@@ -8,6 +8,15 @@ import { round2 } from "./util.js";
 
 const CLICK_TOLERANCE = 9; // px: groessere Bewegung = Kamera drehen, kein Klick (Touch-tauglich)
 
+// Sitz der 45-Grad-Winkelkupplung, ausgemessen an den Dateien der Hersteller-
+// software (tmp/.../Basic II_Haus_13120.qdf, alle sechs Adapter identisch):
+// der Adapterkoerper steht 10,83 cm entlang der Kardinalachse und 3,61 cm
+// entlang der Schraege vor der Basiskupplung. Dazwischen liegt damit ein echtes
+// Rohrende, auf das die Winkelkupplung gesteckt wird. Frueher standen hier
+// 5 / 3,75 cm -- der Adapter klebte dadurch direkt am Basis-Wuerfel.
+const C45_SLEEVE_LEN = 10.83;
+const C45_ARM_LEN = 3.61;
+
 export class Builder {
   constructor(scene, model, { onChange } = {}) {
     this.scene = scene;
@@ -16,11 +25,16 @@ export class Builder {
     this.onNotice = () => {};        // kurze Hinweis-Meldung an die UI
     this.onHistoryChange = () => {}; // Undo-Verfuegbarkeit hat sich geaendert
 
-    this.mode = "add";            // "add" | "panel" | "clamp" | "delete" | "reinforce" | "assembly"
+    // "select" (Cursor: vorhandenes auswaehlen) | "add" | "panel" | "slide" |
+    // "clamp" | "reinforce" | "assembly"
+    this.mode = "select";
     this.tubeId = geometry().defaultTube;
     this.panelId = defaultPanel();
     this.color = "blue";
     this.selectedNodeId = null;
+    // Cursor-Modus: id -> kind ("tube"/"panel"/"node"/...). Die ids sind ueber
+    // alle Kategorien hinweg eindeutig (gemeinsamer Zaehler in model._id).
+    this.selection = new Map();
 
     this.showLabels = false;     // Kupplungs-Namen im normalen Bauen anzeigen
     this.diagonal = false;       // schraege (45-Grad) Streben statt Achsen
@@ -35,6 +49,7 @@ export class Builder {
     this._maxUndo = 60;
 
     this._down = null;
+    this._boxing = false;
     this._attach();
     this.refresh();
   }
@@ -74,6 +89,7 @@ export class Builder {
     if (this.selectedNodeId && !this.model.nodes.has(this.selectedNodeId)) {
       this.selectedNodeId = null;
     }
+    this._pruneSelection();
     if (this.mode === "assembly") this.enterAssembly();
     this.onHistoryChange();
     this.refresh();
@@ -88,6 +104,7 @@ export class Builder {
     if (this.selectedNodeId && !this.model.nodes.has(this.selectedNodeId)) {
       this.selectedNodeId = null;
     }
+    this._pruneSelection();
     if (this.mode === "assembly") this.enterAssembly();
     this.onHistoryChange();
     this.refresh();
@@ -96,7 +113,10 @@ export class Builder {
   // --- oeffentliche Steuerung --------------------------------------------
   setMode(mode) {
     this.mode = mode;
-    if (mode === "delete") this.selectedNodeId = null;
+    // Im Cursor-Modus gibt es keine Bau-Kupplung: sonst blieben Ankerpunkte
+    // stehen. Umgekehrt gilt die Cursor-Auswahl nur dort.
+    if (mode === "select") this.selectedNodeId = null;
+    else this.selection.clear();
     // Labels beim Moduswechsel grundsaetzlich ausschalten;
     // der Aufbaumodus schaltet sie in enterAssembly() selbst wieder ein.
     this.showLabels = false;
@@ -105,7 +125,73 @@ export class Builder {
   }
   setTube(tubeId) { this.tubeId = tubeId; }
   setPanel(panelId) { this.panelId = panelId; if (this.mode === "panel") this.refresh(); }
-  setColor(colorId) { this.color = colorId; }
+  // Farbe der Toolbar. Im Cursor-Modus faerbt sie ausserdem die aktuelle
+  // Auswahl um -- im Platzier-Modus gilt sie nur fuer NEUE Teile.
+  setColor(colorId) {
+    this.color = colorId;
+    if (this.mode === "select" && this.selection.size) this.colorSelection(colorId);
+  }
+
+  // --- Cursor-Modus -------------------------------------------------------
+  /** Faerbt alle faerbbaren Teile der Auswahl um. */
+  colorSelection(colorId) {
+    let changed = 0;
+    this.recordHistory(() => {
+      for (const [id, kind] of this.selection)
+        if (this.model.setColorOf(kind, id, colorId)) changed++;
+    });
+    if (changed) this.onNotice(t("notice_color_changed"));
+    this.refresh();
+    return changed;
+  }
+
+  /** Loescht alle ausgewaehlten Teile. Kupplungen zuletzt (nehmen Rohre mit). */
+  deleteSelection() {
+    if (!this.selection.size) return 0;
+    const entries = [...this.selection];
+    this.recordHistory(() => {
+      for (const [id, kind] of entries) {
+        if (kind === "tube") this.model.removeTube(id);
+        else if (kind === "panel") this.model.removePanel(id);
+        else if (kind === "textile") this.model.removeTextile(id);
+        else if (kind === "slide") this.model.removeSlide(id);
+        else if (kind === "clamp") this.model.removeClamp(id);
+      }
+      for (const [id, kind] of entries) if (kind === "node") this.model.removeNode(id);
+    });
+    const n = entries.length;
+    this.selection.clear();
+    this.refresh();
+    return n;
+  }
+
+  /**
+   * Nach dem Laden/Importieren eines anderen Modells aufrufen: Auswahl und
+   * Bau-Kupplung zeigen sonst auf gleichnamige ids des NEUEN Modells (die
+   * Zaehler starten wieder bei 1) -- _pruneSelection findet das nicht.
+   */
+  modelReplaced() {
+    this.selection.clear();
+    this.selectedNodeId = null;
+  }
+
+  clearSelection() {
+    if (!this.selection.size) return;
+    this.selection.clear();
+    this.refresh();
+  }
+
+  /** Nach Undo/Redo/Import: Auswahl auf noch existierende Teile eindampfen. */
+  _pruneSelection() {
+    const maps = {
+      tube: this.model.tubes, panel: this.model.panels, node: this.model.nodes,
+      textile: this.model.textiles, slide: this.model.slides, clamp: this.model.clamps,
+    };
+    for (const [id, kind] of [...this.selection]) {
+      const map = maps[kind];
+      if (!map || !map.has(id)) this.selection.delete(id);
+    }
+  }
   // Im Aufbaumodus merkt sich der Schalter seinen Zustand, damit ein
   // Schrittwechsel die Beschriftung nicht wieder einblendet.
   setShowLabels(on) {
@@ -118,6 +204,16 @@ export class Builder {
 
   // Anzahl der Rohre, die ein Verstaerkungsprofil gebrauchen koennten.
   suggestionCount() { return this.model.reinforcementSuggestions().size; }
+
+  // Anzahl der Rohre, die sich mit einem anderen ueberlagern.
+  collisionCount() { return this.model.collisions().size; }
+
+  // Rohr fuer eine Schraege: die in der Toolbar gewaehlte Laenge. Nur wenn dort
+  // ein Bogenrohr steht (keine gerade Laenge), greift der Katalog-Standard.
+  _diagonalTube() {
+    const sel = getTube(this.tubeId);
+    return sel && sel.length_cm != null ? sel : getTube(diagonalTubeId());
+  }
 
   // --- Aufbaumodus -------------------------------------------------------
   // Aufbauplan (neu) berechnen und beim aktuellen Schritt bleiben (geklemmt).
@@ -244,20 +340,20 @@ export class Builder {
 
   // Schraege Strebe (45 Grad) vom ausgewaehlten Knoten in eine Diagonalrichtung.
   // Projektvorgabe: alle Schraegen sind immer 45 Grad ueber eine C45-Winkel-
-  // kupplung (Adapter belegt Platz, eigene Kupplung). Nutzt das Diagonalrohr (T35).
+  // kupplung (Adapter belegt Platz, eigene Kupplung). Die Rohrlaenge kommt aus
+  // der Toolbar-Auswahl.
   buildDiagonal(dirVec) {
     const node = this.selectedNodeId && this.model.nodes.get(this.selectedNodeId);
     if (!node) return;
-    const dt = getTube(diagonalTubeId());
+    const dt = this._diagonalTube();
     if (!dt) return;
     const axis = this._diagSleeveAxis(node, dirVec);
     if (!axis) { this.onNotice(t("notice_no_free_arm")); return; }
-    const cs = geometry().connectorSize;
     let res;
     this.recordHistory(() => {
       res = this.model.extendC45Diagonal(
         node.id, dirVec, axis, dt.id, this.color,
-        dt.length_cm, spacingFor(dt.length_cm), cs, cs * 0.75
+        dt.length_cm, spacingFor(dt.length_cm), C45_SLEEVE_LEN, C45_ARM_LEN
       );
     });
     if (res && res.collision) this.onNotice(t("notice_collision"));
@@ -273,12 +369,22 @@ export class Builder {
   refresh() {
     const assembly = this.mode === "assembly" && this.buildPlan.steps.length
       ? this._assemblyVisibility() : null;
-    const labelFor = this.showLabels ? (node) => connectorLabelInfo(this.model, node) : null;
-    const slideNameFor = this.showLabels ? (sl) => slideKindLabel(sl.kind) : null;
+    // Cursor-Modus mit genau EINEM gewaehlten Teil: dessen Namen anzeigen --
+    // dieselben Sprites wie der "Namen"-Schalter, nur auf dieses Teil begrenzt.
+    const soloId = this.mode === "select" && this.selection.size === 1
+      ? [...this.selection.keys()][0] : null;
+    const withLabels = this.showLabels || soloId != null;
+    const labelFor = withLabels ? (node) => connectorLabelInfo(this.model, node) : null;
+    const slideNameFor = withLabels ? (sl) => slideKindLabel(sl.kind) : null;
+    const labelIds = (soloId != null && !this.showLabels) ? new Set([soloId]) : null;
     const suggest = (this.showHints || this.mode === "reinforce")
       ? this.model.reinforcementSuggestions() : null;
     const reinforce = this.mode === "reinforce";
-    this.scene.renderModel(this.model, this.selectedNodeId, { labelFor, slideNameFor, assembly, suggest, reinforce });
+    // Kollisions-Modus: immer ein Set (auch leeres), damit die Szene den Modus
+    // erkennt und die uebrigen Rohre grau zeichnet.
+    const collide = this.mode === "collision" ? this.model.collisions() : null;
+    const selected = this.mode === "select" && this.selection.size ? this.selection : null;
+    this.scene.renderModel(this.model, this.selectedNodeId, { labelFor, slideNameFor, labelIds, assembly, suggest, reinforce, collide, selected });
     this._buildHandles();
     this.onChange();
   }
@@ -300,19 +406,19 @@ export class Builder {
     }
     const node = this.selectedNodeId ? this.model.nodes.get(this.selectedNodeId) : null;
     if (!node) return;
+    // Die 45-Grad-Winkelkupplung gibt es nur einarmig: Huelse auf das Rohrende,
+    // ein Arm in die Schraege. Von ihr aus laesst sich nichts weiterbauen.
+    if (node.c45body) return;
 
-    // An einem c45body-Knoten (Adapter-Koerper) kann keine weitere C45-Kupplung
-    // angebaut werden – von dort gehen nur normale Rohre ab (kardinale Richtungen).
-    const forcedCardinal = !!node.c45body;
     // Rotierte Kupplung (armDirs aus QDF-Import): eigene Arm-Richtungen verwenden,
     // kein C45-Adapter noetig – die Kupplung ist bereits korrekt ausgerichtet.
-    const hasArmDirs = !forcedCardinal && node.armDirs && node.armDirs.length > 0;
+    const hasArmDirs = node.armDirs && node.armDirs.length > 0;
     // Schräg-Konnektor: liegt auf einer Schräge (hat schon ein Diagonalrohr) =
     // ist bereits 45-Grad gedreht. Bietet automatisch Diagonal-Richtungen an und
     // baut OHNE neuen C45-Adapter weiter (snappt an vorhandene Schräg-Kupplungen).
-    const isSlope = !forcedCardinal && !hasArmDirs && this._hasDiagonalTube(node);
+    const isSlope = !hasArmDirs && this._hasDiagonalTube(node);
     const occupied = this._occupiedDirs(node);
-    const useDiag = !forcedCardinal && !hasArmDirs && (this.diagonal || isSlope);
+    const useDiag = !hasArmDirs && (this.diagonal || isSlope);
     const isC45 = useDiag && !isSlope; // C45-Adapter nur an einer NICHT-schraegen Kupplung
     // Schräg-Konnektor: nur seine eigene gedrehte 90°-Arm-Basis (Schräge + Quer
     // in der Ebene + die zwei Kardinalen senkrecht dazu), NICHT beliebige Diagonalen.
@@ -579,19 +685,68 @@ export class Builder {
   _attach() {
     const el = this.scene.renderer.domElement;
     el.addEventListener("pointerdown", (e) => {
-      this._down = { x: e.clientX, y: e.clientY };
+      this._down = {
+        x: e.clientX, y: e.clientY,
+        add: e.ctrlKey || e.metaKey || e.shiftKey,
+        // Rechteck nur mit Strg/Cmd -- ohne bleibt es beim Drehen wie gewohnt.
+        box: this.mode === "select" && (e.ctrlKey || e.metaKey),
+      };
+      this._boxing = false;
+      this._last = { x: e.clientX, y: e.clientY };
+      // Zeiger festhalten: sonst geht das pointerup verloren, wenn man beim
+      // Aufziehen ueber den Rand des Canvas hinauszieht.
+      if (el.setPointerCapture) { try { el.setPointerCapture(e.pointerId); } catch { /* egal */ } }
+      // Linke Taste ohne Strg: eigene Drehung um den Punkt unter dem Zeiger.
+      if (e.button === 0 && !this._down.box) this.scene.beginOrbit(e.clientX, e.clientY);
     });
     el.addEventListener("pointermove", (e) => this._onMove(e));
     el.addEventListener("pointerup", (e) => this._onUp(e));
+
   }
 
+
+  // Der Zeigefinger-Cursor soll genau das anbieten, was im jeweiligen Modus
+  // auch wirklich anklickbar ist -- sonst verspricht er Interaktionen, die es
+  // nicht gibt.
   _onMove(e) {
+    // Cursor-Modus: mit gedrueckter linker Taste ziehen zieht ein Auswahl-
+    // Rechteck auf, statt zu drehen (das liegt dort auf der rechten Taste).
+    // Linke Taste gedrueckt und kein Rechteck: um den Zeigerpunkt drehen.
+    if (this._down && !this._down.box && (e.buttons & 1) && this.scene.orbiting) {
+      const dx = e.clientX - this._last.x, dy = e.clientY - this._last.y;
+      this._last = { x: e.clientX, y: e.clientY };
+      if (dx || dy) this.scene.orbitBy(dx, dy);
+      return;
+    }
+    if (this._down && this._down.box && (e.buttons & 1)) {
+      if (this._boxing ||
+          Math.hypot(e.clientX - this._down.x, e.clientY - this._down.y) > CLICK_TOLERANCE) {
+        this._boxing = true;
+        this.scene.showSelectBox(this._down.x, this._down.y, e.clientX, e.clientY);
+        this.scene.setHover(null);
+        return;
+      }
+    }
+    const x = e.clientX, y = e.clientY;
+    const handle = () => this.scene.pickHandle(x, y)?.object || null;
+    const build = (kinds) => {
+      const p = this.scene.pickBuild(x, y);
+      return p && (!kinds || kinds.includes(p.data.kind)) ? p.object : null;
+    };
     let obj = null;
-    if (this.mode === "add" || this.mode === "panel" || this.mode === "slide" || this.mode === "clamp") {
-      const h = this.scene.pickHandle(e.clientX, e.clientY);
-      obj = h ? h.object : (this.scene.pickBuild(e.clientX, e.clientY)?.object || null);
-    } else {
-      obj = this.scene.pickBuild(e.clientX, e.clientY)?.object || null;
+    if (this.mode === "select") {
+      // Cursor-Modus: alles Platzierte ist waehlbar, Rutschen eingeschlossen.
+      obj = this.scene.pickForDelete(x, y)?.object || null;
+    } else if (this.mode === "add") {
+      // Handles + anbaubare Kupplungen (Winkelkupplungen sind es nicht).
+      const n = build(["node"]);
+      obj = handle() || (n && this._isBuildable(n.userData.id) ? n : null);
+    } else if (this.mode === "panel" || this.mode === "slide") {
+      obj = handle();                            // nur die Feld-Handles
+    } else if (this.mode === "clamp") {
+      obj = handle() || build(["tube", "clamp"]);
+    } else if (this.mode === "reinforce") {
+      obj = build(["tube"]);
     }
     this.scene.setHover(obj);
   }
@@ -599,13 +754,24 @@ export class Builder {
   _onUp(e) {
     const d = this._down;
     this._down = null;
+    this.scene.endOrbit();
     if (!d) return;
+    if (this._boxing) {
+      this._boxing = false;
+      this.scene.hideSelectBox();
+      // Das Rechteck ergaenzt immer: mehrere Zuege lassen sich so zu einer
+      // Auswahl zusammensetzen. Aufgehoben wird sie per Klick ins Leere.
+      const found = this.scene.pickInRect(d.x, d.y, e.clientX, e.clientY);
+      for (const [id, kind] of found) this.selection.set(id, kind);
+      this.refresh();
+      return;
+    }
     if (Math.hypot(e.clientX - d.x, e.clientY - d.y) > CLICK_TOLERANCE) return; // Drehen
-    if (this.mode === "add") this._clickAdd(e);
+    if (this.mode === "select") this._clickSelect(e);
+    else if (this.mode === "add") this._clickAdd(e);
     else if (this.mode === "panel") this._clickPanel(e);
     else if (this.mode === "slide") this._clickSlide(e);
     else if (this.mode === "clamp") this._clickClamp(e);
-    else if (this.mode === "delete") this._clickDelete(e);
     else if (this.mode === "reinforce") this._clickReinforce(e);
     // Aufbaumodus: nur ansehen/drehen, keine Modelländerung
   }
@@ -669,15 +835,7 @@ export class Builder {
   }
 
   _clickPanel(e) {
-    // Bestehende Platte/Netz anklicken → Farbe ändern (wie bei Rohren).
-    const pick = this.scene.pickBuild(e.clientX, e.clientY);
-    if (pick && (pick.data.kind === "panel" || pick.data.kind === "textile")) {
-      let changed;
-      this.recordHistory(() => { changed = this.model.setColorOf(pick.data.kind, pick.data.id, this.color); });
-      if (changed) { this.onNotice(t("notice_color_changed")); this.refresh(); }
-      return;
-    }
-    // Neues Platten-Handle → Platte hinzufügen.
+    // Umfaerben passiert ausschliesslich im Cursor-Modus -- hier wird nur gebaut.
     const h = this.scene.pickHandle(e.clientX, e.clientY);
     if (h && h.data.panelCell) {
       this.recordHistory(() => this.model.addPanel(h.data.rectNodes, this.panelId, this.color));
@@ -699,21 +857,20 @@ export class Builder {
       }
       let res;
       if (h.data.diagonal) {
-        const dt = getTube(diagonalTubeId());
-        const cs = geometry().connectorSize;
+        const dt = this._diagonalTube();
         const node = this.model.nodes.get(h.data.nodeId);
         const axis = node && this._diagSleeveAxis(node, h.data.dir);
         if (!axis) { this.onNotice(t("notice_no_free_arm")); return; }
         this.recordHistory(() => {
           res = this.model.extendC45Diagonal(
             h.data.nodeId, h.data.dir, axis, dt.id,
-            this.color, dt.length_cm, spacingFor(dt.length_cm), cs, cs * 0.75
+            this.color, dt.length_cm, spacingFor(dt.length_cm), C45_SLEEVE_LEN, C45_ARM_LEN
           );
         });
       } else if (h.data.slope) {
         // Schräg-Konnektor (schon 45-Grad gedreht): Diagonalrohr weiterbauen,
         // OHNE neuen C45-Adapter; snappt an vorhandene Schräg-Kupplungen.
-        const dt = getTube(diagonalTubeId());
+        const dt = this._diagonalTube();
         this.recordHistory(() => {
           res = this.model.extendDiagonalSnap(
             h.data.nodeId, h.data.dir, dt.id, this.color, dt.length_cm, spacingFor(dt.length_cm)
@@ -737,42 +894,47 @@ export class Builder {
       this.refresh();
       return;
     }
-    // 2. bestehende Kupplung auswaehlen ODER Teil umfaerben
+    // 2. bestehende Kupplung als Anbaupunkt waehlen. Umfaerben gibt es hier
+    // bewusst nicht mehr -- das passiert nur im Cursor-Modus.
     const pick = this.scene.pickBuild(e.clientX, e.clientY);
     if (!pick) return;
-    if (pick.data.kind === "node") {
-      this.selectedNodeId = pick.data.id;
+    if (pick.data.kind === "node" && this._isBuildable(pick.data.id)) {
+      // Erneuter Klick auf die BEREITS gewaehlte Kupplung schaltet zwischen
+      // Achs- und Schraeg-Richtungen um: die Ankerpunkte liegen dicht
+      // beieinander, der Griff zur Toolbar unterbricht den Bau-Fluss.
+      if (this.selectedNodeId === pick.data.id) this.diagonal = !this.diagonal;
+      else this.selectedNodeId = pick.data.id;
       this.refresh();
-    } else if (pick.data.kind === "tube" || pick.data.kind === "panel" || pick.data.kind === "textile") {
-      // Mit gewaehlter Farbe auf ein Rohr/eine Platte/ein Netz klicken faerbt es um.
-      let changed;
-      this.recordHistory(() => { changed = this.model.setColorOf(pick.data.kind, pick.data.id, this.color); });
-      if (changed) {
-        this.onNotice(t("notice_color_changed"));
-        this.refresh();
-      }
     }
   }
 
-  _clickDelete(e) {
+  // Laesst sich an dieser Kupplung ueberhaupt weiterbauen? Die 45-Grad-
+  // Winkelkupplung (c45body) nicht: sie ist einarmig und schon belegt.
+  _isBuildable(nodeId) {
+    const n = this.model.nodes.get(nodeId);
+    return !!n && !n.c45body;
+  }
+
+  // Cursor-Modus: bereits platzierte Teile auswaehlen. Einfacher Klick waehlt
+  // genau eines, Strg/Shift-Klick nimmt dazu bzw. wieder heraus, Klick ins
+  // Leere hebt die Auswahl auf. Es werden KEINE Ankerpunkte gebaut.
+  _clickSelect(e) {
     const pick = this.scene.pickForDelete(e.clientX, e.clientY);
-    if (!pick) return;
-    this.recordHistory(() => {
-      if (pick.data.kind === "tube") {
-        this.model.removeTube(pick.data.id);
-      } else if (pick.data.kind === "panel") {
-        this.model.removePanel(pick.data.id);
-      } else if (pick.data.kind === "textile") {
-        this.model.removeTextile(pick.data.id);
-      } else if (pick.data.kind === "slide") {
-        this.model.removeSlide(pick.data.id);
-      } else if (pick.data.kind === "clamp") {
-        this.model.removeClamp(pick.data.id);
-      } else if (pick.data.kind === "node") {
-        if (this.selectedNodeId === pick.data.id) this.selectedNodeId = null;
-        this.model.removeNode(pick.data.id);
-      }
-    });
+    const add = e.ctrlKey || e.metaKey || e.shiftKey;
+    if (!pick) {
+      if (!add) this.clearSelection();
+      return;
+    }
+    const { kind, id } = pick.data;
+    if (add) {
+      if (this.selection.has(id)) this.selection.delete(id);
+      else this.selection.set(id, kind);
+    } else if (this.selection.size === 1 && this.selection.has(id)) {
+      this.selection.clear();
+    } else {
+      this.selection.clear();
+      this.selection.set(id, kind);
+    }
     this.refresh();
   }
 }

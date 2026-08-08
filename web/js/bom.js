@@ -82,15 +82,13 @@ export function inferConnectorType(model, node) {
 export function connectorsForNode(model, node) {
   const dirs = neighborDirs(model, node);
   if (dirs.length === 0) return [];
-  // Adapter-Koerper (c45body): Hier sitzt eine *normale* Kupplung, die einfach
-  // 45 Grad gedreht eingesetzt ist – KEINE Winkelkupplung (C45). Die C45-
-  // Winkelkupplung sitzt an der Eck-Kupplung (connector45_2 / c45-Knoten),
-  // nicht hier. Die Klassifizierung richtet sich nach Anzahl + Lage aller Arme
-  // (Arm-Steg zur Eck-Kupplung + Diagonalrohr(e)).
-  if (node.c45body) {
-    const t = connectorTypeForDirs(dirs);
-    return t && t !== "end" ? [t] : [];
-  }
+  // Adapter-Koerper (c45body): genau HIER sitzt die 45-Grad-Winkelkupplung --
+  // sie steckt mit ihrer Huelse auf dem Rohrende der Basiskupplung und nimmt
+  // mit dem 45-Grad-Arm die Schraege auf. Es gibt sie nur einarmig, also immer
+  // genau eine je Adapter-Koerper. Die Arm-Richtungen (Huelse + Schraege) nach
+  // Anzahl/Lage zu klassifizieren lieferte hier faelschlich eine
+  // "Flaechenkupplung 2-armig (90 Grad)".
+  if (node.c45body) return ["diagonal"];
   if (!node.c45) {
     const t = connectorTypeForDirs(dirs);
     return t && t !== "end" ? [t] : [];

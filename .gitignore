@@ -13,3 +13,4 @@ __pycache__/
 # Node (nur fuer Tooling, nicht Teil der App)
 node_modules/
 quadro-entwurf*.json
+tmp/

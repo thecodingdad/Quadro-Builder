@@ -2,9 +2,26 @@
 
 import * as THREE from "three";
 import { OrbitControls } from "../vendor/three/OrbitControls.js";
-import { geometry, colorHex, connectorColor } from "./catalog.js";
+import { geometry, colorHex, connectorColor, getPanel } from "./catalog.js";
 
 const UP = new THREE.Vector3(0, 1, 0);
+
+// Render-Qualitaet: steuert nur die Aufloesung der gecachten Geometrien, nicht
+// die Masse. conn = [Segmente breit, hoch] des abgerundeten Kupplungs-Wuerfels
+// (null = scharfkantiger Wuerfel), tube = Umfangssegmente der Rohre.
+export const QUALITY_LEVELS = ["low", "medium", "high"];
+const QUALITY = {
+  low:    { conn: null,      tube: 8,  bow: 8 },
+  medium: { conn: [16, 10],  tube: 16, bow: 14 },
+  high:   { conn: [48, 32],  tube: 44, bow: 32 },
+};
+const DEFAULT_QUALITY = "medium";
+
+// Rundung des Kupplungs-Wuerfels (p-Norm des Superellipsoids). 2 waere die
+// Kugel, grosse Werte ein scharfer Wuerfel. Bei 3 liegen die Flanken buendig
+// auf 2,5 cm (Rohrradius 2,45) und die Ecken stehen nur noch 0,5 cm ueber --
+// bei 5 waren es 1 cm, die Kupplung wirkte dadurch klobig.
+const CONNECTOR_ROUNDNESS = 3;
 
 // Hintergrundfarben fuer die Beschriftung nach Kategorie (Aufbaumodus-Hervorhebung).
 const LABEL_BG = {
@@ -29,9 +46,15 @@ export class SceneManager {
     this.scene = new THREE.Scene();
     this.scene.background = new THREE.Color(0xeef1f5);
 
-    this.camera = new THREE.PerspectiveCamera(
+    // Beide Kameras stehen bereit; umgeschaltet wird ueber setProjection().
+    // Die orthografische zeigt keine Fluchtpunkte -- parallele Rohre bleiben
+    // parallel, Masse sind vergleichbar (Bauplan-Blick).
+    this._perspCam = new THREE.PerspectiveCamera(
       55, container.clientWidth / container.clientHeight, 1, 100000
     );
+    this._orthoCam = new THREE.OrthographicCamera(-1, 1, 1, -1, -100000, 100000);
+    this.camera = this._perspCam;
+    this._projection = "perspective";
     this._defaultCam = { pos: [140, 120, 180], target: [0, 30, 0] };
     this.resetCamera();
 
@@ -41,6 +64,11 @@ export class SceneManager {
     // Scrollrad zoomt auf den Mauszeiger statt auf die Bildmitte -- man haelt
     // damit die Stelle im Blick, an der man gerade baut.
     this.controls.zoomToCursor = true;
+    // Drehen macht der Builder selbst (um den Punkt unter dem Zeiger), deshalb
+    // bekommt OrbitControls die linke Taste gar nicht erst.
+    this.controls.mouseButtons.LEFT = null;
+    this.onCameraChange = () => {};   // von der UI zum Sichern ueberschrieben
+    this.controls.addEventListener("end", () => this.onCameraChange());
     this.controls.target.set(...this._defaultCam.target);
 
     // Licht: warmes Sonnenlicht + Himmelslicht + weiche Schatten
@@ -100,6 +128,8 @@ export class SceneManager {
     this._clampRingGeo = null; // lazy (ein Ring der "8")
     this._c45Geo = null;      // lazy (45-Grad-Adapter-Koerper, Box)
     this._c45StubGeo = null;  // lazy (Diagonal-Stutzen des Adapters)
+    this._panelGeos = new Map(); // lazy, pro Plattenmass/Lochbild (siehe _panelGeometry)
+    this._quality = DEFAULT_QUALITY;
     this._materials = {};
 
     window.addEventListener("resize", () => this.onResize());
@@ -117,10 +147,65 @@ export class SceneManager {
   resetCamera() {
     this.camera.position.set(...this._defaultCam.pos);
     this.camera.lookAt(...this._defaultCam.target);
+    this.camera.zoom = 1;
+    this.camera.updateProjectionMatrix();
     if (this.controls) {
       this.controls.target.set(...this._defaultCam.target);
       this.controls.update();
     }
+    this._updateOrthoFrustum();
+  }
+
+  /** Aktive Projektion: "perspective" | "orthographic". */
+  get projection() { return this._projection; }
+
+  /**
+   * Projektion umschalten. Standort, Blickrichtung und der sichtbare Ausschnitt
+   * werden uebernommen: die Bildhoehe der orthografischen Kamera ergibt sich aus
+   * Abstand und Oeffnungswinkel der perspektivischen, sonst springt das Bild.
+   */
+  setProjection(mode) {
+    if (mode !== "perspective" && mode !== "orthographic") return false;
+    if (mode === this._projection) return false;
+    const from = this.camera;
+    const to = mode === "orthographic" ? this._orthoCam : this._perspCam;
+    const target = this.controls ? this.controls.target : new THREE.Vector3(...this._defaultCam.target);
+    to.position.copy(from.position);
+    to.quaternion.copy(from.quaternion);
+    // Zurueck zur Perspektive: der orthografische Zoom steckt in camera.zoom,
+    // die Perspektive kennt das nicht -- also in einen Abstand umrechnen, sonst
+    // springt die Bildgroesse.
+    if (mode === "perspective" && from.zoom !== 1) {
+      const dir = new THREE.Vector3().subVectors(from.position, target);
+      dir.setLength(dir.length() / from.zoom);
+      to.position.copy(target).add(dir);
+    }
+    to.zoom = 1;
+    to.updateProjectionMatrix();
+    this._projection = mode;
+    this.camera = to;
+    this._updateOrthoFrustum();
+    if (this.controls) {
+      this.controls.object = to;
+      this.controls.update();
+    }
+    return true;
+  }
+
+  // Bildausschnitt der orthografischen Kamera aus Abstand zum Ziel und dem
+  // Oeffnungswinkel der perspektivischen ableiten -- so deckt sie beim
+  // Umschalten denselben Bereich ab.
+  _updateOrthoFrustum() {
+    const w = this.container.clientWidth, h = this.container.clientHeight;
+    if (!w || !h) return;
+    const target = this.controls ? this.controls.target : new THREE.Vector3(...this._defaultCam.target);
+    const dist = this.camera.position.distanceTo(target) || 1;
+    const height = 2 * dist * Math.tan((this._perspCam.fov / 2) * (Math.PI / 180));
+    const width = height * (w / h);
+    const o = this._orthoCam;
+    o.left = -width / 2; o.right = width / 2;
+    o.top = height / 2; o.bottom = -height / 2;
+    o.updateProjectionMatrix();
   }
 
   onResize() {
@@ -131,8 +216,9 @@ export class SceneManager {
     if (w === this._lastW && h === this._lastH) return;
     this._lastW = w;
     this._lastH = h;
-    this.camera.aspect = w / h;
-    this.camera.updateProjectionMatrix();
+    this._perspCam.aspect = w / h;
+    this._perspCam.updateProjectionMatrix();
+    this._updateOrthoFrustum();
     // updateStyle = false -> Three schreibt KEINE festen px-Werte in den
     // Canvas-Style. Sonst wird der Canvas breiter als sein Container, das
     // Dokument bekommt eine Scrollbar, der Container schrumpft um deren
@@ -141,6 +227,19 @@ export class SceneManager {
   }
 
   // Auf die nächste Achse gerundete horizontale Blickrichtung (für Pfeiltasten).
+  /**
+   * Schaut die Kamera eher flach von der Seite auf das Modell (frontal) oder
+   * von oben herab? Ab 45 Grad Neigung gilt der Blick als Aufsicht. Die
+   * Pfeiltasten richten sich danach: frontal zeigt "hoch" nach oben, in der
+   * Aufsicht nach hinten -- also immer dorthin, wo es auf dem Bildschirm
+   * tatsaechlich hingeht.
+   */
+  isFrontalView() {
+    const f = new THREE.Vector3();
+    this.camera.getWorldDirection(f);
+    return Math.abs(f.y) < Math.SQRT1_2;
+  }
+
   getHorizontalAxes() {
     const f = new THREE.Vector3();
     this.camera.getWorldDirection(f);
@@ -154,10 +253,54 @@ export class SceneManager {
     return { forward, right };
   }
 
+  // Abgerundeter Wuerfel (Superellipsoid): eine Kugel wird per p-Norm zum
+  // Wuerfel mit weichen Kanten gezogen -- groesseres n = kantiger, n = 2 waere
+  // wieder die Kugel. Das trifft die echte QUADRO-Kupplung deutlich besser als
+  // ein scharfkantiger Wuerfel und braucht keine zusaetzliche Geometrie-Klasse.
+  // Die Flanken liegen bei size/2 (2,5 cm) und schliessen damit buendig mit dem
+  // Rohr ab (tubeRadius 2,45 cm).
+  _roundedBoxGeometry(size, n = CONNECTOR_ROUNDNESS, segW = 16, segH = 10) {
+    const half = size / 2;
+    const geo = new THREE.SphereGeometry(half, segW, segH);
+    const pos = geo.attributes.position;
+    const v = new THREE.Vector3();
+    for (let i = 0; i < pos.count; i++) {
+      v.fromBufferAttribute(pos, i).divideScalar(half);   // auf die Einheitskugel
+      const s = Math.abs(v.x) ** n + Math.abs(v.y) ** n + Math.abs(v.z) ** n;
+      v.multiplyScalar(half * s ** (-1 / n));
+      pos.setXYZ(i, v.x, v.y, v.z);
+    }
+    pos.needsUpdate = true;
+    geo.computeVertexNormals();
+    return geo;
+  }
+
+  /** Aktuelle Qualitaetsstufe (Aufloesung der Geometrien). */
+  get quality() { return this._quality; }
+
+  /**
+   * Qualitaetsstufe setzen. Wirft die davon abhaengigen Geometrie-Caches weg;
+   * der Aufrufer muss anschliessend neu rendern (builder.refresh()), sonst
+   * zeigen die vorhandenen Meshes noch die alte Aufloesung.
+   */
+  setQuality(level) {
+    if (!QUALITY[level] || level === this._quality) return false;
+    this._quality = level;
+    for (const key of ["_connGeo", "_c45Geo", "_c45StubGeo", "_clampGeo", "_clampRingGeo"]) {
+      if (this[key]) this[key].dispose();
+      this[key] = null;
+    }
+    return true;
+  }
+
+  _q() { return QUALITY[this._quality] || QUALITY[DEFAULT_QUALITY]; }
+
   _connGeometry() {
     if (!this._connGeo) {
       const s = geometry().connectorSize;
-      this._connGeo = new THREE.BoxGeometry(s, s, s);
+      const seg = this._q().conn;
+      this._connGeo = seg ? this._roundedBoxGeometry(s, CONNECTOR_ROUNDNESS, seg[0], seg[1])
+        : new THREE.BoxGeometry(s, s, s);
     }
     return this._connGeo;
   }
@@ -181,6 +324,59 @@ export class SceneManager {
     return this._clampRingGeo;
   }
 
+  // Platten-Geometrie, gecacht pro Mass + Lochbild. Volle Platten sind eine
+  // flache Box; Lochplatten (Katalog-Feld "holes") werden als Rechteck-Shape
+  // mit ausgestanzten Kreisen extrudiert.
+  // Wichtig: Der Cache muss in _disposeGroup ausgenommen werden, sonst gibt der
+  // naechste Render-Durchlauf die noch benutzte Geometrie frei.
+  _panelGeometry(panelId, w, d, thickness) {
+    const def = getPanel(panelId);
+    const holes = (def && def.holes) || 0;
+    const key = `${holes}:${w.toFixed(2)}x${d.toFixed(2)}x${thickness}`;
+    const hit = this._panelGeos.get(key);
+    if (hit) return hit;
+
+    let geo;
+    if (holes === 9) {
+      const shape = new THREE.Shape();
+      shape.moveTo(-w / 2, -d / 2);
+      shape.lineTo(w / 2, -d / 2);
+      shape.lineTo(w / 2, d / 2);
+      shape.lineTo(-w / 2, d / 2);
+      shape.closePath();
+      const r = Math.min(w, d) * 0.105;   // Lochradius ~4 cm im 40er-Feld
+      const off = Math.min(w, d) * 0.29;  // Mitte der aeusseren Lochreihen
+      for (const gx of [-off, 0, off])
+        for (const gy of [-off, 0, off])
+          shape.holes.push(new THREE.Path().absarc(gx, gy, r, 0, Math.PI * 2, true));
+      geo = new THREE.ExtrudeGeometry(shape, { depth: thickness, bevelEnabled: false, curveSegments: 14 });
+      // Shape liegt in XY und wird nach +Z extrudiert. Die Drehung um -90 Grad
+      // um X bringt das in die Box-Orientierung (x = u, y = Dicke, z = w);
+      // danach mittig um die Plattenebene zentrieren.
+      geo.rotateX(-Math.PI / 2);
+      geo.translate(0, -thickness / 2, 0);
+      geo.computeVertexNormals();
+    } else {
+      geo = new THREE.BoxGeometry(w, thickness, d);
+    }
+    this._panelGeos.set(key, geo);
+    return geo;
+  }
+
+  // Auswahl-Variante eines beliebigen Bauteil-Materials: gleiche Farbe, aber
+  // orange leuchtend (wie die gewaehlte Kupplung im Bau-Modus). Pro Basis-
+  // Material einmal geklont und gecacht -- _disposeGroup gibt nur Geometrien frei.
+  _selectedMaterial(base) {
+    const key = "sel:" + base.uuid;
+    if (!this._materials[key]) {
+      const m = base.clone();
+      if (m.emissive) m.emissive = new THREE.Color(0x8a4a00);
+      else m.color = new THREE.Color(0xff8c1a);
+      this._materials[key] = m;
+    }
+    return this._materials[key];
+  }
+
   _clampMaterial() {
     if (!this._materials["clamp"]) {
       this._materials["clamp"] = new THREE.MeshStandardMaterial({
@@ -195,7 +391,9 @@ export class SceneManager {
   _c45Geometry() {
     if (!this._c45Geo) {
       const s = geometry().connectorSize * 0.82;
-      this._c45Geo = new THREE.BoxGeometry(s, s, s);
+      const seg = this._q().conn;
+      this._c45Geo = seg ? this._roundedBoxGeometry(s, CONNECTOR_ROUNDNESS, seg[0], seg[1])
+        : new THREE.BoxGeometry(s, s, s);
     }
     return this._c45Geo;
   }
@@ -634,6 +832,17 @@ export class SceneManager {
     return this._materials["tubeGray"];
   }
 
+  // Kollisions-Modus: sich ueberlagernde Rohre leuchtend rot.
+  _tubeCollision() {
+    if (!this._materials["tubeCollision"]) {
+      this._materials["tubeCollision"] = new THREE.MeshStandardMaterial({
+        color: new THREE.Color(0xe0342b), roughness: 0.35, metalness: 0.1,
+        emissive: new THREE.Color(0x5a0400),
+      });
+    }
+    return this._materials["tubeCollision"];
+  }
+
   // Reinforce-Modus: Rohre, die bereits verstärkt sind (blau-metallic).
   _tubeReinforceActive() {
     if (!this._materials["tubeReinforceActive"]) {
@@ -699,23 +908,33 @@ export class SceneManager {
   }
 
   // Kandidaten-Feld fuer eine Platte (addPanelHandle): ein festes Material.
-  _panelHandleMaterial() {
-    if (!this._materials["panelHandle"]) {
-      this._materials["panelHandle"] = new THREE.MeshBasicMaterial({
-        color: 0x1a8cff, transparent: true, opacity: 0.35,
+  // Feld-Handles (Platten/Rutschen-Montagestellen). Das Material ist bewusst
+  // gecacht und damit von ALLEN Handles geteilt -- die Hervorhebung unter dem
+  // Mauszeiger darf deshalb nicht seine Deckkraft aendern, sonst leuchten alle
+  // Felder gleichzeitig auf. Stattdessen gibt es eine zweite Variante, die in
+  // setHover() nur am getroffenen Mesh eingehaengt wird.
+  _panelHandleMaterial(hovered) {
+    const key = hovered ? "panelHandle:hover" : "panelHandle";
+    if (!this._materials[key]) {
+      this._materials[key] = new THREE.MeshBasicMaterial({
+        color: 0x1a8cff, transparent: true, opacity: hovered ? 0.65 : 0.35,
         side: THREE.DoubleSide, depthWrite: false,
       });
     }
-    return this._materials["panelHandle"];
+    return this._materials[key];
   }
 
   // Hervorhebung der im aktuellen Aufbau-Schritt hinzukommenden Rohre.
+  // Rohre des AKTUELLEN Aufbauschritts (nur dort ist st === "current"): orange
+  // hervorgehoben und leicht durchscheinend, damit die Kupplungen dahinter --
+  // die im selben Schritt gesteckt werden -- sichtbar bleiben.
   _tubeHighlight(colorId) {
     const key = "tubehl:" + colorId;
     if (!this._materials[key]) {
       this._materials[key] = new THREE.MeshStandardMaterial({
         color: new THREE.Color(colorHex(colorId)), roughness: 0.4, metalness: 0.05,
         emissive: new THREE.Color(0x3a2400),
+        transparent: true, opacity: 0.75, depthWrite: false,
       });
     }
     return this._materials[key];
@@ -787,14 +1006,24 @@ export class SceneManager {
     const asm = opts.assembly || null;
     const labelFor = opts.labelFor || null;
     const slideNameFor = opts.slideNameFor || null;
+    // Nur diese ids beschriften (Cursor-Modus mit genau einem gewaehlten Teil).
+    // null = alle, die labelFor/slideNameFor liefern.
+    const labelIds = opts.labelIds || null;
+    const wantsLabel = (id) => !labelIds || labelIds.has(id);
     const suggest = opts.suggest || null;
     const reinforce = opts.reinforce || false;
+    // Kollisions-Modus: betroffene Rohre rot, alle anderen grau. Platten und
+    // Netze bleiben aussen vor, damit die Ueberlagerungen sichtbar sind.
+    const collide = opts.collide || null;
+    const collision = !!collide;
+    const hideFlat = reinforce || collision;
     const cs = geometry().connectorSize;
     // Echte Kupplungs-Arme (aus variant2 importiert, node.arms): kurze Stutzen
     // mit Arm-Durchmesser (~42 mm). Offene Arme ragen heraus; von Rohren belegte
     // stecken im Rohr (Arm dünner als Rohr) -> sichtbar nur die freien Arme.
     const armStubLen = cs * 0.85;
-    const armStubGeo = new THREE.CylinderGeometry(armRadius, armRadius, armStubLen, 12);
+    const qual = this._q();   // Aufloesung je Qualitaetsstufe
+    const armStubGeo = new THREE.CylinderGeometry(armRadius, armRadius, armStubLen, Math.max(6, qual.tube - 4));
     const armStubOff = cs / 2 + armStubLen / 2 - 0.4;
 
     // Richtungen der an einem Knoten TATSAECHLICH angeschlossenen Rohre.
@@ -952,7 +1181,7 @@ export class SceneManager {
       }
 
       // Beschriftung: im Aufbaumodus nur die aktuelle Ebene, sonst alle sichtbaren.
-      const showLabel = labelFor && (asm ? st === "current" : st !== "future");
+      const showLabel = labelFor && wantsLabel(n.id) && (asm ? st === "current" : st !== "future");
       if (showLabel) {
         const info = labelFor(n);
         const text = typeof info === "string" ? info : info && info.text;
@@ -986,12 +1215,13 @@ export class SceneManager {
       if (bowCurve) {
         const bowMat = st === "future" ? this._ghostMaterial()
           : st === "current" ? this._tubeHighlight(t.color)
+          : (collide && collide.has(t.id)) ? this._tubeCollision()
           : (suggest && suggest.has(t.id)) ? this._tubeSuggest()
-          : reinforce ? this._tubeGray()
+          : (reinforce || collision) ? this._tubeGray()
           : (asm && st === "done") ? this._fadedMaterial(colorHex(t.color))
           : this._tubeMaterial(t.color);
         const bowMesh = new THREE.Mesh(
-          new THREE.TubeGeometry(bowCurve, 24, tubeRadius, 14, false), bowMat
+          new THREE.TubeGeometry(bowCurve, 24, tubeRadius, qual.bow, false), bowMat
         );
         bowMesh.userData = { kind: "tube", id: t.id };
         bowMesh.castShadow = true;
@@ -1000,17 +1230,26 @@ export class SceneManager {
         continue;
       }
 
-      const geo = new THREE.CylinderGeometry(tubeRadius, tubeRadius, len, 16);
+      // Sichtbare Rohrlaenge: das echte Rohr, NICHT der Knotenabstand. Zwischen
+      // zwei Kupplungsmitten liegen Rohrlaenge + connectorSize; ein Zylinder ueber
+      // die volle Distanz ragt darum an beiden Enden 2,5 cm in die Kupplungen
+      // hinein und schaut dort heraus.
+      // Gerechnet wird aus der Distanz, nicht aus der Katalog-Laenge: im
+      // Schraegen-Raster (importierte Diagonalen, ~41,5 statt 40) klaffte sonst
+      // eine Luecke zwischen Rohrende und Kupplung.
+      const drawLen = Math.max(1, len - cs);
       const isReinforceActive = reinforce && t.reinforced;
       const effectiveRadius = isReinforceActive ? tubeRadius * 1.08 : tubeRadius;
+      const geo = new THREE.CylinderGeometry(tubeRadius, tubeRadius, drawLen, qual.tube);
       const geo2 = isReinforceActive
-        ? new THREE.CylinderGeometry(effectiveRadius, effectiveRadius, len, 16)
+        ? new THREE.CylinderGeometry(effectiveRadius, effectiveRadius, drawLen, qual.tube)
         : geo;
       const mat = st === "future" ? this._ghostMaterial()
         : st === "current" ? this._tubeHighlight(t.color)
+        : (collide && collide.has(t.id)) ? this._tubeCollision()
         : isReinforceActive ? this._tubeReinforceActive()
         : (suggest && suggest.has(t.id)) ? this._tubeSuggest()
-        : reinforce ? this._tubeGray()
+        : (reinforce || collision) ? this._tubeGray()
         : (asm && st === "done") ? this._fadedMaterial(colorHex(t.color))
         : this._tubeMaterial(t.color);
       const mesh = new THREE.Mesh(isReinforceActive ? geo2 : geo, mat);
@@ -1036,7 +1275,7 @@ export class SceneManager {
       }
 
       // Laengen-Beschriftung: gleiche Sichtbarkeitsregel wie die Kupplungs-Namen.
-      const showTubeLabel = labelFor && (asm ? st === "current" : st !== "future");
+      const showTubeLabel = labelFor && wantsLabel(t.id) && (asm ? st === "current" : st !== "future");
       if (showTubeLabel) {
         const cm = t.length != null ? t.length : Math.round(len - cs);
         const category = t.tubeId === "T75" ? "tube75" : null;
@@ -1047,10 +1286,10 @@ export class SceneManager {
       }
     }
 
-    // Platten (flache Box in der Feld-Ebene) – im Reinforce-Modus ausgeblendet.
+    // Platten (flache Box in der Feld-Ebene) – im Verstaerken-/Kollisions-Modus ausgeblendet.
     const thickness = geometry().panelThickness || 1.6;
     for (const p of model.panels.values()) {
-      if (reinforce) continue;
+      if (hideFlat) continue;
       const ns = p.nodes.map((id) => model.nodes.get(id));
       if (ns.some((n) => !n)) continue;
       const st = stateOf(p.id);
@@ -1065,7 +1304,7 @@ export class SceneManager {
       const xAxis = u.clone().normalize();
       const zAxis = w.clone().normalize();
       const yAxis = new THREE.Vector3().crossVectors(zAxis, xAxis).normalize();
-      const geo = new THREE.BoxGeometry(u.length(), thickness, w.length());
+      const geo = this._panelGeometry(p.panelId, u.length(), w.length(), thickness);
       const mat = st === "future" ? this._ghostMaterial()
         : (asm && st === "done") ? this._fadedMaterial(colorHex(p.color))
         : this._panelMaterial(p.color, st === "current", false);
@@ -1115,7 +1354,7 @@ export class SceneManager {
 
     // Netze/Stoffe (textil2): halbtransparente Flaeche ueber 4 Eck-Kupplungen.
     for (const tx of (model.textiles ? model.textiles.values() : [])) {
-      if (reinforce) continue;
+      if (hideFlat) continue;
       const ns = tx.nodes.map((id) => model.nodes.get(id));
       if (ns.some((n) => !n)) continue;
       const st = stateOf(tx.id);
@@ -1147,7 +1386,7 @@ export class SceneManager {
     this._slideChainFrame = null;
     this._slideChainNextId = null;
     for (const sl of (model.slides ? model.slides.values() : [])) {
-      if (reinforce) continue;
+      if (hideFlat) continue;
       const st = stateOf(sl.id);
       if (st === "future") continue;
       const mat = (asm && st === "done")
@@ -1155,7 +1394,7 @@ export class SceneManager {
         : this._slideMatFor(sl.kind, st === "current", sl.color);
 
       // Beschriftung: Name des Rutschenenteils/Dachs wenn Labels aktiv.
-      if (slideNameFor && st !== "future") {
+      if (slideNameFor && wantsLabel(sl.id) && st !== "future") {
         const name = slideNameFor(sl);
         if (name) {
           const sprite = this._makeLabelSprite(name, st === "current", null);
@@ -1174,6 +1413,28 @@ export class SceneManager {
       // roof2 (Dach-Tuch): als GIEBEL ueber das Dach (von den C45-Traufen die
       // Dachschraegen hoch, 90°-Knick am First, andere Schraege runter).
       if (sl.kind === "roof2") { this._addRoof(sl, model, mat, st); continue; }
+    }
+
+    // Cursor-Modus: ausgewaehlte Teile hervorheben. Als Nachlauf ueber die
+    // fertige Gruppe, damit nicht jeder einzelne Material-Aufruf eine
+    // Auswahl-Variante kennen muss.
+    if (opts.selected && opts.selected.size) {
+      this.buildGroup.traverse((o) => {
+        if (!o.isMesh || !o.userData || !opts.selected.has(o.userData.id)) return;
+        o.material = this._selectedMaterial(o.material);
+      });
+    }
+
+    // Schnittebene: Materialien muessen clipShadows tragen, sonst werfen
+    // weggeschnittene Teile weiterhin Schatten auf den Boden. Die Materialien
+    // entstehen erst bei ihrer ersten Verwendung, deshalb hier statt in setClip.
+    if (this._clipPlane) {
+      this.buildGroup.traverse((o) => {
+        if (o.isMesh && o.material && !o.material.clipShadows) {
+          o.material.clipShadows = true;
+          o.material.needsUpdate = true;
+        }
+      });
     }
 
     // Gras unter bodennahen Bauteilen ausblenden (Footprint-Maske).
@@ -1487,8 +1748,137 @@ export class SceneManager {
   raycastObjects(clientX, clientY, objects) {
     this._setMouse(clientX, clientY);
     const hits = this._raycaster.intersectObjects(objects, false);
-    return hits.length ? hits[0] : null;
+    if (!hits.length) return null;
+    // Schnittebene aktiv: weggeschnittene Stellen sind nicht anklickbar. Damit
+    // faellt ein komplett verdecktes Teil automatisch raus, ein angeschnittenes
+    // bleibt an seiner sichtbaren Haelfte waehlbar.
+    const plane = this._clipPlane;
+    if (!plane) return hits[0];
+    for (const h of hits) if (plane.distanceToPoint(h.point) >= 0) return h;
+    return null;
   }
+
+  /**
+   * Weltpunkt unter dem Mauszeiger (Bauteil-Treffer, sonst Bodenebene).
+   */
+  _pointUnderCursor(clientX, clientY) {
+    this._setMouse(clientX, clientY);
+    const objects = [...this.pickNodes, ...this.pickTubes, ...this.pickPanels,
+                     ...this.pickClamps, ...this.pickTextiles, ...this.pickSlides];
+    for (const h of this._raycaster.intersectObjects(objects, false)) {
+      if (this._clipPlane && this._clipPlane.distanceToPoint(h.point) < 0) continue;
+      return h.point.clone();
+    }
+    // Daneben getroffen: die Kupplung nehmen, die dem Sehstrahl am naechsten
+    // liegt. Ein Drehpunkt auf dem leeren Boden liegt sonst je nach Blickwinkel
+    // weit weg vom Modell und das Drehen fuehlt sich wieder aus wie um nichts.
+    const v = new THREE.Vector3();
+    let best = null, bestD = Infinity;
+    for (const m of this.pickNodes) {
+      v.setFromMatrixPosition(m.matrixWorld);
+      if (this._clipPlane && this._clipPlane.distanceToPoint(v) < 0) continue;
+      const d = this._raycaster.ray.distanceToPoint(v);
+      if (d < bestD) { bestD = d; best = v.clone(); }
+    }
+    if (best) return best;
+    // Gar kein Modell: auf die Bodenebene ausweichen.
+    const ground = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+    const p = new THREE.Vector3();
+    return this._raycaster.ray.intersectPlane(ground, p) ? p : null;
+  }
+
+  /**
+   * Drehen um den Punkt unter dem Mauszeiger -- eigene Implementierung, weil
+   * OrbitControls immer um controls.target dreht und die Kamera in update() per
+   * lookAt darauf ausrichtet. Ein verschobener target liesse das Bild also
+   * springen (der Drehpunkt landet in der Bildmitte).
+   *
+   * Stattdessen wird das ganze Gespann aus Kamera-Position, Kamera-Ausrichtung
+   * UND controls.target als starrer Koerper um den Drehpunkt gedreht. Der Blick
+   * bleibt dadurch exakt erhalten (kein Sprung), der Punkt unter dem Zeiger
+   * steht still, und weil der target mitwandert, passt anschliessend auch das
+   * lookAt von OrbitControls genau zur gesetzten Ausrichtung.
+   */
+  beginOrbit(clientX, clientY) {
+    this._orbitPivot = this._pointUnderCursor(clientX, clientY);
+    return !!this._orbitPivot;
+  }
+
+  endOrbit() {
+    if (!this._orbitPivot) return;
+    this._orbitPivot = null;
+    this.onCameraChange();
+  }
+
+  get orbiting() { return !!this._orbitPivot; }
+
+  orbitBy(dx, dy) {
+    const P = this._orbitPivot;
+    if (!P) return;
+    const h = this.container.clientHeight || 1;
+    const yaw = -2 * Math.PI * dx / h;
+    const pitch = -2 * Math.PI * dy / h;
+    const cam = this.camera;
+    cam.updateMatrixWorld();
+    const right = new THREE.Vector3().setFromMatrixColumn(cam.matrixWorld, 0).normalize();
+    const fwd = new THREE.Vector3();
+    cam.getWorldDirection(fwd);
+
+    const qYaw = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), yaw);
+    const qPitch = new THREE.Quaternion().setFromAxisAngle(right, pitch);
+    // Ueberschlag am Pol vermeiden: Neigung nur anwenden, solange der Blick
+    // nicht fast senkrecht steht.
+    const q = Math.abs(fwd.clone().applyQuaternion(qPitch).y) > 0.995
+      ? qYaw : qYaw.multiply(qPitch);
+
+    const move = (v) => v.sub(P).applyQuaternion(q).add(P);
+    move(cam.position);
+    if (this.controls) move(this.controls.target);
+    cam.quaternion.premultiply(q);
+    cam.updateMatrixWorld();
+  }
+
+  /** Kamerazustand zum Sichern (Position, Ziel, Zoom). */
+  cameraState() {
+    if (!this.controls) return null;
+    return {
+      pos: this.camera.position.toArray(),
+      target: this.controls.target.toArray(),
+      zoom: this.camera.zoom,
+    };
+  }
+
+  restoreCameraState(st) {
+    if (!st || !this.controls || !Array.isArray(st.pos) || !Array.isArray(st.target)) return false;
+    this.camera.position.fromArray(st.pos);
+    this.controls.target.fromArray(st.target);
+    if (typeof st.zoom === "number" && st.zoom > 0) this.camera.zoom = st.zoom;
+    this.camera.updateProjectionMatrix();
+    this._updateOrthoFrustum();
+    this.controls.update();
+    return true;
+  }
+
+  // --- Schnittebene --------------------------------------------------------
+  // Blendet alles vor der Ebene aus (echtes Clipping, keine Objekt-Sichtbarkeit)
+  // -- ein Rohr, das die Ebene kreuzt, bleibt zur Haelfte stehen.
+  // axis: "x" | "y" | "z", value in cm, flip dreht die sichtbare Seite um.
+  setClip(axis, value, flip) {
+    const n = axis === "x" ? [1, 0, 0] : axis === "y" ? [0, 1, 0] : [0, 0, 1];
+    const sign = flip ? 1 : -1;
+    const normal = new THREE.Vector3(n[0] * sign, n[1] * sign, n[2] * sign);
+    const constant = flip ? -value : value;
+    if (this._clipPlane) this._clipPlane.set(normal, constant);
+    else this._clipPlane = new THREE.Plane(normal, constant);
+    this.renderer.clippingPlanes = [this._clipPlane];
+  }
+
+  clearClip() {
+    this._clipPlane = null;
+    this.renderer.clippingPlanes = [];
+  }
+
+  get clipping() { return !!this._clipPlane; }
 
   pickHandle(clientX, clientY) {
     const hit = this.raycastObjects(clientX, clientY, this.handleMeshes);
@@ -1514,22 +1904,72 @@ export class SceneManager {
     return hit ? { object: hit.object, data: hit.object.userData, point: hit.point } : null;
   }
 
+  // --- Auswahl-Rechteck (Cursor-Modus) ------------------------------------
+
+  showSelectBox(x0, y0, x1, y1) {
+    if (!this._selectBox) {
+      this._selectBox = document.createElement("div");
+      this._selectBox.className = "select-box";
+      this.container.appendChild(this._selectBox);
+    }
+    const r = this.renderer.domElement.getBoundingClientRect();
+    const b = this._selectBox;
+    b.hidden = false;
+    b.style.left = (Math.min(x0, x1) - r.left) + "px";
+    b.style.top = (Math.min(y0, y1) - r.top) + "px";
+    b.style.width = Math.abs(x1 - x0) + "px";
+    b.style.height = Math.abs(y1 - y0) + "px";
+  }
+
+  hideSelectBox() {
+    if (this._selectBox) this._selectBox.hidden = true;
+  }
+
+  /**
+   * Alle waehlbaren Teile, deren Mittelpunkt im Bildschirm-Rechteck liegt.
+   * Der Mittelpunkt entscheidet (nicht die Huelle): ein langes Rohr, das nur
+   * durch das Rechteck streift, gilt damit als nicht enthalten.
+   * Liefert id -> kind, passend zu builder.selection.
+   */
+  pickInRect(x0, y0, x1, y1) {
+    const r = this.renderer.domElement.getBoundingClientRect();
+    const minX = Math.min(x0, x1), maxX = Math.max(x0, x1);
+    const minY = Math.min(y0, y1), maxY = Math.max(y0, y1);
+    const out = new Map();
+    const v = new THREE.Vector3();
+    this.scene.updateMatrixWorld();
+    const meshes = [...this.pickNodes, ...this.pickTubes, ...this.pickPanels,
+                    ...this.pickClamps, ...this.pickTextiles, ...this.pickSlides];
+    for (const m of meshes) {
+      const d = m.userData;
+      if (!d || !d.id || out.has(d.id)) continue;
+      if (!m.geometry.boundingBox) m.geometry.computeBoundingBox();
+      m.geometry.boundingBox.getCenter(v).applyMatrix4(m.matrixWorld).project(this.camera);
+      if (v.z > 1) continue;   // hinter der Kamera
+      const sx = r.left + (v.x * 0.5 + 0.5) * r.width;
+      const sy = r.top + (-v.y * 0.5 + 0.5) * r.height;
+      if (sx >= minX && sx <= maxX && sy >= minY && sy <= maxY) out.set(d.id, d.kind);
+    }
+    return out;
+  }
+
   setHover(object) {
     if (this._hover === object) return;
     if (this._hover && this._hover.userData.kind === "handle") {
-      if (this._hover.userData.panelCell) this._hover.material.opacity = 0.35;
+      if (this._hover.userData.panelCell) this._hover.material = this._panelHandleMaterial(false);
       else this._hover.scale.setScalar(1);
     }
     this._hover = object;
     if (object && object.userData.kind === "handle") {
-      if (object.userData.panelCell) object.material.opacity = 0.65;
+      if (object.userData.panelCell) object.material = this._panelHandleMaterial(true);
       else object.scale.setScalar(1.6);
     }
     this.container.style.cursor = object ? "pointer" : "default";
   }
 
   _disposeGroup(group) {
-    const cached = [this._connGeo, this._clampGeo, this._clampRingGeo, this._c45Geo, this._c45StubGeo];
+    const cached = [this._connGeo, this._clampGeo, this._clampRingGeo, this._c45Geo, this._c45StubGeo,
+      ...this._panelGeos.values()];
     for (let i = group.children.length - 1; i >= 0; i--) {
       const c = group.children[i];
       // Rekursiv (verschachtelte Gruppen, z.B. Rutschen) Geometrien freigeben.

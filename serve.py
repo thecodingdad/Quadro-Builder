@@ -39,7 +39,7 @@ def main():
     port = int(sys.argv[1]) if len(sys.argv) > 1 else 8000
     socketserver.TCPServer.allow_reuse_address = True
     handler = partial(Handler, directory=ROOT)
-    with socketserver.TCPServer(("127.0.0.1", port), handler) as httpd:
+    with socketserver.TCPServer(("0.0.0.0", port), handler) as httpd:
         url = f"http://127.0.0.1:{port}/web/index.html"
         print("=" * 52)
         print("  Quadro Builder")

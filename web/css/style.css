@@ -158,17 +158,33 @@ body {
 .btn.part:disabled { opacity: 0.38; cursor: default; }
 .btn.part:disabled:hover { border-color: var(--line); background: #fff; }
 
-/* Farb-Auswahl-Popup (erscheint beim 2. Klick auf aktiven Part-Button) */
-.color-popup {
+/* Varianten-Popup unter den Bauteil-Buttons (Rohre / Platten) */
+.part-popup {
   display: flex;
-  gap: 7px;
-  padding: 8px 10px;
+  flex-direction: column;
+  gap: 2px;
+  padding: 6px;
+  min-width: 180px;
+  max-height: min(60vh, 420px);
+  overflow-y: auto;
   background: #fff;
   border: 1px solid var(--line);
   border-radius: 10px;
   box-shadow: 0 8px 28px rgba(0, 0, 0, 0.18);
   z-index: 200;
 }
+.part-popup-row {
+  display: flex; align-items: center; gap: 9px;
+  padding: 6px 8px;
+  border: none; border-radius: 7px;
+  background: none; color: var(--ink);
+  font-size: 13px; font-family: inherit; text-align: left;
+  cursor: pointer;
+}
+.part-popup-row:hover { background: #f1f4f8; }
+.part-popup-row.active { background: var(--accent); color: var(--accent-ink); }
+.part-popup-row svg { flex: 0 0 auto; }
+.part-popup-row .pp-name { flex: 1; white-space: nowrap; }
 .btn.icon-btn { display: inline-flex; align-items: center; gap: 5px; }
 .btn.icon-btn svg { display: block; }
 
@@ -206,6 +222,10 @@ body {
 .btn.danger { color: var(--no); }
 .btn.danger:hover { border-color: var(--no); background: #fdeceb; }
 .menu-pop hr, .menu-section + .btn { margin-top: 2px; }
+/* Einstellungen: schmaler als das Entwürfe-Menü, Hinweis ohne Extra-Abstand */
+#settings-pop { width: min(240px, calc(100vw - 28px)); }
+#settings-pop select { width: 100%; max-width: none; }
+#settings-pop .hint { margin-top: 2px; }
 /* Quadratische Icon-Buttons */
 .btn.icon-sq { padding: 6px 8px; min-width: 32px; display: inline-flex; align-items: center; justify-content: center; }
 
@@ -366,6 +386,52 @@ body.sidebar-hidden #sidebar, body.sidebar-hidden #sidebar-resizer { display: no
 .totals strong { font-variant-numeric: tabular-nums; }
 
 /* Inventory */
+/* Schnittebene: schwebende Leiste oben mittig über dem Viewport */
+#slice-bar {
+  position: absolute;
+  top: 12px; left: 50%;
+  transform: translateX(-50%);
+  display: flex; align-items: center; gap: 8px;
+  padding: 6px 10px;
+  background: rgba(255, 255, 255, 0.95);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.14);
+  z-index: 6;
+}
+#slice-bar .btn.small { padding: 4px 9px; font-size: 12px; }
+#slice-bar .seg .btn { min-width: 28px; }
+#slice-range { width: 220px; }
+.slice-value {
+  font-size: 12px; font-variant-numeric: tabular-nums;
+  color: var(--muted); min-width: 56px; text-align: right;
+}
+
+/* Auswahl-Rechteck im Cursor-Modus (Drag über dem Canvas) */
+.select-box {
+  position: absolute;
+  border: 1px solid var(--accent);
+  background: rgba(26, 140, 255, 0.14);
+  pointer-events: none;
+  z-index: 5;
+}
+
+/* Aussenmasse des Modells über der Bestandsliste */
+.model-size {
+  display: flex; gap: 6px;
+  margin-bottom: 10px;
+}
+.model-size .dim {
+  flex: 1;
+  display: flex; flex-direction: column; gap: 1px;
+  padding: 6px 8px;
+  background: #f4f6f9; border-radius: 8px;
+}
+.model-size .dim-label {
+  font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--muted);
+}
+.model-size .dim-value { font-size: 14px; font-weight: 700; font-variant-numeric: tabular-nums; }
+
 .feasibility {
   font-size: 13px; font-weight: 600;
   padding: 8px 10px; border-radius: 8px; margin-bottom: 10px;
@@ -540,12 +606,6 @@ body.sidebar-hidden #sidebar, body.sidebar-hidden #sidebar-resizer { display: no
     width: auto;
     top: auto;
   }
-}
-
-/* ≤480 px: nur Kern-Teile in der Bauteil-Leiste */
-@media (max-width: 480px) {
-  /* Nicht-essentielle Tubes (10, 20, 25, 52 cm) und Platten (80er) ausblenden */
-  .hide-narrow { display: none !important; }
 }
 
 /* Druckbereich (nur beim Drucken sichtbar) */

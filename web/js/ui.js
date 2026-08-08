@@ -4,6 +4,7 @@ import { buildableTubes, buildableCurvedTubes, buildablePanels, tubeColors, geom
 import { computeBOM, compareInventory } from "./bom.js";
 import { computeBuildPlan } from "./buildplan.js";
 import { parseQDF } from "./qdfimport.js";
+import { QUALITY_LEVELS } from "./scene.js";
 import * as storage from "./storage.js";
 import { t, getLang, setLang, applyTranslations } from "./i18n.js";
 
@@ -70,6 +71,9 @@ export function initUI({ scene, model, builder }) {
       renderHelpTable();
       renderColorButtons();
       renderOrderOptions();
+      renderPartButtons();
+      renderQualityOptions();
+      syncProjectionButton();
       // Dynamische UI-Texte aktualisieren
       setMode(builder.mode);
       update();
@@ -111,6 +115,148 @@ export function initUI({ scene, model, builder }) {
     if (fileMenu && !fileMenu.contains(e.target)) toggleFileMenu(false);
   });
 
+  // --- Schnittebene ------------------------------------------------------
+  // Schneidet das Modell entlang einer Achse auf, damit man hineinsehen und
+  // weiter innen bauen kann. Kein eigener Modus: laeuft parallel zu Bauen,
+  // Platten setzen usw. weiter.
+  const sliceBar = $("slice-bar");
+  const sliceRange = $("slice-range");
+  const slice = { on: false, axis: "z", value: 0, flip: false };
+
+  function sliceLimits() {
+    const b = model.bounds(geometry().connectorSize / 2);
+    if (!b) return { min: -100, max: 100 };
+    const i = slice.axis === "x" ? 0 : slice.axis === "y" ? 1 : 2;
+    return { min: Math.floor(b.min[i]), max: Math.ceil(b.max[i]) };
+  }
+
+  function applySlice() {
+    if (!sliceBar) return;
+    sliceBar.hidden = !slice.on;
+    $("btn-slice").classList.toggle("active", slice.on);
+    if (!slice.on) { scene.clearClip(); builder.refresh(); return; }
+    const lim = sliceLimits();
+    sliceRange.min = lim.min;
+    sliceRange.max = lim.max;
+    slice.value = Math.min(lim.max, Math.max(lim.min, slice.value));
+    sliceRange.value = slice.value;
+    $("slice-value").textContent = `${Math.round(slice.value)} cm`;
+    for (const b of $("slice-axes").querySelectorAll("button"))
+      b.classList.toggle("active", b.dataset.axis === slice.axis);
+    scene.setClip(slice.axis, slice.value, slice.flip);
+    builder.refresh();   // Handles neu: verdeckte sind nicht mehr anklickbar
+  }
+
+  if (sliceBar) {
+    $("btn-slice").addEventListener("click", () => {
+      slice.on = !slice.on;
+      if (slice.on) {
+        // Beim Einschalten in die Mitte der aktuellen Achse legen.
+        const lim = sliceLimits();
+        slice.value = Math.round((lim.min + lim.max) / 2);
+      }
+      applySlice();
+    });
+    $("slice-close").addEventListener("click", () => { slice.on = false; applySlice(); });
+    $("slice-flip").addEventListener("click", () => { slice.flip = !slice.flip; applySlice(); });
+    for (const b of $("slice-axes").querySelectorAll("button")) {
+      b.addEventListener("click", () => {
+        slice.axis = b.dataset.axis;
+        const lim = sliceLimits();
+        slice.value = Math.round((lim.min + lim.max) / 2);
+        applySlice();
+      });
+    }
+    sliceRange.addEventListener("input", () => {
+      slice.value = parseFloat(sliceRange.value);
+      $("slice-value").textContent = `${Math.round(slice.value)} cm`;
+      scene.setClip(slice.axis, slice.value, slice.flip);
+    });
+    // Erst beim Loslassen neu aufbauen -- waehrend des Ziehens waere das zaeh.
+    sliceRange.addEventListener("change", () => builder.refresh());
+  }
+
+  // --- Kamera merken -----------------------------------------------------
+  // Position, Blickziel und Zoom ueberleben einen Reload; sonst landet man
+  // immer wieder in der Standardansicht.
+  const CAMERA_KEY = "quadro.camera.v1";
+  let camSaveTimer = null;
+  scene.onCameraChange = () => {
+    clearTimeout(camSaveTimer);
+    camSaveTimer = setTimeout(() => {
+      const st = scene.cameraState();
+      if (st) localStorage.setItem(CAMERA_KEY, JSON.stringify(st));
+    }, 400);
+  };
+
+  // --- Kamera-Projektion -------------------------------------------------
+  // Orthogonal = keine Fluchtpunkte: parallele Rohre bleiben parallel, gut zum
+  // Ausmessen und Vergleichen. Perspektivisch = raeumlicher Eindruck.
+  const PROJECTION_KEY = "quadro.projection.v1";
+  const projBtn = $("btn-projection");
+  function syncProjectionButton() {
+    if (!projBtn) return;
+    const ortho = scene.projection === "orthographic";
+    projBtn.classList.toggle("active", ortho);
+    projBtn.title = t(ortho ? "btn_projection_ortho" : "btn_projection_persp");
+  }
+  if (projBtn) {
+    const savedProj = localStorage.getItem(PROJECTION_KEY);
+    if (savedProj) scene.setProjection(savedProj);
+    syncProjectionButton();
+    // Erst Projektion, dann Kamera: setProjection() setzt den Zoom zurueck.
+    try {
+      const st = JSON.parse(localStorage.getItem(CAMERA_KEY));
+      if (st) scene.restoreCameraState(st);
+    } catch { /* kaputter Eintrag -> Standardansicht */ }
+    projBtn.addEventListener("click", () => {
+      const next = scene.projection === "orthographic" ? "perspective" : "orthographic";
+      scene.setProjection(next);
+      localStorage.setItem(PROJECTION_KEY, next);
+      syncProjectionButton();
+      flash(t(next === "orthographic" ? "btn_projection_ortho" : "btn_projection_persp"));
+    });
+  }
+
+  // --- Einstellungen -----------------------------------------------------
+  // Render-Qualitaet: nur die Aufloesung der Geometrien, keine Masse. Wird in
+  // localStorage gemerkt und beim Start angewendet.
+  const QUALITY_KEY = "quadro.quality.v1";
+  const settingsMenu = $("settings-menu");
+  const qualitySelect = $("quality-select");
+
+  function renderQualityOptions() {
+    if (!qualitySelect) return;
+    qualitySelect.innerHTML = "";
+    for (const level of QUALITY_LEVELS) {
+      const o = el("option", null, t("quality_" + level));
+      o.value = level;
+      qualitySelect.appendChild(o);
+    }
+    qualitySelect.value = scene.quality;
+  }
+
+  function toggleSettingsMenu(open) {
+    const pop = $("settings-pop");
+    const show = open == null ? pop.hidden : open;
+    pop.hidden = !show;
+    $("btn-settings").classList.toggle("active", show);
+  }
+
+  if (qualitySelect) {
+    const saved = localStorage.getItem(QUALITY_KEY);
+    if (saved && scene.setQuality(saved)) builder.refresh();
+    renderQualityOptions();
+    qualitySelect.addEventListener("change", () => {
+      if (scene.setQuality(qualitySelect.value)) builder.refresh();
+      localStorage.setItem(QUALITY_KEY, qualitySelect.value);
+    });
+    $("btn-settings").addEventListener("click", (e) => { e.stopPropagation(); toggleSettingsMenu(); });
+    document.addEventListener("click", (e) => {
+      if (settingsMenu && !settingsMenu.contains(e.target)) toggleSettingsMenu(false);
+    });
+  }
+
   // --- Hamburger-Menü (Mobile) -------------------------------------------
   const hamburgerBtn = $("btn-hamburger");
   const hamburgerInner = $("toolbar-right-inner");
@@ -130,9 +276,23 @@ export function initUI({ scene, model, builder }) {
 
   // --- Modus -------------------------------------------------------------
   $("mode-add").addEventListener("click", () => setMode("add"));
+  $("mode-select").addEventListener("click", () => setMode("select"));
   $("mode-clamp").addEventListener("click", () => setMode("clamp"));
-  $("mode-delete").addEventListener("click", () => setMode("delete"));
-  $("mode-reinforce").addEventListener("click", () => setMode(builder.mode === "reinforce" ? "add" : "reinforce"));
+  // Loeschen arbeitet auf der Cursor-Auswahl; der Button ist sonst ausgeblendet.
+  $("mode-delete").addEventListener("click", () => {
+    const n = builder.deleteSelection();
+    if (n) flash(t("flash_deleted_n", n));
+    syncDeleteButton();
+  });
+  $("mode-reinforce").addEventListener("click", () => setMode(builder.mode === "reinforce" ? "select" : "reinforce"));
+  $("mode-collision").addEventListener("click", () => {
+    const on = builder.mode !== "collision";
+    setMode(on ? "collision" : "select");
+    if (on) {
+      const n = builder.collisionCount();
+      flash(n ? t("flash_collisions_n", n) : t("flash_collisions_0"));
+    }
+  });
   $("mode-assembly").addEventListener("click", () => setMode("assembly"));
   $("btn-labels").addEventListener("click", () => toggleLabels());
   $("btn-hints").addEventListener("click", () => toggleHints());
@@ -161,21 +321,33 @@ export function initUI({ scene, model, builder }) {
   function syncPartHighlights() {
     const inAdd = builder.mode === "add";
     const inPanel = builder.mode === "panel";
-    tubeWrap.querySelectorAll("button").forEach((x) =>
-      x.classList.toggle("active", inAdd && x.dataset.tube === builder.tubeId));
-    panelWrap.querySelectorAll("button").forEach((x) =>
-      x.classList.toggle("active", inPanel && x.dataset.panel === builder.panelId));
+    // Die Buttons zeigen die Auswahl (auch wenn sie per Tastatur kam) und
+    // markieren per .active, welcher der beiden Bau-Modi gerade laeuft.
+    renderPartButtons();
+    const curved = isCurved(builder.tubeId);
+    tubeBtn.classList.toggle("active", inAdd && !curved);
+    if (bowBtn) bowBtn.classList.toggle("active", inAdd && curved);
+    panelBtn.classList.toggle("active", inPanel);
     if (slideBtn) slideBtn.classList.toggle("active", builder.mode === "slide");
     $("btn-diagonal").classList.toggle("active", inAdd && builder.diagonal);
     syncPartColors();
   }
 
+  /** Loeschen-Button: nur sichtbar, wenn im Cursor-Modus etwas ausgewaehlt ist. */
+  function syncDeleteButton() {
+    const on = builder.mode === "select" && builder.selection.size > 0;
+    $("mode-delete").hidden = !on;
+  }
+
   function setMode(m) {
     builder.setMode(m);
-    $("mode-add").classList.toggle("active", m === "add" || m === "panel" || m === "slide");
+    // Der Cursor-Modus gehoert zum Bauen (nicht zum Aufbau-Modus), deshalb
+    // bleibt "Bauen" oben mit markiert.
+    $("mode-add").classList.toggle("active", m === "add" || m === "panel" || m === "slide" || m === "select");
+    $("mode-select").classList.toggle("active", m === "select");
     $("mode-clamp").classList.toggle("active", m === "clamp");
-    $("mode-delete").classList.toggle("active", m === "delete");
     $("mode-reinforce").classList.toggle("active", m === "reinforce");
+    $("mode-collision").classList.toggle("active", m === "collision");
     $("mode-assembly").classList.toggle("active", m === "assembly");
     $("toolbar-ctx").hidden = m === "assembly";
     // Aufbau-Modus zeigt das Aufbau-Panel; beim Verlassen zurück zum zuletzt
@@ -191,23 +363,25 @@ export function initUI({ scene, model, builder }) {
       showSidebarPanel(localStorage.getItem(SIDEBAR_PANEL_KEY) || null);
     $("btn-labels").classList.toggle("active", builder.showLabels);
     syncPartHighlights();
+    syncDeleteButton();
     const statusMap = {
+      select: "status_select",
       add: "status_add",
       panel: "status_panel",
       reinforce: "status_reinforce",
+      collision: "status_collision",
       clamp: "status_clamp",
       assembly: "status_assembly",
-      delete: "status_delete",
     };
     $("status").textContent = t(statusMap[m] || "status_add");
     if (m === "assembly") renderAssembly();
   }
 
-  // --- Farb-Popup (erscheint beim 2. Klick auf den bereits aktiven Part-Button) ---
+  // Schwarz gibt es nur fuer Platten, nicht fuer Rohre.
   const PANEL_EXTRA_COLORS = [{ id: "black", name: "Schwarz", name_en: "Black", hex: "#2b2b2b" }];
 
-  let activeColorPopup = null;
-  let colorPopupAnchor = null; // Button, der das Popup geöffnet hat
+  let activePopup = null;
+  let popupAnchor = null; // Button, der das Popup geöffnet hat
 
   function colorHexFor(colorId) {
     const c = tubeColors().find((x) => x.id === colorId);
@@ -240,53 +414,46 @@ export function initUI({ scene, model, builder }) {
     });
   }
 
-  function closeColorPopup() {
-    if (!activeColorPopup) return;
-    activeColorPopup.remove();
-    activeColorPopup = null;
-    colorPopupAnchor = null;
+  function closePopup() {
+    if (!activePopup) return;
+    activePopup.remove();
+    activePopup = null;
+    popupAnchor = null;
     document.removeEventListener("click", onPopupOutsideClick);
   }
 
   function onPopupOutsideClick(e) {
     // Klick auf den Anker-Button selbst (oder dessen Kinder) → Popup bleibt offen;
     // der Button-Handler togglet das Popup dann selbst.
-    if (colorPopupAnchor && colorPopupAnchor.contains(e.target)) return;
-    if (activeColorPopup && !activeColorPopup.contains(e.target)) closeColorPopup();
+    if (popupAnchor && popupAnchor.contains(e.target)) return;
+    if (activePopup && !activePopup.contains(e.target)) closePopup();
   }
 
   /**
-   * Öffnet ein kleines Farbwahl-Popup unter dem Anker-Button.
-   * Zweiter Klick auf denselben Button schließt es wieder (Toggle).
-   * partType: "tube" → 4 Farben; "panel" → 4 + Schwarz.
+   * Öffnet die Varianten-Liste unter einem Bauteil-Button (Rohre/Platten).
+   * Zweiter Klick auf denselben Button schließt sie wieder (Toggle).
+   * iconOf(item) liefert das SVG-Markup, onPick(item) übernimmt die Auswahl.
    */
-  function showColorPopup(anchorBtn, partType) {
+  function showPartPopup(anchorBtn, items, currentId, iconOf, onPick) {
     // Toggle: Popup für denselben Button bereits offen → schließen
-    if (activeColorPopup && colorPopupAnchor === anchorBtn) {
-      closeColorPopup();
+    if (activePopup && popupAnchor === anchorBtn) {
+      closePopup();
       return;
     }
-    closeColorPopup();
+    closePopup();
 
-    const colors = tubeColors();
-    const list = partType === "panel" ? [...colors, ...PANEL_EXTRA_COLORS] : colors;
-
-    const pop = document.createElement("div");
-    pop.className = "color-popup";
-
-    list.forEach((c) => {
-      const sw = el("button", "swatch" + (c.id === builder.color ? " active" : ""));
-      sw.style.background = c.hex;
-      sw.title = c.name;
-      sw.dataset.color = c.id;
-      sw.addEventListener("click", (e) => {
+    const pop = el("div", "part-popup");
+    for (const item of items) {
+      const row = el("button", "part-popup-row" + (item.id === currentId ? " active" : ""));
+      row.innerHTML = iconOf(item) + `<span class="pp-name"></span>`;
+      row.querySelector(".pp-name").textContent = partName(item);
+      row.addEventListener("click", (e) => {
         e.stopPropagation();
-        builder.setColor(c.id);
-        syncPartColors();
-        closeColorPopup();
+        onPick(item);
+        closePopup();
       });
-      pop.appendChild(sw);
-    });
+      pop.appendChild(row);
+    }
 
     document.body.appendChild(pop);
 
@@ -303,58 +470,74 @@ export function initUI({ scene, model, builder }) {
       if (parseFloat(pop.style.left) > maxLeft) pop.style.left = maxLeft + "px";
     });
 
-    activeColorPopup = pop;
-    colorPopupAnchor = anchorBtn;
+    activePopup = pop;
+    popupAnchor = anchorBtn;
     // Leicht verzögert registrieren, damit der auslösende Klick nicht sofort schließt
     setTimeout(() => document.addEventListener("click", onPopupOutsideClick), 0);
   }
 
-  // --- Rohr-Buttons ------------------------------------------------------
-  // Kern-Tubes: auf schmalen Screens sichtbar; der Rest bekommt hide-narrow
-  const ESSENTIAL_TUBES  = new Set(["T15", "T35", "T75"]);
-  // Kern-Platten: auf schmalen Screens sichtbar
-  const ESSENTIAL_PANELS = new Set(["panel_40x40", "panel_40x20"]);
-
+  // --- Rohr-Auswahl (Button + Popup) -------------------------------------
+  // Frueher stand je Rohrlaenge ein eigener Button in der Leiste; auf schmalen
+  // Screens musste die Haelfte davon per hide-narrow verschwinden. Jetzt zeigt
+  // EIN Button die aktuelle Wahl, der Klick klappt die Varianten darunter auf.
+  // Bogenrohre haben keine gerade Laenge und stehen deshalb nicht in
+  // buildableTubes(); sie bauen ueber dieselben Richtungs-Handles, setzen dort
+  // aber einen Viertelkreis -> eigener Button daneben.
   const tubeWrap = $("tube-buttons");
   const tubes = buildableTubes();
-  tubes.forEach((tube, i) => {
-    const narrow = ESSENTIAL_TUBES.has(tube.id) ? "" : " hide-narrow";
-    const b = el("button", "btn part" + narrow);
-    b.dataset.tube = tube.id;
-    b.title = `${tube.name} – ${eur(tube.price)} (${i + 1})`;
+  const curvedTubes = buildableCurvedTubes();
+  const isCurved = (id) => curvedTubes.some((x) => x.id === id);
+  // Der Rohr-Button zeigt weiter die zuletzt gewaehlte GERADE Laenge, auch
+  // waehrend ein Bogenrohr aktiv ist.
+  let lastStraightTubeId = tubes.some((x) => x.id === builder.tubeId) ? builder.tubeId : tubes[0].id;
+
+  function tubeIcon(tube) {
+    if (tube.shape === "curved")
+      return `<svg viewBox="0 0 28 16" width="28" height="16" aria-hidden="true">` +
+        `<path d="M5 14 A9 9 0 0 1 14 5 L23 5" fill="none" stroke="currentColor" stroke-width="3.4" stroke-linecap="round"/></svg>`;
     const w = Math.round(8 + Math.min(tube.length_cm, 75) / 75 * 18);
-    b.innerHTML =
-      `<svg viewBox="0 0 28 16" width="28" height="16" aria-hidden="true">` +
-      `<line x1="${14 - w / 2}" y1="8" x2="${14 + w / 2}" y2="8" stroke="currentColor" stroke-width="3.4" stroke-linecap="round"/></svg>` +
-      `<span>${tube.length_cm}</span>`;
-    if (tube.id === builder.tubeId) b.classList.add("active");
-    b.addEventListener("click", () => {
+    return `<svg viewBox="0 0 28 16" width="28" height="16" aria-hidden="true">` +
+      `<line x1="${14 - w / 2}" y1="8" x2="${14 + w / 2}" y2="8" stroke="currentColor" stroke-width="3.4" stroke-linecap="round"/></svg>`;
+  }
+  function tubeShortLabel(tube) {
+    return tube.shape === "curved" ? t("part_bow") : String(tube.length_cm);
+  }
+
+  const tubeBtn = el("button", "btn part");
+  tubeBtn.dataset.tube = "";
+  tubeBtn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    // Klick auf den Rohr-Button heisst "ich will gerade Rohre bauen" ->
+    // Modus mitschalten und von einem aktiven Bogen zurueckwechseln.
+    if (builder.mode !== "add") setMode("add");
+    if (isCurved(builder.tubeId)) { builder.setTube(lastStraightTubeId); syncPartHighlights(); }
+    showPartPopup(tubeBtn, tubes, builder.tubeId, tubeIcon, (tube) => {
       builder.setTube(tube.id);
       if (builder.mode !== "add") setMode("add");
       else syncPartHighlights();
     });
-    tubeWrap.appendChild(b);
   });
+  tubeWrap.appendChild(tubeBtn);
 
-  // --- Bogenrohr-Buttons -------------------------------------------------
-  // Bogenrohre haben keine gerade Laenge und stehen deshalb nicht in
-  // buildableTubes(); sie bauen ueber dieselben Richtungs-Handles wie ein
-  // gerades Rohr, setzen dort aber einen Viertelkreis.
-  for (const cv of buildableCurvedTubes()) {
-    const b = el("button", "btn part");
-    b.dataset.tube = cv.id;
-    b.title = `${partName(cv)} – ${eur(cv.price)}`;
-    b.innerHTML =
-      `<svg viewBox="0 0 28 16" width="28" height="16" aria-hidden="true">` +
-      `<path d="M5 14 A9 9 0 0 1 14 5 L23 5" fill="none" stroke="currentColor" stroke-width="3.4" stroke-linecap="round"/></svg>` +
-      `<span data-i18n="part_bow">${t("part_bow")}</span>`;
-    if (cv.id === builder.tubeId) b.classList.add("active");
-    b.addEventListener("click", () => {
-      builder.setTube(cv.id);
+  // Bogenrohr: eigener Button direkt neben den geraden Rohren. Bei mehreren
+  // Bogen-Varianten klappt dieselbe Varianten-Liste auf.
+  const bowBtn = curvedTubes.length ? el("button", "btn part") : null;
+  if (bowBtn) {
+    bowBtn.dataset.tube = "";
+    bowBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
       if (builder.mode !== "add") setMode("add");
-      else syncPartHighlights();
+      if (curvedTubes.length < 2) {
+        builder.setTube(curvedTubes[0].id);
+        syncPartHighlights();
+        return;
+      }
+      showPartPopup(bowBtn, curvedTubes, builder.tubeId, tubeIcon, (tube) => {
+        builder.setTube(tube.id);
+        syncPartHighlights();
+      });
     });
-    tubeWrap.appendChild(b);
+    tubeWrap.appendChild(bowBtn);
   }
 
   // --- Farb-Buttons ------------------------------------------------------
@@ -382,30 +565,62 @@ export function initUI({ scene, model, builder }) {
   }
   renderColorButtons();
 
-  // --- Platten-Buttons ---------------------------------------------------
+  // --- Platten-Auswahl (Button + Popup) ----------------------------------
+  // Analog zu den Rohren. Volle Platte und Lochplatte gleicher Groesse stehen
+  // als getrennte Varianten drin und zaehlen in der Stueckliste getrennt; das
+  // Icon zeigt das 3x3-Lochraster.
   const panelWrap = $("panel-buttons");
-  for (const p of buildablePanels()) {
-    const narrow = ESSENTIAL_PANELS.has(p.id) ? "" : " hide-narrow";
-    const b = el("button", "btn part" + narrow);
-    b.dataset.panel = p.id;
-    b.title = `${p.name} – ${eur(p.price)}`;
-    b.innerHTML =
-      `<svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true">` +
-      `<rect x="2.5" y="2.5" width="11" height="11" rx="1.5" fill="currentColor" opacity="0.18" stroke="currentColor" stroke-width="1.4"/></svg>` +
-      `<span>${p.w}×${p.h}</span>`;
-    if (p.id === builder.panelId) b.classList.add("active");
-    b.addEventListener("click", () => {
+  const panelList = buildablePanels();
+
+  function panelIcon(p) {
+    let holes = "";
+    if (p.holes === 9)
+      for (const cy of [4.6, 8, 11.4])
+        for (const cx of [4.6, 8, 11.4])
+          holes += `<circle cx="${cx}" cy="${cy}" r="1.35" fill="currentColor"/>`;
+    return `<svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true">` +
+      `<rect x="2.5" y="2.5" width="11" height="11" rx="1.5" fill="currentColor" opacity="0.18" stroke="currentColor" stroke-width="1.4"/>` +
+      holes + `</svg>`;
+  }
+
+  const panelBtn = el("button", "btn part");
+  panelBtn.dataset.panel = "";
+  panelBtn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    if (builder.mode !== "panel") setMode("panel");
+    showPartPopup(panelBtn, panelList, builder.panelId, panelIcon, (p) => {
       builder.setPanel(p.id);
       setMode("panel");
     });
-    panelWrap.appendChild(b);
+  });
+  panelWrap.appendChild(panelBtn);
+
+  /** Beschriftet die Bauteil-Buttons mit der jeweils aktuellen Variante. */
+  function renderPartButtons() {
+    if (tubes.some((x) => x.id === builder.tubeId)) lastStraightTubeId = builder.tubeId;
+    const tube = tubes.find((x) => x.id === lastStraightTubeId) || tubes[0];
+    tubeBtn.innerHTML = tubeIcon(tube) + `<span></span>`;
+    tubeBtn.lastChild.textContent = tubeShortLabel(tube);
+    tubeBtn.title = `${t("label_tube")}: ${partName(tube)} – ${eur(tube.price)}`;
+
+    if (bowBtn) {
+      const bow = curvedTubes.find((x) => x.id === builder.tubeId) || curvedTubes[0];
+      bowBtn.innerHTML = tubeIcon(bow) + `<span></span>`;
+      bowBtn.lastChild.textContent = t("part_bow");
+      bowBtn.title = `${partName(bow)} – ${eur(bow.price)}`;
+    }
+
+    const pan = panelList.find((x) => x.id === builder.panelId) || panelList[0];
+    panelBtn.innerHTML = panelIcon(pan) + `<span></span>`;
+    panelBtn.lastChild.textContent = `${pan.w}×${pan.h}`;
+    panelBtn.title = `${t("label_panel")}: ${partName(pan)} – ${eur(pan.price)}`;
   }
 
   // --- Rutschen-Button ---------------------------------------------------
   // Rutschen sind keine Rohre/Platten: sie werden an zwei senkrechten,
   // parallelen Rohren eingehaengt. Der Modus zeigt die passenden Felder an.
   {
-    const b = el("btn-slide" && "button", "btn part");
+    const b = el("button", "btn part");
     b.dataset.slide = "slide-new2";
     b.title = t("part_slide");
     b.innerHTML =
@@ -413,7 +628,7 @@ export function initUI({ scene, model, builder }) {
       `<path d="M3 13 C7 13 5 4 13 3" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>` +
       `<span data-i18n="part_slide">${t("part_slide")}</span>`;
     b.addEventListener("click", () => setMode(builder.mode === "slide" ? "add" : "slide"));
-    panelWrap.appendChild(b);
+    $("slide-buttons").appendChild(b);
     slideBtn = b;
   }
 
@@ -451,6 +666,7 @@ export function initUI({ scene, model, builder }) {
         });
         if (!data.nodes.length) throw new Error(t("qdf_no_parts"));
         let loadRes;
+        builder.modelReplaced();
         builder.recordHistory(() => { loadRes = model.loadJSON(data); });
         if (!loadRes.ok) throw new Error(t(loadRes.reason === "format" ? "load_error_format" : "load_error_data"));
         builder.selectedNodeId = null;
@@ -468,6 +684,7 @@ export function initUI({ scene, model, builder }) {
       } else {
         const data = await storage.importFile(f);
         let loadRes;
+        builder.modelReplaced();
         builder.recordHistory(() => { loadRes = model.loadJSON(data); });
         if (!loadRes.ok) throw new Error(t(loadRes.reason === "format" ? "load_error_format" : "load_error_data"));
         builder.selectedNodeId = null;
@@ -514,7 +731,8 @@ export function initUI({ scene, model, builder }) {
     const data = storage.loadNamed(name);
     if (!data) return;
     let loadRes;
-    builder.recordHistory(() => { loadRes = model.loadJSON(data); });
+    builder.modelReplaced();
+        builder.recordHistory(() => { loadRes = model.loadJSON(data); });
     if (!loadRes.ok) {
       flash(t(loadRes.reason === "format" ? "load_error_format" : "load_error_data"));
       toggleFileMenu(false);
@@ -760,14 +978,17 @@ export function initUI({ scene, model, builder }) {
       }
     }
 
+    // Die Pfeiltasten folgen dem Blickwinkel: schaut man frontal auf das Modell,
+    // baut Pfeil-hoch nach OBEN, aus der Aufsicht nach hinten. So zeigt die
+    // Taste immer dorthin, wo das Rohr auf dem Bildschirm auch erscheint. Fuer
+    // die dritte Achse dreht man die Ansicht -- eigene Tasten braucht es nicht.
     const axes = scene.getHorizontalAxes();
+    const frontal = scene.isFrontalView();
     let dir = null;
-    if (k === "ArrowUp") dir = axes.forward;
-    else if (k === "ArrowDown") dir = neg(axes.forward);
+    if (k === "ArrowUp") dir = frontal ? [0, 1, 0] : axes.forward;
+    else if (k === "ArrowDown") dir = frontal ? [0, -1, 0] : neg(axes.forward);
     else if (k === "ArrowRight") dir = axes.right;
     else if (k === "ArrowLeft") dir = neg(axes.right);
-    else if (k === "PageUp" || k === "+" || k === "=") dir = [0, 1, 0];
-    else if (k === "PageDown" || k === "-" || k === "_") dir = [0, -1, 0];
     if (dir) {
       e.preventDefault();
       if (builder.mode !== "add") setMode("add");
@@ -784,18 +1005,28 @@ export function initUI({ scene, model, builder }) {
     switch (k.toLowerCase()) {
       case "b": setMode("add"); break;
       case "p": setMode("panel"); break;
-      case "x": setMode("delete"); break;
+      case "s": setMode("select"); break;
       case "v": setMode("reinforce"); break;
+      case "x": $("mode-collision").click(); break;
       case "a": setMode("assembly"); break;
       case "k": setMode("clamp"); break;
       case "d": toggleDiagonal(); break;
       case "n": toggleLabels(); break;
       case "h": toggleHints(); break;
       case "c": scene.resetCamera(); break;
-      case "escape": builder.selectedNodeId = null; builder.refresh(); break;
+      // Escape fuehrt immer zurueck in den Cursor-Modus.
+      case "escape":
+        closePopup();
+        setMode("select");
+        break;
       case "delete":
       case "backspace":
-        if (builder.selectedNodeId) {
+        if (builder.mode === "select") {
+          if (!builder.selection.size) break;
+          e.preventDefault();
+          flash(t("flash_deleted_n", builder.deleteSelection()));
+          syncDeleteButton();
+        } else if (builder.selectedNodeId) {
           e.preventDefault();
           const id = builder.selectedNodeId;
           builder.selectedNodeId = null;
@@ -828,6 +1059,10 @@ export function initUI({ scene, model, builder }) {
 
 
   function update() {
+    syncDeleteButton();
+    // Der Builder kann den Schraeg-Schalter selbst umlegen (zweiter Klick auf
+    // die gewaehlte Kupplung) -- die Toolbar muss das nachziehen.
+    syncPartHighlights();
     const bom = computeBOM(model);
 
     const tb = $("bom-tubes"); tb.innerHTML = "";
@@ -876,7 +1111,27 @@ export function initUI({ scene, model, builder }) {
     showSaved();
   }
 
+  /** Aussenmasse des Modells (Hoehe/Breite/Tiefe) ueber der Bestandsliste. */
+  function renderModelSize() {
+    const box = $("model-size");
+    if (!box) return;
+    // Halbe Kupplung an jeder Seite: die Wuerfel stehen ueber die Eckknoten
+    // hinaus, das Mass waere sonst um eine Kupplungslaenge zu klein.
+    const b = model.bounds(geometry().connectorSize / 2);
+    if (!b) { box.hidden = true; box.innerHTML = ""; return; }
+    box.hidden = false;
+    box.innerHTML = "";
+    const dims = [["dim_height", b.size[1]], ["dim_width", b.size[0]], ["dim_depth", b.size[2]]];
+    for (const [key, v] of dims) {
+      const cell = el("div", "dim");
+      cell.appendChild(el("span", "dim-label", t(key)));
+      cell.appendChild(el("span", "dim-value", `${Math.round(v)} cm`));
+      box.appendChild(cell);
+    }
+  }
+
   function renderInventory(bom) {
+    renderModelSize();
     const body = $("inventory-body"); body.innerHTML = "";
     const banner = $("feasibility-banner");
     if (bom.totals.tubes === 0 && bom.totals.connectors === 0 && bom.totals.panels === 0) {
@@ -999,7 +1254,7 @@ export function initUI({ scene, model, builder }) {
   });
 
   refreshSavedList();
-  setMode("add");
+  setMode("select");   // Start im Cursor-Modus, nicht mit einem Rohr in der Hand
   updateUndoButton();
   return { update };
 }

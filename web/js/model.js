@@ -282,7 +282,8 @@ export class BuildModel {
   setColorOf(kind, id, color) {
     const map = kind === "tube" ? this.tubes
       : kind === "panel" ? this.panels
-      : kind === "textile" ? this.textiles : null;
+      : kind === "textile" ? this.textiles
+      : kind === "slide" ? this.slides : null;
     if (!map) return false;
     const el = map.get(id);
     if (!el || el.color === color) return false;
@@ -353,6 +354,32 @@ export class BuildModel {
       const aUnsupported = a.y - minY > 0.5 && !this._supportedFromBelow(a);
       const bUnsupported = b.y - minY > 0.5 && !this._supportedFromBelow(b);
       if (aUnsupported || bUnsupported) out.add(t.id);
+    }
+    return out;
+  }
+
+  // Alle Rohre, die sich mit einem anderen ueberlagern -- kollineare Ueberdeckung
+  // (zwei Rohre auf derselben Achse) oder Kreuzung im Rohrinneren. Genau die
+  // beiden Faelle, die tubeCollision() beim Bauen verhindert; importierte oder
+  // aeltere Modelle koennen sie trotzdem enthalten.
+  // Arm-/Link-Kanten sind keine Rohre. Boegen bleiben aussen vor: gespeichert ist
+  // ihre Sehne, nicht der Bogen -- ein Test darauf meldet Falschtreffer.
+  collisions() {
+    const out = new Set();
+    const list = [];
+    for (const t of this.tubes.values()) {
+      if (t.arm || t.link || t.bow) continue;
+      const a = this.nodes.get(t.a), b = this.nodes.get(t.b);
+      if (a && b) list.push({ id: t.id, a, b });
+    }
+    for (let i = 0; i < list.length; i++) {
+      for (let j = i + 1; j < list.length; j++) {
+        const p = list[i], q = list[j];
+        if (segmentsOverlap(p.a, p.b, q.a, q.b) || segmentsCross(p.a, p.b, q.a, q.b)) {
+          out.add(p.id);
+          out.add(q.id);
+        }
+      }
     }
     return out;
   }
@@ -461,16 +488,60 @@ export class BuildModel {
     const by = from.y + c45axis[1] * sleeveLen + dir[1] * armLen;
     const bz = from.z + c45axis[2] * sleeveLen + dir[2] * armLen;
     const target = { x: bx + dir[0] * spacing, y: by + dir[1] * spacing, z: bz + dir[2] * spacing };
+    // Am oberen Ende sitzt haeufig schon eine Kupplung. Die Winkelkupplung frisst
+    // im Schraegen-Raster ein gutes Stueck Weg, deshalb landet das gerechnete
+    // Rohrende ein bis zwei Zentimeter daneben -- zu weit fuer den Auto-Merge
+    // (MERGE_EPS). Ohne dieses Snapping entstuende eine zweite Kupplung, die die
+    // vorhandene ueberlagert. Gleiche Logik wie in extendDiagonalSnap.
+    const snap = this._nodeNear(target, DIAGONAL_SNAP_TOL, [fromId]);
+    const end = snap || target;
     // Pfad des Diagonalrohrs schon belegt?
-    if (this.tubeCollision({ x: bx, y: by, z: bz }, target)) return { collision: true };
+    if (this.tubeCollision({ x: bx, y: by, z: bz }, end)) return { collision: true };
     const body = this.addNode(round(bx), round(by), round(bz));
     body.c45 = true;
     body.c45body = true;
     body.c45axis = c45axis.slice();
     this.addArm(from.id, body.id);
-    const to = this.addNode(round(target.x), round(target.y), round(target.z));
+    const to = snap || this.addNode(round(target.x), round(target.y), round(target.z));
     const tube = this.addTube(body.id, to.id, tubeId, color, length);
     return { node: to, tube, body };
+  }
+
+  // Aussenmasse des Modells in cm. Die Bounding-Box laeuft ueber alle Kupplungen
+  // (Platten/Netze haengen an ihnen) plus die Eckpunkte der Rutschen, die ueber
+  // das Rohrgeruest hinausragen. `pad` schlaegt an jeder Seite etwas drauf --
+  // die Kupplungswuerfel stehen um ihre halbe Kantenlaenge ueber den Knoten
+  // hinaus, sonst faelle das Mass um eine Kupplung zu klein aus.
+  // Liefert null, solange nichts gebaut ist.
+  bounds(pad = 0) {
+    let lo = null, hi = null;
+    const push = (x, y, z) => {
+      if (!lo) { lo = [x, y, z]; hi = [x, y, z]; return; }
+      lo = [Math.min(lo[0], x), Math.min(lo[1], y), Math.min(lo[2], z)];
+      hi = [Math.max(hi[0], x), Math.max(hi[1], y), Math.max(hi[2], z)];
+    };
+    for (const n of this.nodes.values()) push(n.x, n.y, n.z);
+    for (const s of (this.slides ? this.slides.values() : [])) {
+      push(s.x, s.y, s.z);
+      if (s.hook && s.hook.length === 3) push(s.hook[0], s.hook[1], s.hook[2]);
+    }
+    if (!lo) return null;
+    return {
+      min: [lo[0] - pad, lo[1] - pad, lo[2] - pad],
+      max: [hi[0] + pad, hi[1] + pad, hi[2] + pad],
+      size: [hi[0] - lo[0] + 2 * pad, hi[1] - lo[1] + 2 * pad, hi[2] - lo[2] + 2 * pad],
+    };
+  }
+
+  // Naechster vorhandener Knoten innerhalb tol um p, ohne die ausgeschlossenen ids.
+  _nodeNear(p, tol, exclude = []) {
+    let best = null, bestD = tol;
+    for (const n of this.nodes.values()) {
+      if (exclude.includes(n.id)) continue;
+      const d = Math.hypot(n.x - p.x, n.y - p.y, n.z - p.z);
+      if (d <= bestD) { bestD = d; best = n; }
+    }
+    return best;
   }
 
   // Schräg-Rohr an einer (schon rotierten) Schräg-Kupplung weiterbauen. Wie

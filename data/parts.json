@@ -485,10 +485,11 @@
       "name_en": "Perforated panel 40 x 40 cm",
       "w": 40,
       "h": 40,
+      "holes": 9,
       "price": 6.99,
-      "buildable": false,
+      "buildable": true,
       "colored": true,
-      "note": "nicht begehbar"
+      "note": "gleiches Feld wie panel_40x40, aber mit 3x3-Lochraster; holes steuert die Darstellung und haelt sie beim QDF-Import aus der Groessen-Zuordnung heraus"
     },
     {
       "id": "panel_70x120",

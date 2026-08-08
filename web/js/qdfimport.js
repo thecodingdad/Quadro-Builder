@@ -178,9 +178,12 @@ export function parseQDF(text, opts = {}) {
   let seq = 1;
 
   // Plattengroesse (w x h cm) -> panelId. Sortiert, damit Reihenfolge egal ist.
+  // Lochplatten (holes) bleiben aussen vor: sie haben dieselben Masse wie die
+  // volle Platte und wuerden diese sonst in der Map ueberschreiben. Das QDF-
+  // Format kennt nur "panel2" ohne Loch-Kennzeichnung -> import als volle Platte.
   const panelByDims = new Map();
   for (const pa of opts.panels || []) {
-    if (pa.w == null || pa.h == null) continue;
+    if (pa.w == null || pa.h == null || pa.holes) continue;
     const a = Math.round(pa.w), b = Math.round(pa.h);
     panelByDims.set(Math.min(a, b) + "x" + Math.max(a, b), pa.id);
   }

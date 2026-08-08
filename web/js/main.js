@@ -47,6 +47,7 @@ async function boot() {
           tubes: buildableTubes(), panels: panels(),
           connectorSize: geometry().connectorSize, mergeEps: 2,
         });
+        builder.modelReplaced();
         model.loadJSON(data);
         builder.selectedNodeId = null;
         builder.refresh();
