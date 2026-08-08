@@ -658,6 +658,21 @@ export class SceneManager {
   }
 
   // Halbtransparentes "Geist"-Material fuer noch nicht gebaute Teile (Aufbaumodus).
+  // Bereits gebaute Teile im Aufbaumodus: blass und leicht durchscheinend, damit
+  // die Teile des AKTUELLEN Schritts klar hervortreten.
+  _fadedMaterial(hex) {
+    const key = "faded_" + hex;
+    if (!this._materials[key]) {
+      const c = new THREE.Color(hex);
+      c.lerp(new THREE.Color(0xffffff), 0.55);
+      this._materials[key] = new THREE.MeshStandardMaterial({
+        color: c, roughness: 0.85, metalness: 0.02,
+        transparent: true, opacity: 0.45, depthWrite: false,
+      });
+    }
+    return this._materials[key];
+  }
+
   _ghostMaterial() {
     if (!this._materials["ghost"]) {
       this._materials["ghost"] = new THREE.MeshStandardMaterial({
@@ -827,6 +842,7 @@ export class SceneManager {
       let mat;
       if (st === "future") mat = this._ghostMaterial();
       else if (st === "current") mat = this._connMaterial(true);
+      else if (asm && st === "done") mat = this._fadedMaterial(connectorColor().hex);
       else mat = this._connMaterial(n.id === selectedNodeId);
       // Adapter-Koerper (importierte C45, n.c45body) sind keine eigenstaendige
       // Kupplung -> kein dunkler Wuerfel; sie werden unten in Adapter-Farbe
@@ -970,6 +986,7 @@ export class SceneManager {
           : st === "current" ? this._tubeHighlight(t.color)
           : (suggest && suggest.has(t.id)) ? this._tubeSuggest()
           : reinforce ? this._tubeGray()
+          : (asm && st === "done") ? this._fadedMaterial(colorHex(t.color))
           : this._tubeMaterial(t.color);
         const bowMesh = new THREE.Mesh(
           new THREE.TubeGeometry(bowCurve, 24, tubeRadius, 14, false), bowMat
@@ -992,6 +1009,7 @@ export class SceneManager {
         : isReinforceActive ? this._tubeReinforceActive()
         : (suggest && suggest.has(t.id)) ? this._tubeSuggest()
         : reinforce ? this._tubeGray()
+        : (asm && st === "done") ? this._fadedMaterial(colorHex(t.color))
         : this._tubeMaterial(t.color);
       const mesh = new THREE.Mesh(isReinforceActive ? geo2 : geo, mat);
       mesh.position.copy(mid);
@@ -1045,7 +1063,9 @@ export class SceneManager {
       const zAxis = w.clone().normalize();
       const yAxis = new THREE.Vector3().crossVectors(zAxis, xAxis).normalize();
       const geo = new THREE.BoxGeometry(u.length(), thickness, w.length());
-      const mat = st === "future" ? this._ghostMaterial() : this._panelMaterial(p.color, st === "current", false);
+      const mat = st === "future" ? this._ghostMaterial()
+        : (asm && st === "done") ? this._fadedMaterial(colorHex(p.color))
+        : this._panelMaterial(p.color, st === "current", false);
       const mesh = new THREE.Mesh(geo, mat);
       mesh.quaternion.setFromRotationMatrix(new THREE.Matrix4().makeBasis(xAxis, yAxis, zAxis));
       mesh.position.copy(center);
@@ -1124,7 +1144,9 @@ export class SceneManager {
     for (const sl of (model.slides ? model.slides.values() : [])) {
       if (reinforce) continue;
       const st = stateOf(sl.id);
-      const mat = st === "future" ? this._ghostMaterial() : this._slideMatFor(sl.kind, st === "current", sl.color);
+      const mat = st === "future" ? this._ghostMaterial()
+        : (asm && st === "done") ? this._fadedMaterial(sl.color ? colorHex(sl.color) : 0xd23b3b)
+        : this._slideMatFor(sl.kind, st === "current", sl.color);
 
       // Beschriftung: Name des Rutschenenteils/Dachs wenn Labels aktiv.
       if (slideNameFor && st !== "future") {

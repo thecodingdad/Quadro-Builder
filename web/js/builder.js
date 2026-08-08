@@ -28,6 +28,7 @@ export class Builder {
     this.buildPlan = { levels: [], steps: [] };
     this.assemblyStep = 0;
     this.assemblyOrder = "y+";   // Aufbaurichtung, siehe buildplan.BUILD_ORDERS
+    this.assemblyLabels = true;  // Beschriftung im Aufbaumodus (per Namen-Button)
 
     this._undoStack = [];
     this._redoStack = [];
@@ -105,7 +106,13 @@ export class Builder {
   setTube(tubeId) { this.tubeId = tubeId; }
   setPanel(panelId) { this.panelId = panelId; if (this.mode === "panel") this.refresh(); }
   setColor(colorId) { this.color = colorId; }
-  setShowLabels(on) { this.showLabels = !!on; this.refresh(); }
+  // Im Aufbaumodus merkt sich der Schalter seinen Zustand, damit ein
+  // Schrittwechsel die Beschriftung nicht wieder einblendet.
+  setShowLabels(on) {
+    this.showLabels = !!on;
+    if (this.mode === "assembly") this.assemblyLabels = this.showLabels;
+    this.refresh();
+  }
   setDiagonal(on) { this.diagonal = !!on; if (this.mode === "add") this.refresh(); }
   setShowHints(on) { this.showHints = !!on; this.refresh(); }
 
@@ -118,7 +125,7 @@ export class Builder {
     this.buildPlan = computeBuildPlan(this.model, this.assemblyOrder);
     const max = Math.max(0, this.buildPlan.steps.length - 1);
     this.assemblyStep = Math.min(this.assemblyStep, max);
-    this.showLabels = true; // im Aufbaumodus sind die Ebenen-Namen standardmaessig an
+    this.showLabels = this.assemblyLabels; // Beschriftung: zuletzt gewaehlter Zustand
   }
 
   // Aufbaurichtung wechseln: Plan neu rechnen und beim ersten Schritt beginnen.
