@@ -1182,6 +1182,11 @@ export class SceneManager {
       if (sl.quat && sl.quat.length === 4) fwd.applyQuaternion(new THREE.Quaternion(sl.quat[0], sl.quat[1], sl.quat[2], sl.quat[3]).normalize());
       if (fwd.lengthSq() < 0.01) fwd.set(1, 0, 0);
       fwd.normalize();
+      // Die Rutsche steht 90 Grad gegen den Uhrzeigersinn (um die Hochachse) zu
+      // der Richtung, die direkt aus der QDF-Quaternion faellt -- im Vergleich
+      // mit der Herstellersoftware lag sie sonst quer und auf der falschen Seite
+      // des Turms.
+      fwd.applyAxisAngle(new THREE.Vector3(0, 1, 0), Math.PI / 2);
       P1 = P0.clone();                       // Auslauf = QDF-Position
       P0 = P1.clone().addScaledVector(fwd, SLIDE_RUN).setY(P1.y + SLIDE_RISE); // Einstieg oben
     }
