@@ -1,6 +1,6 @@
 // Verkabelt die Bedienoberflaeche (Toolbar, Tastatur, Stueckliste, Bestand).
 
-import { buildableTubes, buildablePanels, tubeColors, geometry, allTubes, allConnectors, panels, reinforcements, slideKindName } from "./catalog.js";
+import { buildableTubes, buildableCurvedTubes, buildablePanels, tubeColors, geometry, allTubes, allConnectors, panels, reinforcements, slideKindName, partName } from "./catalog.js";
 import { computeBOM, compareInventory } from "./bom.js";
 import { computeBuildPlan } from "./buildplan.js";
 import { parseQDF } from "./qdfimport.js";
@@ -336,6 +336,32 @@ export function initUI({ scene, model, builder }) {
     });
     tubeWrap.appendChild(b);
   });
+
+  // --- Bogenrohr-Buttons -------------------------------------------------
+  // Bogenrohre haben keine gerade Laenge und stehen deshalb nicht in
+  // buildableTubes(); sie bauen ueber dieselben Richtungs-Handles wie ein
+  // gerades Rohr, setzen dort aber einen Viertelkreis.
+  for (const cv of buildableCurvedTubes()) {
+    const b = el("button", "btn part");
+    b.dataset.tube = cv.id;
+    b.title = `${partName(cv)} – ${eur(cv.price)}`;
+    b.innerHTML =
+      `<svg viewBox="0 0 28 16" width="28" height="16" aria-hidden="true">` +
+      `<path d="M5 14 A9 9 0 0 1 14 5 L23 5" fill="none" stroke="currentColor" stroke-width="3.4" stroke-linecap="round"/></svg>` +
+      `<span data-i18n="part_bow">${t("part_bow")}</span>`;
+    if (cv.id === builder.tubeId) b.classList.add("active");
+    b.addEventListener("click", () => {
+      const wasActive = builder.mode === "add" && builder.tubeId === cv.id;
+      if (wasActive) {
+        showColorPopup(b, "tube");
+      } else {
+        builder.setTube(cv.id);
+        if (builder.mode !== "add") setMode("add");
+        else syncPartHighlights();
+      }
+    });
+    tubeWrap.appendChild(b);
+  }
 
   // --- Platten-Buttons ---------------------------------------------------
   const panelWrap = $("panel-buttons");

@@ -385,6 +385,33 @@ export class BuildModel {
     return this.extend(fromId, dir, tubeId, color, length, spacing);
   }
 
+  // Bogenrohr (Viertelkreis) anbauen. dirVec ist die Tangente am Startknoten,
+  // normal die Richtung zum Kreismittelpunkt (senkrecht dazu), R der Radius.
+  // Endpunkt = from + R * (dir + normal); der Mittelpunkt wird mitgespeichert,
+  // damit die Szene denselben Bogen zeichnet wie beim QDF-Import.
+  extendBow(fromNodeId, dirVec, normal, tubeId, color, R) {
+    const from = this.nodes.get(fromNodeId);
+    if (!from) return null;
+    const cx = from.x + normal[0] * R, cy = from.y + normal[1] * R, cz = from.z + normal[2] * R;
+    const target = {
+      x: from.x + R * (dirVec[0] + normal[0]),
+      y: from.y + R * (dirVec[1] + normal[1]),
+      z: from.z + R * (dirVec[2] + normal[2]),
+    };
+    const existing = this.findNodeNear(target.x, target.y, target.z);
+    if (existing && this.tubeBetween(from.id, existing.id)) {
+      return { node: existing, tube: null, duplicate: true };
+    }
+    const to = this.addNode(round(target.x), round(target.y), round(target.z));
+    if (from.id === to.id) return null;
+    const tube = this.addTube(from.id, to.id, tubeId, color, null);
+    if (tube) {
+      tube.bow = true;
+      tube.bowCenter = [round(cx), round(cy), round(cz)];
+    }
+    return { node: to, tube };
+  }
+
   isEmpty() {
     return this.nodes.size === 0;
   }

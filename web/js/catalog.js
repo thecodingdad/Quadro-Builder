@@ -38,6 +38,18 @@ export function allTubes() {
   return catalog().tubes;
 }
 
+// Baubare Bogenrohre (shape "curved"). Sie haben keine length_cm und tauchen
+// daher bewusst NICHT in buildableTubes() auf -- ihr Rasterschritt ist der
+// Bogenradius, nicht eine gerade Laenge.
+export function buildableCurvedTubes() {
+  return catalog().tubes.filter((t) => t.buildable && t.shape === "curved");
+}
+
+export function isCurvedTube(id) {
+  const t = getTube(id);
+  return !!t && t.shape === "curved";
+}
+
 export function allConnectors() {
   return catalog().connectors;
 }

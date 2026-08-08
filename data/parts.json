@@ -19,67 +19,554 @@
   },
   "colors": {
     "tube": [
-      { "id": "blue",   "name": "Blau",  "name_en": "Blue",   "hex": "#1f63b5" },
-      { "id": "green",  "name": "Gruen", "name_en": "Green",  "hex": "#2e9e4a" },
-      { "id": "yellow", "name": "Gelb",  "name_en": "Yellow", "hex": "#f4c020" },
-      { "id": "red",    "name": "Rot",   "name_en": "Red",    "hex": "#d42e2e" }
+      {
+        "id": "blue",
+        "name": "Blau",
+        "name_en": "Blue",
+        "hex": "#1f63b5"
+      },
+      {
+        "id": "green",
+        "name": "Gruen",
+        "name_en": "Green",
+        "hex": "#2e9e4a"
+      },
+      {
+        "id": "yellow",
+        "name": "Gelb",
+        "name_en": "Yellow",
+        "hex": "#f4c020"
+      },
+      {
+        "id": "red",
+        "name": "Rot",
+        "name_en": "Red",
+        "hex": "#d42e2e"
+      }
     ],
-    "connector": { "id": "black", "name": "Schwarz", "name_en": "Black", "hex": "#2b2b2b" }
+    "connector": {
+      "id": "black",
+      "name": "Schwarz",
+      "name_en": "Black",
+      "hex": "#2b2b2b"
+    }
   },
   "connectors": [
-    { "id": "6way",        "code": "CS6", "name": "Raumkupplung 6-armig",        "name_en": "Space connector 6-way",        "arms": 6, "kind": "space",   "price": 2.49, "buildable": true,  "note": "Wuerfel-Knoten, 6 Richtungen" },
-    { "id": "5way",        "code": "CS5", "name": "Raumkupplung 5-armig",        "name_en": "Space connector 5-way",        "arms": 5, "kind": "space",   "price": 2.49, "buildable": true,  "note": "" },
-    { "id": "4way",        "code": "CS4", "name": "Raumkupplung 4-armig",        "name_en": "Space connector 4-way",        "arms": 4, "kind": "space",   "price": 2.49, "buildable": true,  "note": "raeumlich (nicht in einer Ebene)" },
-    { "id": "3way",        "code": "CS3", "name": "Raumkupplung 3-armig",        "name_en": "Space connector 3-way",        "arms": 3, "kind": "space",   "price": 2.49, "buildable": true,  "note": "Ecke, raeumlich" },
-    { "id": "cross",       "code": "CF4", "name": "Flaechenkupplung 4-armig",    "name_en": "Surface connector 4-way",    "arms": 4, "kind": "planar",  "price": 2.49, "buildable": true,  "note": "Kreuz in einer Ebene" },
-    { "id": "t",           "code": "CF3", "name": "Flaechenkupplung 3-armig",    "name_en": "Surface connector 3-way",    "arms": 3, "kind": "planar",  "price": 2.49, "buildable": true,  "note": "T-Stueck in einer Ebene" },
-    { "id": "straight",    "code": "CF2", "name": "Flaechenkupplung 2-armig (180 Grad)", "name_en": "Surface connector 2-way (180°)", "arms": 2, "kind": "planar", "angle": 180, "price": 2.49, "buildable": true, "note": "gerade Verlaengerung" },
-    { "id": "elbow",       "code": "CS2", "name": "Flaechenkupplung 2-armig (90 Grad)",  "name_en": "Surface connector 2-way (90°)",  "arms": 2, "kind": "planar", "angle": 90,  "price": 2.49, "buildable": true, "note": "Winkel 90 Grad" },
-    { "id": "diagonal",    "code": "C45", "name": "Winkelkupplung (45 Grad)",    "name_en": "Angle connector (45°)",    "arms": 1, "kind": "special", "angle": 45, "price": 2.49, "buildable": true, "note": "Aufsteck-Adapter: wird mit der Huelse auf eine vorhandene Kupplung gesteckt und bietet auf der Gegenseite einen einzelnen, um 45 Grad gedrehten Rohrstutzen (fuer Schraegen/Rampen). Wird daher zusaetzlich zur Basiskupplung gezaehlt." },
-    { "id": "flexi",       "code": "CX4", "name": "Flexikupplung",               "name_en": "Flexi connector",               "arms": 4, "kind": "special", "price": 8.99, "buildable": false, "note": "frei einstellbar" },
-    { "id": "flexi_hinge", "code": "CXB", "name": "Flexikupplung Scharnier",     "name_en": "Flexi connector hinge",     "arms": 2, "kind": "special", "price": 2.49, "buildable": false, "note": "" },
-    { "id": "flexi_bolt",  "code": "CXA", "name": "Flexikupplung Bolzen",        "name_en": "Flexi connector bolt",        "arms": 2, "kind": "special", "price": 4.99, "buildable": false, "note": "" },
-    { "id": "hole_t",      "code": "CH3", "name": "Lochzapfenkupplung 3-armig",  "name_en": "Pin connector 3-way",  "arms": 3, "kind": "special", "price": 6.49, "buildable": false, "note": "" },
-    { "id": "hole_1",      "code": "CH1", "name": "Lochzapfenkupplung 1-armig",  "name_en": "Pin connector 1-way",  "arms": 1, "kind": "special", "price": 6.49, "buildable": false, "note": "" },
-    { "id": "bearing",     "code": "CBR", "name": "Lagerkupplung",               "name_en": "Bearing connector",               "arms": 2, "kind": "special", "price": 6.49, "buildable": false, "note": "drehbar (Rad/Achse)" },
-    { "id": "double_tube", "code": "CDT", "name": "Doppelrohrverbinder",         "name_en": "Double tube connector",         "arms": 2, "kind": "special", "price": 4.49, "buildable": true,  "note": "verbindet zwei Rohre laengs; ermoeglicht Klappen/bewegliche und schraege Elemente" },
-    { "id": "tube_clamp",  "code": "CCL", "name": "Rohrklammer",                 "name_en": "Tube clamp",                 "arms": 0, "kind": "special", "price": 2.49, "buildable": false, "note": "Klammer" }
+    {
+      "id": "6way",
+      "code": "CS6",
+      "name": "Raumkupplung 6-armig",
+      "name_en": "Space connector 6-way",
+      "arms": 6,
+      "kind": "space",
+      "price": 2.49,
+      "buildable": true,
+      "note": "Wuerfel-Knoten, 6 Richtungen"
+    },
+    {
+      "id": "5way",
+      "code": "CS5",
+      "name": "Raumkupplung 5-armig",
+      "name_en": "Space connector 5-way",
+      "arms": 5,
+      "kind": "space",
+      "price": 2.49,
+      "buildable": true,
+      "note": ""
+    },
+    {
+      "id": "4way",
+      "code": "CS4",
+      "name": "Raumkupplung 4-armig",
+      "name_en": "Space connector 4-way",
+      "arms": 4,
+      "kind": "space",
+      "price": 2.49,
+      "buildable": true,
+      "note": "raeumlich (nicht in einer Ebene)"
+    },
+    {
+      "id": "3way",
+      "code": "CS3",
+      "name": "Raumkupplung 3-armig",
+      "name_en": "Space connector 3-way",
+      "arms": 3,
+      "kind": "space",
+      "price": 2.49,
+      "buildable": true,
+      "note": "Ecke, raeumlich"
+    },
+    {
+      "id": "cross",
+      "code": "CF4",
+      "name": "Flaechenkupplung 4-armig",
+      "name_en": "Surface connector 4-way",
+      "arms": 4,
+      "kind": "planar",
+      "price": 2.49,
+      "buildable": true,
+      "note": "Kreuz in einer Ebene"
+    },
+    {
+      "id": "t",
+      "code": "CF3",
+      "name": "Flaechenkupplung 3-armig",
+      "name_en": "Surface connector 3-way",
+      "arms": 3,
+      "kind": "planar",
+      "price": 2.49,
+      "buildable": true,
+      "note": "T-Stueck in einer Ebene"
+    },
+    {
+      "id": "straight",
+      "code": "CF2",
+      "name": "Flaechenkupplung 2-armig (180 Grad)",
+      "name_en": "Surface connector 2-way (180°)",
+      "arms": 2,
+      "kind": "planar",
+      "angle": 180,
+      "price": 2.49,
+      "buildable": true,
+      "note": "gerade Verlaengerung"
+    },
+    {
+      "id": "elbow",
+      "code": "CS2",
+      "name": "Flaechenkupplung 2-armig (90 Grad)",
+      "name_en": "Surface connector 2-way (90°)",
+      "arms": 2,
+      "kind": "planar",
+      "angle": 90,
+      "price": 2.49,
+      "buildable": true,
+      "note": "Winkel 90 Grad"
+    },
+    {
+      "id": "diagonal",
+      "code": "C45",
+      "name": "Winkelkupplung (45 Grad)",
+      "name_en": "Angle connector (45°)",
+      "arms": 1,
+      "kind": "special",
+      "angle": 45,
+      "price": 2.49,
+      "buildable": true,
+      "note": "Aufsteck-Adapter: wird mit der Huelse auf eine vorhandene Kupplung gesteckt und bietet auf der Gegenseite einen einzelnen, um 45 Grad gedrehten Rohrstutzen (fuer Schraegen/Rampen). Wird daher zusaetzlich zur Basiskupplung gezaehlt."
+    },
+    {
+      "id": "flexi",
+      "code": "CX4",
+      "name": "Flexikupplung",
+      "name_en": "Flexi connector",
+      "arms": 4,
+      "kind": "special",
+      "price": 8.99,
+      "buildable": false,
+      "note": "frei einstellbar"
+    },
+    {
+      "id": "flexi_hinge",
+      "code": "CXB",
+      "name": "Flexikupplung Scharnier",
+      "name_en": "Flexi connector hinge",
+      "arms": 2,
+      "kind": "special",
+      "price": 2.49,
+      "buildable": false,
+      "note": ""
+    },
+    {
+      "id": "flexi_bolt",
+      "code": "CXA",
+      "name": "Flexikupplung Bolzen",
+      "name_en": "Flexi connector bolt",
+      "arms": 2,
+      "kind": "special",
+      "price": 4.99,
+      "buildable": false,
+      "note": ""
+    },
+    {
+      "id": "hole_t",
+      "code": "CH3",
+      "name": "Lochzapfenkupplung 3-armig",
+      "name_en": "Pin connector 3-way",
+      "arms": 3,
+      "kind": "special",
+      "price": 6.49,
+      "buildable": false,
+      "note": ""
+    },
+    {
+      "id": "hole_1",
+      "code": "CH1",
+      "name": "Lochzapfenkupplung 1-armig",
+      "name_en": "Pin connector 1-way",
+      "arms": 1,
+      "kind": "special",
+      "price": 6.49,
+      "buildable": false,
+      "note": ""
+    },
+    {
+      "id": "bearing",
+      "code": "CBR",
+      "name": "Lagerkupplung",
+      "name_en": "Bearing connector",
+      "arms": 2,
+      "kind": "special",
+      "price": 6.49,
+      "buildable": false,
+      "note": "drehbar (Rad/Achse)"
+    },
+    {
+      "id": "double_tube",
+      "code": "CDT",
+      "name": "Doppelrohrverbinder",
+      "name_en": "Double tube connector",
+      "arms": 2,
+      "kind": "special",
+      "price": 4.49,
+      "buildable": true,
+      "note": "verbindet zwei Rohre laengs; ermoeglicht Klappen/bewegliche und schraege Elemente"
+    },
+    {
+      "id": "tube_clamp",
+      "code": "CCL",
+      "name": "Rohrklammer",
+      "name_en": "Tube clamp",
+      "arms": 0,
+      "kind": "special",
+      "price": 2.49,
+      "buildable": false,
+      "note": "Klammer"
+    }
   ],
   "tubes": [
-    { "id": "T10",   "code": "T10", "name": "Rohr 10 cm",  "name_en": "Tube 10 cm",  "length_cm": 10, "shape": "straight", "price": 3.49,  "buildable": true,  "colored": true },
-    { "id": "T15",   "code": "T15", "name": "Rohr 15 cm",  "name_en": "Tube 15 cm",  "length_cm": 15, "shape": "straight", "price": 1.99,  "buildable": true,  "colored": true },
-    { "id": "T20",   "code": "T20", "name": "Rohr 20 cm",  "name_en": "Tube 20 cm",  "length_cm": 20, "shape": "straight", "price": 3.99,  "buildable": true,  "colored": true },
-    { "id": "T25",   "code": "T25", "name": "Rohr 25 cm",  "name_en": "Tube 25 cm",  "length_cm": 25, "shape": "straight", "price": 2.99,  "buildable": true,  "colored": true },
-    { "id": "T35",   "code": "T35", "name": "Rohr 35 cm",  "name_en": "Tube 35 cm",  "length_cm": 35, "shape": "straight", "price": 2.49,  "buildable": true,  "colored": true },
-    { "id": "T52",   "code": "T52", "name": "Rohr 52 cm",  "name_en": "Tube 52 cm",  "length_cm": 52, "shape": "straight", "price": 9.99,  "buildable": true,  "colored": true },
-    { "id": "T75",   "code": "T75", "name": "Rohr 75 cm",  "name_en": "Tube 75 cm",  "length_cm": 75, "shape": "straight", "price": 9.99,  "buildable": true,  "colored": true },
-    { "id": "TC1",   "code": "TC1", "name": "Bogenrohr",   "name_en": "Curved tube",   "length_cm": null, "shape": "curved",  "price": 11.49, "buildable": false, "colored": true },
-    { "id": "TS1",   "code": "TS1", "name": "Rohr 15 cm 90 Grad (4 Loecher)",  "name_en": "Tube 15 cm 90° (4 holes)",  "length_cm": 15, "shape": "angled", "angle": 90,  "price": 11.49, "buildable": false, "colored": true },
-    { "id": "TS2",   "code": "TS2", "name": "Rohr 15 cm 135 Grad (3 Loecher)", "name_en": "Tube 15 cm 135° (3 holes)", "length_cm": 15, "shape": "angled", "angle": 135, "price": 11.49, "buildable": false, "colored": true },
-    { "id": "TS3",   "code": "TS3", "name": "Rohr 15 cm 180 Grad (4 Loecher)", "name_en": "Tube 15 cm 180° (4 holes)", "length_cm": 15, "shape": "angled", "angle": 180, "price": 11.49, "buildable": false, "colored": true },
-    { "id": "TS4",   "code": "TS4", "name": "Rohr 35 cm 90 Grad (4 Loecher)",  "name_en": "Tube 35 cm 90° (4 holes)",  "length_cm": 35, "shape": "angled", "angle": 90,  "price": 11.49, "buildable": false, "colored": true },
-    { "id": "TS5",   "code": "TS5", "name": "Rohr 35 cm 135 Grad (3 Loecher)", "name_en": "Tube 35 cm 135° (3 holes)", "length_cm": 35, "shape": "angled", "angle": 135, "price": 11.49, "buildable": false, "colored": true },
-    { "id": "TS6",   "code": "TS6", "name": "Rohr 35 cm 180 Grad (4 Loecher)", "name_en": "Tube 35 cm 180° (4 holes)", "length_cm": 35, "shape": "angled", "angle": 180, "price": 11.49, "buildable": false, "colored": true },
-    { "id": "TS7",   "code": "TS7", "name": "Bogenrohr 135 Grad (3 Loecher)",  "name_en": "Curved tube 135° (3 holes)",  "length_cm": null, "shape": "curved", "angle": 135, "price": 22.99, "buildable": false, "colored": true }
+    {
+      "id": "T10",
+      "code": "T10",
+      "name": "Rohr 10 cm",
+      "name_en": "Tube 10 cm",
+      "length_cm": 10,
+      "shape": "straight",
+      "price": 3.49,
+      "buildable": true,
+      "colored": true
+    },
+    {
+      "id": "T15",
+      "code": "T15",
+      "name": "Rohr 15 cm",
+      "name_en": "Tube 15 cm",
+      "length_cm": 15,
+      "shape": "straight",
+      "price": 1.99,
+      "buildable": true,
+      "colored": true
+    },
+    {
+      "id": "T20",
+      "code": "T20",
+      "name": "Rohr 20 cm",
+      "name_en": "Tube 20 cm",
+      "length_cm": 20,
+      "shape": "straight",
+      "price": 3.99,
+      "buildable": true,
+      "colored": true
+    },
+    {
+      "id": "T25",
+      "code": "T25",
+      "name": "Rohr 25 cm",
+      "name_en": "Tube 25 cm",
+      "length_cm": 25,
+      "shape": "straight",
+      "price": 2.99,
+      "buildable": true,
+      "colored": true
+    },
+    {
+      "id": "T35",
+      "code": "T35",
+      "name": "Rohr 35 cm",
+      "name_en": "Tube 35 cm",
+      "length_cm": 35,
+      "shape": "straight",
+      "price": 2.49,
+      "buildable": true,
+      "colored": true
+    },
+    {
+      "id": "T52",
+      "code": "T52",
+      "name": "Rohr 52 cm",
+      "name_en": "Tube 52 cm",
+      "length_cm": 52,
+      "shape": "straight",
+      "price": 9.99,
+      "buildable": true,
+      "colored": true
+    },
+    {
+      "id": "T75",
+      "code": "T75",
+      "name": "Rohr 75 cm",
+      "name_en": "Tube 75 cm",
+      "length_cm": 75,
+      "shape": "straight",
+      "price": 9.99,
+      "buildable": true,
+      "colored": true
+    },
+    {
+      "id": "TC1",
+      "code": "TC1",
+      "name": "Bogenrohr",
+      "name_en": "Curved tube",
+      "length_cm": null,
+      "shape": "curved",
+      "price": 11.49,
+      "buildable": true,
+      "colored": true
+    },
+    {
+      "id": "TS1",
+      "code": "TS1",
+      "name": "Rohr 15 cm 90 Grad (4 Loecher)",
+      "name_en": "Tube 15 cm 90° (4 holes)",
+      "length_cm": 15,
+      "shape": "angled",
+      "angle": 90,
+      "price": 11.49,
+      "buildable": false,
+      "colored": true
+    },
+    {
+      "id": "TS2",
+      "code": "TS2",
+      "name": "Rohr 15 cm 135 Grad (3 Loecher)",
+      "name_en": "Tube 15 cm 135° (3 holes)",
+      "length_cm": 15,
+      "shape": "angled",
+      "angle": 135,
+      "price": 11.49,
+      "buildable": false,
+      "colored": true
+    },
+    {
+      "id": "TS3",
+      "code": "TS3",
+      "name": "Rohr 15 cm 180 Grad (4 Loecher)",
+      "name_en": "Tube 15 cm 180° (4 holes)",
+      "length_cm": 15,
+      "shape": "angled",
+      "angle": 180,
+      "price": 11.49,
+      "buildable": false,
+      "colored": true
+    },
+    {
+      "id": "TS4",
+      "code": "TS4",
+      "name": "Rohr 35 cm 90 Grad (4 Loecher)",
+      "name_en": "Tube 35 cm 90° (4 holes)",
+      "length_cm": 35,
+      "shape": "angled",
+      "angle": 90,
+      "price": 11.49,
+      "buildable": false,
+      "colored": true
+    },
+    {
+      "id": "TS5",
+      "code": "TS5",
+      "name": "Rohr 35 cm 135 Grad (3 Loecher)",
+      "name_en": "Tube 35 cm 135° (3 holes)",
+      "length_cm": 35,
+      "shape": "angled",
+      "angle": 135,
+      "price": 11.49,
+      "buildable": false,
+      "colored": true
+    },
+    {
+      "id": "TS6",
+      "code": "TS6",
+      "name": "Rohr 35 cm 180 Grad (4 Loecher)",
+      "name_en": "Tube 35 cm 180° (4 holes)",
+      "length_cm": 35,
+      "shape": "angled",
+      "angle": 180,
+      "price": 11.49,
+      "buildable": false,
+      "colored": true
+    },
+    {
+      "id": "TS7",
+      "code": "TS7",
+      "name": "Bogenrohr 135 Grad (3 Loecher)",
+      "name_en": "Curved tube 135° (3 holes)",
+      "length_cm": null,
+      "shape": "curved",
+      "angle": 135,
+      "price": 22.99,
+      "buildable": false,
+      "colored": true
+    }
   ],
   "panels": [
-    { "id": "panel_40x40",      "code": "PA4", "name": "Platte 40 x 40 cm",     "name_en": "Panel 40 x 40 cm",     "w": 40, "h": 40, "price": 6.99, "buildable": true,  "colored": true,  "note": "passt auf ein Feld aus vier 35er-Rohren" },
-    { "id": "panel_40x20",      "code": "PA2", "name": "Platte 40 x 20 cm",     "name_en": "Panel 40 x 20 cm",     "w": 40, "h": 20, "price": 5.99, "buildable": true,  "colored": true,  "note": "halbe Platte: 35er x 15er Feld" },
-    { "id": "panel_80x80",      "code": "PA8", "name": "Platte 80 x 80 cm",     "name_en": "Panel 80 x 80 cm",     "w": 80, "h": 80, "price": 12.99, "buildable": true, "colored": true,  "note": "grosses Feld aus vier 75er-Rohren" },
-    { "id": "panel_80x20",      "code": "PA6", "name": "Platte 80 x 20 cm",     "name_en": "Panel 80 x 20 cm",     "w": 80, "h": 20, "price": 8.99, "buildable": true,  "colored": true,  "note": "75er x 15er Feld" },
-    { "id": "panel_30x30",      "code": "PA3", "name": "Platte 30 x 30 cm",     "name_en": "Panel 30 x 30 cm",     "w": 30, "h": 30, "price": 5.99, "buildable": false, "colored": true,  "note": "30er-Raster (25er-Rohr)" },
-    { "id": "hole_panel_40x40", "code": "PO4", "name": "Lochplatte 40 x 40 cm", "name_en": "Perforated panel 40 x 40 cm", "w": 40, "h": 40, "price": 6.99, "buildable": false, "colored": true,  "note": "nicht begehbar" },
-    { "id": "panel_70x120",    "code": "P7C", "name": "Platte 70 x 120 cm",    "name_en": "Panel 70 x 120 cm",            "w": 70, "h": 120, "price": 0,    "buildable": true,  "colored": true,  "note": "grosses Rechteck-Panel; L2-fix" },
-    { "id": "pool_wall",       "code": "BAD", "name": "Bällebad-Wand 120 x 40 cm", "name_en": "Ball pit wall 120 x 40 cm",  "w": 120, "h": 40, "price": 0,   "buildable": false, "colored": true,  "note": "Bällebad-Seitenwand; feste Geometrie (pool2 in QDF)" },
-    { "id": "pool_floor",      "code": "BAF", "name": "Bällebad-Boden",             "name_en": "Ball pit floor",             "w": 120, "h": 160, "price": 0,  "buildable": false, "colored": true,  "note": "Synthetischer Bällebad-Boden (pool2); scene.js rendert darüber Wasser-Volumen" }
+    {
+      "id": "panel_40x40",
+      "code": "PA4",
+      "name": "Platte 40 x 40 cm",
+      "name_en": "Panel 40 x 40 cm",
+      "w": 40,
+      "h": 40,
+      "price": 6.99,
+      "buildable": true,
+      "colored": true,
+      "note": "passt auf ein Feld aus vier 35er-Rohren"
+    },
+    {
+      "id": "panel_40x20",
+      "code": "PA2",
+      "name": "Platte 40 x 20 cm",
+      "name_en": "Panel 40 x 20 cm",
+      "w": 40,
+      "h": 20,
+      "price": 5.99,
+      "buildable": true,
+      "colored": true,
+      "note": "halbe Platte: 35er x 15er Feld"
+    },
+    {
+      "id": "panel_80x80",
+      "code": "PA8",
+      "name": "Platte 80 x 80 cm",
+      "name_en": "Panel 80 x 80 cm",
+      "w": 80,
+      "h": 80,
+      "price": 12.99,
+      "buildable": true,
+      "colored": true,
+      "note": "grosses Feld aus vier 75er-Rohren"
+    },
+    {
+      "id": "panel_80x20",
+      "code": "PA6",
+      "name": "Platte 80 x 20 cm",
+      "name_en": "Panel 80 x 20 cm",
+      "w": 80,
+      "h": 20,
+      "price": 8.99,
+      "buildable": true,
+      "colored": true,
+      "note": "75er x 15er Feld"
+    },
+    {
+      "id": "panel_30x30",
+      "code": "PA3",
+      "name": "Platte 30 x 30 cm",
+      "name_en": "Panel 30 x 30 cm",
+      "w": 30,
+      "h": 30,
+      "price": 5.99,
+      "buildable": false,
+      "colored": true,
+      "note": "30er-Raster (25er-Rohr)"
+    },
+    {
+      "id": "hole_panel_40x40",
+      "code": "PO4",
+      "name": "Lochplatte 40 x 40 cm",
+      "name_en": "Perforated panel 40 x 40 cm",
+      "w": 40,
+      "h": 40,
+      "price": 6.99,
+      "buildable": false,
+      "colored": true,
+      "note": "nicht begehbar"
+    },
+    {
+      "id": "panel_70x120",
+      "code": "P7C",
+      "name": "Platte 70 x 120 cm",
+      "name_en": "Panel 70 x 120 cm",
+      "w": 70,
+      "h": 120,
+      "price": 0,
+      "buildable": true,
+      "colored": true,
+      "note": "grosses Rechteck-Panel; L2-fix"
+    },
+    {
+      "id": "pool_wall",
+      "code": "BAD",
+      "name": "Bällebad-Wand 120 x 40 cm",
+      "name_en": "Ball pit wall 120 x 40 cm",
+      "w": 120,
+      "h": 40,
+      "price": 0,
+      "buildable": false,
+      "colored": true,
+      "note": "Bällebad-Seitenwand; feste Geometrie (pool2 in QDF)"
+    },
+    {
+      "id": "pool_floor",
+      "code": "BAF",
+      "name": "Bällebad-Boden",
+      "name_en": "Ball pit floor",
+      "w": 120,
+      "h": 160,
+      "price": 0,
+      "buildable": false,
+      "colored": true,
+      "note": "Synthetischer Bällebad-Boden (pool2); scene.js rendert darüber Wasser-Volumen"
+    }
   ],
   "reinforcements": [
-    { "id": "reinforce40", "code": "RV4", "name": "Verstaerkungsprofil 40 cm (Holz)", "name_en": "Reinforcement profile 40 cm (wood)", "length_cm": 40, "material": "Holz", "price": 4.49, "note": "Stab, der in ein Rohr geschoben wird und es versteift; kommt in 40-cm-Laengen; heute aus Holz (frueher Alu, guenstiger); noetig bei frei tragenden, von unten ungestuetzten Ebenen" }
+    {
+      "id": "reinforce40",
+      "code": "RV4",
+      "name": "Verstaerkungsprofil 40 cm (Holz)",
+      "name_en": "Reinforcement profile 40 cm (wood)",
+      "length_cm": 40,
+      "material": "Holz",
+      "price": 4.49,
+      "note": "Stab, der in ein Rohr geschoben wird und es versteift; kommt in 40-cm-Laengen; heute aus Holz (frueher Alu, guenstiger); noetig bei frei tragenden, von unten ungestuetzten Ebenen"
+    }
   ],
   "accessories": [
-    { "id": "tube_cap",     "code": "TCP", "name": "Rohrkappe",                       "price": 2.49,  "note": "Endkappe fuer offenes Rohrende" },
-    { "id": "safety_clamp", "code": "YTC", "name": "Sicherungsklammer (Bodenverankerung)", "price": 11.49, "note": "" },
-    { "id": "double_tube",  "code": "CDT", "name": "Doppelrohrverbinder",             "price": 4.49,  "note": "" },
-    { "id": "tube_clamp",   "code": "CCL", "name": "Rohrklammer",                     "price": 2.49,  "note": "" }
+    {
+      "id": "tube_cap",
+      "code": "TCP",
+      "name": "Rohrkappe",
+      "price": 2.49,
+      "note": "Endkappe fuer offenes Rohrende"
+    },
+    {
+      "id": "safety_clamp",
+      "code": "YTC",
+      "name": "Sicherungsklammer (Bodenverankerung)",
+      "price": 11.49,
+      "note": ""
+    },
+    {
+      "id": "double_tube",
+      "code": "CDT",
+      "name": "Doppelrohrverbinder",
+      "price": 4.49,
+      "note": ""
+    },
+    {
+      "id": "tube_clamp",
+      "code": "CCL",
+      "name": "Rohrklammer",
+      "price": 2.49,
+      "note": ""
+    }
   ]
 }

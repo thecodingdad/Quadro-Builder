@@ -1,7 +1,7 @@
 // Bau-Interaktion: Auswahl, Anbau ueber Richtungs-Handles, Loeschen.
 
 import { DIRECTIONS, DIAGONAL_DIRECTIONS, DIR_ALIGN_TOL, ARM_ALIGN_TOL, CLAMP_LINK_DIST } from "./config.js";
-import { geometry, getTube, spacingFor, getPanel, defaultPanel, diagonalTubeId, slideKindLabel } from "./catalog.js";
+import { geometry, getTube, spacingFor, getPanel, defaultPanel, diagonalTubeId, slideKindLabel, isCurvedTube, gridSpacing } from "./catalog.js";
 import { computeBuildPlan, connectorLabelInfo } from "./buildplan.js";
 import { t } from "./i18n.js";
 import { round2 } from "./util.js";
@@ -161,13 +161,28 @@ export class Builder {
     const tube = getTube(this.tubeId);
     let res;
     this.recordHistory(() => {
-      res = this.model.extend(
-        node.id, dirVec, this.tubeId, this.color, tube.length_cm, spacingFor(tube.length_cm)
-      );
+      res = isCurvedTube(this.tubeId)
+        ? this.model.extendBow(node.id, dirVec, this._bowNormal(dirVec), this.tubeId, this.color, gridSpacing())
+        : this.model.extend(
+            node.id, dirVec, this.tubeId, this.color, tube.length_cm, spacingFor(tube.length_cm)
+          );
     });
     if (res && res.collision) this.onNotice(t("notice_collision"));
     else if (res && res.node) this.selectedNodeId = res.node.id;
     this.refresh();
+  }
+
+  // Krummungsrichtung (zum Kreismittelpunkt) eines neu gesetzten Bogenrohrs:
+  // waagerecht angesetzt krummt der Bogen nach UNTEN (der ueblichste Fall --
+  // Geruestkante, Dachbogen), senkrecht angesetzt in die Blickrichtung, damit
+  // der Bogen vom Betrachter weg schwingt statt zufaellig zur Seite.
+  _bowNormal(dirVec) {
+    if (Math.abs(dirVec[1]) < 0.5) return [0, -1, 0];
+    const ax = this.scene.getHorizontalAxes ? this.scene.getHorizontalAxes() : null;
+    const f = (ax && (ax.forward || ax.f)) || [0, 0, -1];
+    return Math.abs(f[0]) >= Math.abs(f[2])
+      ? [Math.sign(f[0]) || 1, 0, 0]
+      : [0, 0, Math.sign(f[2]) || -1];
   }
 
   // Kardinaler Huelsen-Arm fuer eine 45-Grad-Diagonale. Gueltig (45°-Innenwinkel
@@ -645,9 +660,11 @@ export class Builder {
         // model.extend() braucht das nicht zu unterscheiden.
         const tube = getTube(this.tubeId);
         this.recordHistory(() => {
-          res = this.model.extend(
-            h.data.nodeId, h.data.dir, tube.id, this.color, tube.length_cm, spacingFor(tube.length_cm)
-          );
+          res = isCurvedTube(this.tubeId)
+            ? this.model.extendBow(h.data.nodeId, h.data.dir, this._bowNormal(h.data.dir), tube.id, this.color, gridSpacing())
+            : this.model.extend(
+                h.data.nodeId, h.data.dir, tube.id, this.color, tube.length_cm, spacingFor(tube.length_cm)
+              );
         });
       }
       if (res && res.collision) this.onNotice(t("notice_collision"));
