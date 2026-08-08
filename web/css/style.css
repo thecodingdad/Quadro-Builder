@@ -262,8 +262,11 @@ select {
 :root { --sidebar-w: 320px; }
 main { flex: 1; display: flex; min-height: 0; }
 #canvas-wrap { position: relative; flex: 1; min-width: 0; }
-#canvas { position: absolute; inset: 0; touch-action: none; }
-#canvas canvas { display: block; touch-action: none; }
+#canvas { position: absolute; inset: 0; touch-action: none; overflow: hidden; }
+/* Der Canvas folgt immer exakt seinem Container. Feste px-Groessen (von
+   renderer.setSize) wuerden ihn ueber den Container hinauswachsen lassen ->
+   Dokument-Scrollbar -> Container schrumpft -> ResizeObserver -> Flackern. */
+#canvas canvas { display: block; width: 100%; height: 100%; touch-action: none; }
 
 /* Floating Canvas-Buttons (Tastenkürzel, ggf. weitere) */
 .canvas-btn {

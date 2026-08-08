@@ -19,7 +19,9 @@ export class SceneManager {
 
     this.renderer = new THREE.WebGLRenderer({ antialias: true });
     this.renderer.setPixelRatio(window.devicePixelRatio || 1);
-    this.renderer.setSize(container.clientWidth, container.clientHeight);
+    // updateStyle = false: die CSS-Groesse des Canvas kommt aus dem Stylesheet
+    // (100 % des Containers), nicht als feste px-Werte -> siehe onResize().
+    this.renderer.setSize(container.clientWidth, container.clientHeight, false);
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     container.appendChild(this.renderer.domElement);
@@ -121,9 +123,18 @@ export class SceneManager {
   onResize() {
     const w = this.container.clientWidth, h = this.container.clientHeight;
     if (!w || !h) return;
+    // Unveraenderte Groesse ignorieren: sonst kann der ResizeObserver sich
+    // ueber setSize() selbst erneut ausloesen (Endlosschleife).
+    if (w === this._lastW && h === this._lastH) return;
+    this._lastW = w;
+    this._lastH = h;
     this.camera.aspect = w / h;
     this.camera.updateProjectionMatrix();
-    this.renderer.setSize(w, h);
+    // updateStyle = false -> Three schreibt KEINE festen px-Werte in den
+    // Canvas-Style. Sonst wird der Canvas breiter als sein Container, das
+    // Dokument bekommt eine Scrollbar, der Container schrumpft um deren
+    // Breite, der Observer feuert erneut -> Viewport flackert dauerhaft.
+    this.renderer.setSize(w, h, false);
   }
 
   // Auf die nächste Achse gerundete horizontale Blickrichtung (für Pfeiltasten).
