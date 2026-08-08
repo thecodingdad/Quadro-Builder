@@ -68,6 +68,7 @@ export function initUI({ scene, model, builder }) {
       setLang(next);
       applyTranslations();
       renderHelpTable();
+      renderColorButtons();
       // Dynamische UI-Texte aktualisieren
       setMode(builder.mode);
       update();
@@ -327,14 +328,9 @@ export function initUI({ scene, model, builder }) {
       `<span>${tube.length_cm}</span>`;
     if (tube.id === builder.tubeId) b.classList.add("active");
     b.addEventListener("click", () => {
-      const wasActive = builder.mode === "add" && builder.tubeId === tube.id;
-      if (wasActive) {
-        showColorPopup(b, "tube");
-      } else {
-        builder.setTube(tube.id);
-        if (builder.mode !== "add") setMode("add");
-        else syncPartHighlights();
-      }
+      builder.setTube(tube.id);
+      if (builder.mode !== "add") setMode("add");
+      else syncPartHighlights();
     });
     tubeWrap.appendChild(b);
   });
@@ -353,17 +349,37 @@ export function initUI({ scene, model, builder }) {
       `<span data-i18n="part_bow">${t("part_bow")}</span>`;
     if (cv.id === builder.tubeId) b.classList.add("active");
     b.addEventListener("click", () => {
-      const wasActive = builder.mode === "add" && builder.tubeId === cv.id;
-      if (wasActive) {
-        showColorPopup(b, "tube");
-      } else {
-        builder.setTube(cv.id);
-        if (builder.mode !== "add") setMode("add");
-        else syncPartHighlights();
-      }
+      builder.setTube(cv.id);
+      if (builder.mode !== "add") setMode("add");
+      else syncPartHighlights();
     });
     tubeWrap.appendChild(b);
   }
+
+  // --- Farb-Buttons ------------------------------------------------------
+  // Die Farben stehen direkt in der Toolbar. Frueher oeffnete ein zweiter Klick
+  // auf einen Teile-Button ein Popup -- schlecht auffindbar und ein Klick, der
+  // je nach Zustand etwas anderes tat. Schwarz gilt nur fuer Platten.
+  const colorWrap = $("color-buttons");
+  function renderColorButtons() {
+    if (!colorWrap) return;
+    colorWrap.innerHTML = "";
+    for (const c of [...tubeColors(), ...PANEL_EXTRA_COLORS]) {
+      const sw = el("button", "swatch");
+      sw.style.background = c.hex;
+      sw.title = (getLang() === "en" && c.name_en) ? c.name_en : c.name;
+      sw.dataset.color = c.id;
+      sw.addEventListener("click", () => {
+        builder.setColor(c.id);
+        renderColorButtons();
+        syncPartColors();
+      });
+      colorWrap.appendChild(sw);
+    }
+    colorWrap.querySelectorAll("button").forEach((x) =>
+      x.classList.toggle("active", x.dataset.color === builder.color));
+  }
+  renderColorButtons();
 
   // --- Platten-Buttons ---------------------------------------------------
   const panelWrap = $("panel-buttons");
@@ -378,13 +394,8 @@ export function initUI({ scene, model, builder }) {
       `<span>${p.w}×${p.h}</span>`;
     if (p.id === builder.panelId) b.classList.add("active");
     b.addEventListener("click", () => {
-      const wasActive = builder.mode === "panel" && builder.panelId === p.id;
-      if (wasActive) {
-        showColorPopup(b, "panel");
-      } else {
-        builder.setPanel(p.id);
-        setMode("panel");
-      }
+      builder.setPanel(p.id);
+      setMode("panel");
     });
     panelWrap.appendChild(b);
   }
