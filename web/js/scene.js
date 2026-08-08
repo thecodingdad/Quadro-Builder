@@ -916,6 +916,25 @@ export class SceneManager {
       const vb = new THREE.Vector3(b.x, b.y, b.z);
       const mid = va.clone().add(vb).multiplyScalar(0.5);
       const len = va.distanceTo(vb);
+
+      // Bogenrohr: als Roehre entlang des Kreisbogens um bowCenter zeichnen.
+      const bowCurve = t.bow && t.bowCenter ? this._bowCurve(va, vb, t.bowCenter) : null;
+      if (bowCurve) {
+        const bowMat = st === "future" ? this._ghostMaterial()
+          : st === "current" ? this._tubeHighlight(t.color)
+          : (suggest && suggest.has(t.id)) ? this._tubeSuggest()
+          : reinforce ? this._tubeGray()
+          : this._tubeMaterial(t.color);
+        const bowMesh = new THREE.Mesh(
+          new THREE.TubeGeometry(bowCurve, 24, tubeRadius, 14, false), bowMat
+        );
+        bowMesh.userData = { kind: "tube", id: t.id };
+        bowMesh.castShadow = true;
+        this.buildGroup.add(bowMesh);
+        if (st !== "future") this.pickTubes.push(bowMesh);
+        continue;
+      }
+
       const geo = new THREE.CylinderGeometry(tubeRadius, tubeRadius, len, 16);
       const isReinforceActive = reinforce && t.reinforced;
       const effectiveRadius = isReinforceActive ? tubeRadius * 1.08 : tubeRadius;
@@ -1258,6 +1277,33 @@ export class SceneManager {
   }
 
   // --- Handles (Bau-Anfasser) --------------------------------------------
+  // Kreisbogen von va nach vb um den Mittelpunkt center (Bogenrohr, 90 Grad).
+  // Liefert null, wenn die Punkte keinen echten Bogen aufspannen (dann wird das
+  // Rohr wie ein gerades gezeichnet).
+  _bowCurve(va, vb, center) {
+    const C = new THREE.Vector3(center[0], center[1], center[2]);
+    const u = va.clone().sub(C);
+    const v = vb.clone().sub(C);
+    const R = (u.length() + v.length()) / 2;
+    if (R < 1e-3) return null;
+    u.normalize();
+    v.normalize();
+    // Komponente von v senkrecht zu u spannt mit u die Bogenebene auf.
+    const w = v.clone().addScaledVector(u, -u.dot(v));
+    if (w.lengthSq() < 1e-6) return null; // kollinear -> kein Bogen
+    w.normalize();
+    const ang = Math.acos(Math.max(-1, Math.min(1, u.dot(v))));
+    const pts = [];
+    const SEG = 16;
+    for (let i = 0; i <= SEG; i++) {
+      const th = (ang * i) / SEG;
+      pts.push(C.clone()
+        .addScaledVector(u, R * Math.cos(th))
+        .addScaledVector(w, R * Math.sin(th)));
+    }
+    return new THREE.CatmullRomCurve3(pts);
+  }
+
   clearHandles() {
     this._disposeGroup(this.handleGroup);
     this.handleMeshes = [];

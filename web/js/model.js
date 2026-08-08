@@ -418,6 +418,7 @@ export class BuildModel {
         if (t.reinforced) o.reinforced = true;
         if (t.arm) o.arm = true; // C45-Adapter-Arm (kein Rohr)
         if (t.link) o.link = true; // Doppelrohrverbinder-Verbindung (kein Rohr)
+        if (t.bow) { o.bow = true; o.bowCenter = t.bowCenter; } // Bogenrohr (Viertelkreis)
         return o;
       }),
       panels: [...this.panels.values()].map((p) => ({
@@ -470,6 +471,7 @@ export class BuildModel {
       this.tubes.set(t.id, {
         id: t.id, a: t.a, b: t.b, tubeId: t.tubeId, color: t.color, length: t.length,
         reinforced: !!t.reinforced, arm: !!t.arm, link: !!t.link,
+        bow: !!t.bow, bowCenter: t.bowCenter || null,
       });
       maxSeq = Math.max(maxSeq, parseSeq(t.id));
     }

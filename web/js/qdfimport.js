@@ -164,6 +164,8 @@ export function parseQDF(text, opts = {}) {
     : [{ id: "T35", length_cm: 35 }];
   const conn = opts.connectorSize != null ? opts.connectorSize : 5;
   const eps = opts.mergeEps != null ? opts.mergeEps : 2; // cm, beim Verschmelzen grosszuegig
+  // Katalog-ID des Bogenrohrs (shape "curved"); nicht baubar, daher nicht in opts.tubes.
+  const curvedTubeId = opts.curvedTubeId || "TC1";
 
   const materials = new Map(); // id -> colorId
   const nodes = [];            // { id, x, y, z }
@@ -333,7 +335,37 @@ export function parseQDF(text, opts = {}) {
   for (const raw of lines) {
     const p = parseLine(raw);
     if (!p) continue;
-    if (p.name === "tube2" || p.name === "round-tube2") {
+    if (p.name === "round-tube2") {
+      // Bogenrohr (Viertelkreis, 90 Grad). Die lokale +X-Achse ist die Tangente
+      // am Bogenanfang, die lokale +Y-Achse zeigt zum Kreismittelpunkt; der
+      // Radius ist der Rasterschritt (Rohrlaenge + Kupplungsmass).
+      //   Mittelpunkt C = Start + N * R
+      //   Ende        E = Start + R * (T + N)
+      // Empirisch aus QuadroTobezimmer.qdf bestimmt: nur mit dieser Geometrie
+      // landen BEIDE Bogenenden auf vorhandenen Kupplungen (gerade Deutung
+      // trifft dort nichts). Vorher wurde der Bogen wie ein gerades Rohr
+      // importiert und lag damit voellig falsch im Modell.
+      if (!p.tuple || p.tuple.length < 7) continue;
+      if (hasRenderRange(p.rest, 6)) continue; // Alternativ-Pass-Duplikat (wie Viewer)
+      const q = decodeQuat([p.tuple[0], p.tuple[1], p.tuple[2], p.tuple[3]]);
+      const sx = p.tuple[4] / 10, sy = p.tuple[5] / 10, sz = p.tuple[6] / 10;
+      const lenCm = (typeof p.rest[3] === "number" ? p.rest[3] : 350) / 10;
+      const R = lenCm + conn;
+      const T = rotateByQuat(q, [1, 0, 0]);
+      const N = rotateByQuat(q, [0, 1, 0]);
+      const cx = sx + N[0] * R, cy = sy + N[1] * R, cz = sz + N[2] * R;
+      const ex = sx + R * (T[0] + N[0]), ey = sy + R * (T[1] + N[1]), ez = sz + R * (T[2] + N[2]);
+      const a = snapToConnector(round(sx), round(sy), round(sz));
+      const b = snapToConnector(round(ex), round(ey), round(ez));
+      if (a.id === b.id) continue;
+      if (tubeExists(tubes, a.id, b.id)) continue;
+      const mat = typeof p.rest[0] === "number" ? p.rest[0] : null;
+      tubes.push({
+        id: "t" + seq++, a: a.id, b: b.id,
+        tubeId: curvedTubeId, color: materials.get(mat) || FALLBACK_COLOR,
+        length: null, bow: true, bowCenter: [round(cx), round(cy), round(cz)],
+      });
+    } else if (p.name === "tube2") {
       if (!p.tuple || p.tuple.length < 7) continue;
       if (hasRenderRange(p.rest, 6)) continue; // Alternativ-Pass-Duplikat (wie Viewer)
       const q = decodeQuat([p.tuple[0], p.tuple[1], p.tuple[2], p.tuple[3]]);
@@ -365,6 +397,13 @@ export function parseQDF(text, opts = {}) {
       // exakt wie der Referenz-Viewer (slide_renderer.ts) -- inkl. der dortigen
       // lokalen Versaetze + 45°/90°-Drehung. q ist [w,x,y,z]; Three nutzt [x,y,z,w].
       if (!p.tuple || p.tuple.length < 7) { skipped[p.name] = (skipped[p.name] || 0) + 1; continue; }
+      // Alternativ-Pass-Duplikate verwerfen: Ein Rutschen-Teil steht mehrfach in
+      // der Datei -- das ECHTE Teil traegt hoechstens EINE Zahl am Zeilenende,
+      // die Duplikate ein vollstaendiges renderRange-PAAR (rest[4] gesetzt).
+      // Ohne diesen Filter wird eine einzelne Rutsche mehrfach uebereinander
+      // gezeichnet, teils spiegelverkehrt (entgegengesetzte Quaternionen).
+      // Gleiche Regel wie bei round-tube2, dort mit dem Referenzbild abgeglichen.
+      if (hasRenderRange(p.rest, 4)) continue;
       const q = decodeQuat([p.tuple[0], p.tuple[1], p.tuple[2], p.tuple[3]]);
       const qn = Math.hypot(q[0], q[1], q[2], q[3]) || 1;
       const r4 = (v) => Math.round(v * 1e4) / 1e4;
