@@ -38,6 +38,9 @@ export class SceneManager {
     this.controls = new OrbitControls(this.camera, this.renderer.domElement);
     this.controls.enableDamping = true;
     this.controls.dampingFactor = 0.08;
+    // Scrollrad zoomt auf den Mauszeiger statt auf die Bildmitte -- man haelt
+    // damit die Stelle im Blick, an der man gerade baut.
+    this.controls.zoomToCursor = true;
     this.controls.target.set(...this._defaultCam.target);
 
     // Licht: warmes Sonnenlicht + Himmelslicht + weiche Schatten
