@@ -54,9 +54,24 @@ export function connectorLabelInfo(model, node) {
   return { text, type, category };
 }
 
-// Sortierte, eindeutige Hoehen-Ebenen (cm) des Modells, von unten nach oben.
-export function levelsOf(model) {
-  const ys = [...model.nodes.values()].map((n) => n.y).sort((a, b) => a - b);
+// Aufbaurichtungen: Achse + Vorzeichen. "y+" = von unten nach oben (Standard),
+// "x+" = von links nach rechts, "x-" = von rechts nach links, "z+"/"z-" analog
+// fuer vorne/hinten. Je nach Modell und Platz im Raum ist eine andere Reihenfolge
+// praktischer -- gebaut wird immer Scheibe fuer Scheibe entlang dieser Achse.
+export const BUILD_ORDERS = ["y+", "x+", "x-", "z+", "z-"];
+
+// Liefert die Koordinatenfunktion fuer eine Aufbaurichtung: der Wert waechst
+// immer in Baureihenfolge, damit die uebrige Logik unveraendert bleibt.
+export function orderCoord(order) {
+  const axis = (order || "y+")[0];
+  const sign = (order || "y+")[1] === "-" ? -1 : 1;
+  return (o) => (o ? o[axis] * sign : 0);
+}
+
+// Sortierte, eindeutige Ebenen (cm) des Modells in Aufbaureihenfolge.
+export function levelsOf(model, order = "y+") {
+  const coord = orderCoord(order);
+  const ys = [...model.nodes.values()].map((n) => coord(n)).sort((a, b) => a - b);
   const levels = [];
   for (const y of ys) {
     if (levels.length === 0 || Math.abs(y - levels[levels.length - 1]) > Y_EPS) {
@@ -129,8 +144,9 @@ function countPanels(panels) {
 // Erzeugt den Aufbauplan: ein Array von Schritten.
 // Jeder Schritt: { kind, title, level, y, connectors, openEnds, tubes, panels,
 //                  nodeIds, tubeIds, panelIds }
-export function computeBuildPlan(model) {
-  const levels = levelsOf(model);
+export function computeBuildPlan(model, order = "y+") {
+  const coord = orderCoord(order);
+  const levels = levelsOf(model, order);
   const steps = [];
   if (levels.length === 0) return { levels, steps };
 
@@ -138,7 +154,7 @@ export function computeBuildPlan(model) {
   const nodeLevel = new Map(); // nodeId -> levelIndex
   const nodesByLevel = levels.map(() => []);
   for (const n of model.nodes.values()) {
-    const li = levelIndex(levels, n.y);
+    const li = levelIndex(levels, coord(n));
     nodeLevel.set(n.id, li);
     nodesByLevel[li].push(n);
   }
@@ -171,7 +187,7 @@ export function computeBuildPlan(model) {
   }
   const slidesByLevel = levels.map(() => []);
   for (const sl of (model.slides ? model.slides.values() : [])) {
-    slidesByLevel[levelIndex(levels, sl.y)].push(sl);
+    slidesByLevel[levelIndex(levels, coord(sl))].push(sl);
   }
 
   for (let i = 0; i < levels.length; i++) {

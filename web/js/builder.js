@@ -27,6 +27,7 @@ export class Builder {
     this.showHints = false;      // Verstaerkungs-Vorschlaege hervorheben
     this.buildPlan = { levels: [], steps: [] };
     this.assemblyStep = 0;
+    this.assemblyOrder = "y+";   // Aufbaurichtung, siehe buildplan.BUILD_ORDERS
 
     this._undoStack = [];
     this._redoStack = [];
@@ -114,10 +115,18 @@ export class Builder {
   // --- Aufbaumodus -------------------------------------------------------
   // Aufbauplan (neu) berechnen und beim aktuellen Schritt bleiben (geklemmt).
   enterAssembly() {
-    this.buildPlan = computeBuildPlan(this.model);
+    this.buildPlan = computeBuildPlan(this.model, this.assemblyOrder);
     const max = Math.max(0, this.buildPlan.steps.length - 1);
     this.assemblyStep = Math.min(this.assemblyStep, max);
     this.showLabels = true; // im Aufbaumodus sind die Ebenen-Namen standardmaessig an
+  }
+
+  // Aufbaurichtung wechseln: Plan neu rechnen und beim ersten Schritt beginnen.
+  setAssemblyOrder(order) {
+    if (this.assemblyOrder === order) return;
+    this.assemblyOrder = order;
+    this.assemblyStep = 0;
+    if (this.mode === "assembly") { this.enterAssembly(); this.refresh(); }
   }
 
   assemblyCount() { return this.buildPlan.steps.length; }

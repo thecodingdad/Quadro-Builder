@@ -69,6 +69,7 @@ export function initUI({ scene, model, builder }) {
       applyTranslations();
       renderHelpTable();
       renderColorButtons();
+      renderOrderOptions();
       // Dynamische UI-Texte aktualisieren
       setMode(builder.mode);
       update();
@@ -617,6 +618,28 @@ export function initUI({ scene, model, builder }) {
   $("asm-prev").addEventListener("click", () => builder.setAssemblyStep(builder.assemblyStep - 1));
   $("asm-next").addEventListener("click", () => builder.setAssemblyStep(builder.assemblyStep + 1));
   $("asm-print").addEventListener("click", () => printPlan());
+
+  // Aufbaurichtung: je nach Modell und Platz im Raum ist eine andere Reihenfolge
+  // praktischer als die Standard-Reihenfolge von unten nach oben.
+  const ORDER_KEYS = { "y+": "asm_order_yp", "x+": "asm_order_xp", "x-": "asm_order_xm",
+                       "z+": "asm_order_zp", "z-": "asm_order_zm" };
+  const orderSel = $("asm-order");
+  function renderOrderOptions() {
+    if (!orderSel) return;
+    orderSel.innerHTML = "";
+    for (const [value, key] of Object.entries(ORDER_KEYS)) {
+      const o = document.createElement("option");
+      o.value = value;
+      o.textContent = t(key);
+      if (value === builder.assemblyOrder) o.selected = true;
+      orderSel.appendChild(o);
+    }
+  }
+  renderOrderOptions();
+  if (orderSel) orderSel.addEventListener("change", () => {
+    builder.setAssemblyOrder(orderSel.value);
+    renderAssembly();
+  });
 
   function asmRow(container, name, colorId, count, badge) {
     const row = el("div", "asm-row");
