@@ -637,9 +637,10 @@ export class Builder {
   }
 
   _clickSlide(e) {
+    // pickHandle liefert { object, data } -- die Nutzdaten stecken in h.data.
     const h = this.scene.pickHandle(e.clientX, e.clientY);
-    if (!h || !h.userData || !h.userData.slideMount) return;
-    const m = h.userData.slideMount;
+    if (!h || !h.data || !h.data.slideMount) return;
+    const m = h.data.slideMount;
     let added = null;
     this.recordHistory(() => { added = this.model.addSlide(m.hook, m.normal); });
     if (!added) this.onNotice(t("notice_slide_exists"));

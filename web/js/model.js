@@ -7,7 +7,10 @@ import { round2 as round } from "./util.js";
 // Rutsche: Einhaengepunkt sitzt knapp ueber den unteren Kupplungen des
 // senkrechten Rohrpaars; SLIDE_SLOPE ist die rutschentypische Neigung.
 const SLIDE_HOOK_LIFT = 5;                 // cm ueber der unteren Kupplung
-const SLIDE_SLOPE = 35 * Math.PI / 180;
+// Rutsche = starres Fertigteil. Masse abgemessen an QuadroTobezimmer.qdf: dort
+// haengt sie 80 cm hoch ein und laeuft 100 cm weit aus -> Bahn 128 cm bei 38,7 Grad.
+const SLIDE_LENGTH = Math.hypot(100, 80);          // 128 cm Bahnlaenge
+const SLIDE_SLOPE = Math.atan2(80, 100);           // fester Neigungswinkel
 
 function dist2(a, b) {
   const dx = a.x - b.x, dy = a.y - b.y, dz = a.z - b.z;
@@ -210,6 +213,9 @@ export class BuildModel {
       ];
       // Abfallrichtung: waagerechte Feld-Normale, und zwar die Seite mit
       // weniger Bauteilen -- die Rutsche laeuft vom Geruest weg, nicht hinein.
+      // Starres Teil: zu tief eingehaengt landet der Auslauf unter dem Boden --
+      // dort laesst sich real keine Rutsche montieren, also nicht anbieten.
+      if (hook[1] < SLIDE_LENGTH * Math.sin(SLIDE_SLOPE) - 1) continue;
       const nrm = [r.normal[0], 0, r.normal[2]];
       const nl = Math.hypot(nrm[0], nrm[2]);
       if (nl < 0.5) continue;                                 // Feld liegt waagerecht
@@ -228,12 +234,16 @@ export class BuildModel {
   // Rutsche an einer Montagestelle einhaengen. Der Fuss liegt am Boden, um die
   // rutschentypische Neigung vom Einhaengepunkt entfernt.
   addSlide(hook, normal, kind = "slide-new2") {
-    const drop = Math.max(hook[1] - 0, 1);
-    const run = drop / Math.tan(SLIDE_SLOPE);
+    // Die Rutsche ist ein starres Fertigteil: feste Bahnlaenge UND fester
+    // Neigungswinkel. Hoehenunterschied und waagerechter Auslauf stehen damit
+    // fest; der Fuss liegt so tief unter dem Einhaengepunkt, wie das Teil es
+    // vorgibt (bei der ueblichen Einhaenghoehe von 80 cm genau auf dem Boden).
+    const run = SLIDE_LENGTH * Math.cos(SLIDE_SLOPE);
+    const drop = SLIDE_LENGTH * Math.sin(SLIDE_SLOPE);
     const slide = {
       id: this._id("s"),
       x: round(hook[0] + normal[0] * run),
-      y: 0,
+      y: round(hook[1] - drop),
       z: round(hook[2] + normal[2] * run),
       hook: [round(hook[0]), round(hook[1]), round(hook[2])],
       kind,
