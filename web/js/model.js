@@ -4,6 +4,11 @@
 import { MERGE_EPS, FORMAT_VERSION, DIAGONAL_SNAP_TOL } from "./config.js";
 import { round2 as round } from "./util.js";
 
+// Rutsche: Einhaengepunkt sitzt knapp ueber den unteren Kupplungen des
+// senkrechten Rohrpaars; SLIDE_SLOPE ist die rutschentypische Neigung.
+const SLIDE_HOOK_LIFT = 5;                 // cm ueber der unteren Kupplung
+const SLIDE_SLOPE = 35 * Math.PI / 180;
+
 function dist2(a, b) {
   const dx = a.x - b.x, dy = a.y - b.y, dz = a.z - b.z;
   return dx * dx + dy * dy + dz * dz;
@@ -180,6 +185,66 @@ export class BuildModel {
 
   removeSlide(id) {
     this.slides.delete(id);
+  }
+
+  // Montagestellen fuer eine Rutsche: zwei parallele SENKRECHTE Rohre. Die
+  // Rutsche wird dort eingehaengt und sitzt knapp ueber den unteren Kupplungen.
+  // Liefert je Stelle { nodes, hook:[x,y,z], normal:[..] } -- hook ist der
+  // Einhaengepunkt (Mitte zwischen beiden Rohren, kurz ueber den unteren
+  // Kupplungen), normal die Richtung, in die die Rutsche abfaellt.
+  slideMounts(width = 40, tol = 2) {
+    const out = [];
+    for (const r of this.findRectangles()) {
+      // u = Rohrrichtung, v = Abstand der beiden Rohre.
+      if (Math.abs(r.u[1]) < 0.95) continue;                 // Rohre nicht senkrecht
+      if (Math.abs(r.dims[1] - width) > tol) continue;        // falscher Abstand
+      const ns = r.nodes.map((id) => this.nodes.get(id)).filter(Boolean);
+      if (ns.length !== 4) continue;
+      const minY = Math.min(...ns.map((n) => n.y));
+      const low = ns.filter((n) => n.y - minY < 0.5);
+      if (low.length !== 2) continue;
+      const hook = [
+        (low[0].x + low[1].x) / 2,
+        minY + SLIDE_HOOK_LIFT,
+        (low[0].z + low[1].z) / 2,
+      ];
+      // Abfallrichtung: waagerechte Feld-Normale, und zwar die Seite mit
+      // weniger Bauteilen -- die Rutsche laeuft vom Geruest weg, nicht hinein.
+      const nrm = [r.normal[0], 0, r.normal[2]];
+      const nl = Math.hypot(nrm[0], nrm[2]);
+      if (nl < 0.5) continue;                                 // Feld liegt waagerecht
+      nrm[0] /= nl; nrm[2] /= nl;
+      let front = 0, back = 0;
+      for (const n of this.nodes.values()) {
+        const d = (n.x - hook[0]) * nrm[0] + (n.z - hook[2]) * nrm[2];
+        if (d > 5) front++; else if (d < -5) back++;
+      }
+      const dir = front > back ? [-nrm[0], 0, -nrm[2]] : nrm;
+      out.push({ nodes: r.nodes.slice(), hook, normal: dir, center: r.center, u: r.u, v: r.v });
+    }
+    return out;
+  }
+
+  // Rutsche an einer Montagestelle einhaengen. Der Fuss liegt am Boden, um die
+  // rutschentypische Neigung vom Einhaengepunkt entfernt.
+  addSlide(hook, normal, kind = "slide-new2") {
+    const drop = Math.max(hook[1] - 0, 1);
+    const run = drop / Math.tan(SLIDE_SLOPE);
+    const slide = {
+      id: this._id("s"),
+      x: round(hook[0] + normal[0] * run),
+      y: 0,
+      z: round(hook[2] + normal[2] * run),
+      hook: [round(hook[0]), round(hook[1]), round(hook[2])],
+      kind,
+    };
+    for (const s of this.slides.values()) {
+      if (s.hook && Math.hypot(s.hook[0] - slide.hook[0], s.hook[1] - slide.hook[1], s.hook[2] - slide.hook[2]) < 1) {
+        return null; // hier haengt schon eine Rutsche
+      }
+    }
+    this.slides.set(slide.id, slide);
+    return slide;
   }
 
   // Farbe eines Rohrs / einer Platte / eines Netzes setzen (Klick im Bau-Modus
@@ -479,7 +544,8 @@ export class BuildModel {
       })),
       slides: [...this.slides.values()].map((s) => {
         const o = { id: s.id, x: round(s.x), y: round(s.y), z: round(s.z), kind: s.kind };
-        if (s.quat) o.quat = s.quat; // Three-Quaternion x,y,z,w (vor Rz90)
+        if (s.quat) o.quat = s.quat;
+        if (s.hook) o.hook = s.hook; // manuell gesetzt: Einhaengepunkt am Rohrpaar // Three-Quaternion x,y,z,w (vor Rz90)
         return o;
       }),
     };
@@ -538,7 +604,7 @@ export class BuildModel {
       maxSeq = Math.max(maxSeq, parseSeq(t.id));
     }
     for (const s of data.slides || []) {
-      this.slides.set(s.id, { id: s.id, x: s.x, y: s.y, z: s.z, quat: s.quat || null, kind: s.kind });
+      this.slides.set(s.id, { id: s.id, x: s.x, y: s.y, z: s.z, quat: s.quat || null, hook: s.hook || null, kind: s.kind });
       maxSeq = Math.max(maxSeq, parseSeq(s.id));
     }
     this._seq = maxSeq + 1;

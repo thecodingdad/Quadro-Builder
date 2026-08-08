@@ -1172,6 +1172,23 @@ export class SceneManager {
       if (d < bestD) { bestD = d; target = s2; }
     }
     let P1;
+    // Im Editor gesetzte Rutsche: Der Einhaengepunkt am senkrechten Rohrpaar ist
+    // bekannt, es muss nichts aus Quaternion/Kette hergeleitet werden.
+    if (sl.hook && sl.hook.length === 3) {
+      P1 = P0.clone();                                  // Auslauf = gespeicherte Position
+      P0 = new THREE.Vector3(sl.hook[0], sl.hook[1], sl.hook[2]);
+      const C0 = new THREE.Vector3((P0.x + P1.x) / 2, P1.y + (P0.y - P1.y) * 0.32, (P0.z + P1.z) / 2);
+      const bez0 = (t) => {
+        const u = 1 - t;
+        return new THREE.Vector3(
+          u * u * P0.x + 2 * u * t * C0.x + t * t * P1.x,
+          u * u * P0.y + 2 * u * t * C0.y + t * t * P1.y,
+          u * u * P0.z + 2 * u * t * C0.z + t * t * P1.z);
+      };
+      this._slideChainFrame = this._addSlideAlongCurve(mat, st, sl.id, bez0, 9, null);
+      this._slideChainNextId = null;
+      return;
+    }
     if (target) {
       P1 = target.kind === "slide-end2" ? this._slideEndConnectPoint(target) : new THREE.Vector3(target.x, target.y, target.z);
     } else {

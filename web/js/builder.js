@@ -271,6 +271,7 @@ export class Builder {
   _buildHandles() {
     this.scene.clearHandles();
     if (this.mode === "panel") { this._buildPanelHandles(); return; }
+    if (this.mode === "slide") { this._buildSlideHandles(); return; }
     if (this.mode === "clamp") { this._buildClampHandles(); return; }
     if (this.mode !== "add") return;
 
@@ -570,7 +571,7 @@ export class Builder {
 
   _onMove(e) {
     let obj = null;
-    if (this.mode === "add" || this.mode === "panel" || this.mode === "clamp") {
+    if (this.mode === "add" || this.mode === "panel" || this.mode === "slide" || this.mode === "clamp") {
       const h = this.scene.pickHandle(e.clientX, e.clientY);
       obj = h ? h.object : (this.scene.pickBuild(e.clientX, e.clientY)?.object || null);
     } else {
@@ -586,6 +587,7 @@ export class Builder {
     if (Math.hypot(e.clientX - d.x, e.clientY - d.y) > CLICK_TOLERANCE) return; // Drehen
     if (this.mode === "add") this._clickAdd(e);
     else if (this.mode === "panel") this._clickPanel(e);
+    else if (this.mode === "slide") this._clickSlide(e);
     else if (this.mode === "clamp") this._clickClamp(e);
     else if (this.mode === "delete") this._clickDelete(e);
     else if (this.mode === "reinforce") this._clickReinforce(e);
@@ -621,6 +623,27 @@ export class Builder {
       return;
     }
     this._placeClampOnTube(pick.data.id, pick.point);
+  }
+
+  // Montagestellen fuer Rutschen: Felder aus zwei senkrechten, parallelen Rohren.
+  _buildSlideHandles() {
+    for (const m of this.model.slideMounts()) {
+      const corners = m.nodes.map((id) => {
+        const n = this.model.nodes.get(id);
+        return [n.x, n.y, n.z];
+      });
+      this.scene.addPanelHandle(corners, { slideMount: m });
+    }
+  }
+
+  _clickSlide(e) {
+    const h = this.scene.pickHandle(e.clientX, e.clientY);
+    if (!h || !h.userData || !h.userData.slideMount) return;
+    const m = h.userData.slideMount;
+    let added = null;
+    this.recordHistory(() => { added = this.model.addSlide(m.hook, m.normal); });
+    if (!added) this.onNotice(t("notice_slide_exists"));
+    this.refresh();
   }
 
   _clickPanel(e) {

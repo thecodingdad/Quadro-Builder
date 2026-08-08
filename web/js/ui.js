@@ -52,6 +52,7 @@ function renderHelpTable() {
 }
 
 export function initUI({ scene, model, builder }) {
+  let slideBtn = null;
   const inventory = loadInv();
 
   // Übersetzungen initial anwenden
@@ -162,6 +163,7 @@ export function initUI({ scene, model, builder }) {
       x.classList.toggle("active", inAdd && x.dataset.tube === builder.tubeId));
     panelWrap.querySelectorAll("button").forEach((x) =>
       x.classList.toggle("active", inPanel && x.dataset.panel === builder.panelId));
+    if (slideBtn) slideBtn.classList.toggle("active", builder.mode === "slide");
     $("btn-diagonal").classList.toggle("active", inAdd && builder.diagonal);
     syncPartColors();
   }
@@ -385,6 +387,22 @@ export function initUI({ scene, model, builder }) {
       }
     });
     panelWrap.appendChild(b);
+  }
+
+  // --- Rutschen-Button ---------------------------------------------------
+  // Rutschen sind keine Rohre/Platten: sie werden an zwei senkrechten,
+  // parallelen Rohren eingehaengt. Der Modus zeigt die passenden Felder an.
+  {
+    const b = el("btn-slide" && "button", "btn part");
+    b.dataset.slide = "slide-new2";
+    b.title = t("part_slide");
+    b.innerHTML =
+      `<svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true">` +
+      `<path d="M3 13 C7 13 5 4 13 3" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>` +
+      `<span data-i18n="part_slide">${t("part_slide")}</span>`;
+    b.addEventListener("click", () => setMode(builder.mode === "slide" ? "add" : "slide"));
+    panelWrap.appendChild(b);
+    slideBtn = b;
   }
 
   // --- Aktionen ----------------------------------------------------------
