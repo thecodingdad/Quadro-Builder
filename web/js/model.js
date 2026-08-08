@@ -225,10 +225,11 @@ export class BuildModel {
   _prunePanels() {
     for (const p of [...this.panels.values()]) {
       const ns = p.nodes;
-      let ok = ns.every((id) => this.nodes.has(id));
-      for (let k = 0; ok && k < 4; k++) {
-        if (!this.tubeBetween(ns[k], ns[(k + 1) % 4])) ok = false;
-      }
+      // Wie beim Setzen (findRectangles) genuegen ZWEI GEGENUEBERLIEGENDE Rohre:
+      // die Platte bleibt liegen, solange eines der beiden Seitenpaare steht.
+      const edge = (k) => !!this.tubeBetween(ns[k], ns[(k + 1) % 4]);
+      const ok = ns.every((id) => this.nodes.has(id)) &&
+        ((edge(0) && edge(2)) || (edge(1) && edge(3)));
       if (!ok) this.panels.delete(p.id);
     }
     // Netze/Stoffe (textil2): entfernen, sobald eine ihrer 4 Eck-Kupplungen fehlt.
@@ -270,38 +271,54 @@ export class BuildModel {
     return false;
   }
 
-  // Findet rechteckige Felder: 4 Knoten + 4 vorhandene Rand-Rohre.
+  // Findet rechteckige Felder fuer Platten. Es genuegen ZWEI GEGENUEBERLIEGENDE
+  // Rohre -- eine Platte liegt beim Bauen auf zwei parallelen Rohren auf, die
+  // beiden Querseiten muessen nicht geschlossen sein. Gesucht wird deshalb ueber
+  // Paare paralleler, gleich langer Rohre, deren Endknoten ein Rechteck bilden
+  // (frueher lief die Suche ueber die Rohr-Nachbarn eines Knotens und verlangte
+  // alle vier Randrohre; ein Feld mit offenen Querseiten wurde so nie gefunden).
   // Liefert je Feld { nodes:[A,B,C,D], dims:[l1,l2], center, normal, u, v }.
   findRectangles() {
     const rects = [];
     const seen = new Set();
-    for (const A of this.nodes.values()) {
-      const edges = this.neighbors(A.id)
-        .filter(Boolean)
-        .map((N) => ({ node: N, v: [N.x - A.x, N.y - A.y, N.z - A.z] }));
-      for (let i = 0; i < edges.length; i++) {
-        for (let j = i + 1; j < edges.length; j++) {
-          const e1 = edges[i], e2 = edges[j];
-          const dot = e1.v[0] * e2.v[0] + e1.v[1] * e2.v[1] + e1.v[2] * e2.v[2];
-          if (Math.abs(dot) > 1e-3) continue; // nicht senkrecht
-          const B = e1.node, D = e2.node;
-          const C = this.findNodeNear(B.x + e2.v[0], B.y + e2.v[1], B.z + e2.v[2]);
-          if (!C) continue;
-          if (!this.tubeBetween(B.id, C.id) || !this.tubeBetween(D.id, C.id)) continue;
-          const key = [A.id, B.id, C.id, D.id].slice().sort().join("|");
-          if (seen.has(key)) continue;
-          seen.add(key);
-          const n = cross(e1.v, e2.v);
-          const nl = Math.hypot(n[0], n[1], n[2]) || 1;
-          rects.push({
-            nodes: [A.id, B.id, C.id, D.id],
-            dims: [Math.hypot(...e1.v), Math.hypot(...e2.v)],
-            center: [(A.x + B.x + C.x + D.x) / 4, (A.y + B.y + C.y + D.y) / 4, (A.z + B.z + C.z + D.z) / 4],
-            normal: [n[0] / nl, n[1] / nl, n[2] / nl],
-            u: unit(e1.v),
-            v: unit(e2.v),
-          });
-        }
+    // Arm-/Link-Kanten sind keine Rohre; Boegen sind gekruemmt und tragen keine Platte.
+    const tubes = [...this.tubes.values()].filter((t) => !t.arm && !t.link && !t.bow);
+    for (let i = 0; i < tubes.length; i++) {
+      const A = this.nodes.get(tubes[i].a), B = this.nodes.get(tubes[i].b);
+      if (!A || !B) continue;
+      const v1 = [B.x - A.x, B.y - A.y, B.z - A.z];
+      const L1 = Math.hypot(v1[0], v1[1], v1[2]);
+      if (L1 < 1e-6) continue;
+      for (let j = i + 1; j < tubes.length; j++) {
+        let D = this.nodes.get(tubes[j].a), C = this.nodes.get(tubes[j].b);
+        if (!D || !C) continue;
+        let v2 = [C.x - D.x, C.y - D.y, C.z - D.z];
+        const L2 = Math.hypot(v2[0], v2[1], v2[2]);
+        if (Math.abs(L1 - L2) > 0.5) continue;                     // ungleich lang
+        const dot = (v1[0] * v2[0] + v1[1] * v2[1] + v1[2] * v2[2]) / (L1 * L2);
+        if (Math.abs(Math.abs(dot) - 1) > 1e-3) continue;          // nicht parallel
+        if (dot < 0) { const tmp = D; D = C; C = tmp; }            // gleichsinnig ausrichten
+        // Versatz A->D: senkrecht zum Rohr und identisch zu B->C (echtes Rechteck).
+        const w = [D.x - A.x, D.y - A.y, D.z - A.z];
+        const wl = Math.hypot(w[0], w[1], w[2]);
+        if (wl < 0.5) continue;
+        if (Math.abs(w[0] * v1[0] + w[1] * v1[1] + w[2] * v1[2]) > 1e-3) continue;
+        if (Math.abs(C.x - B.x - w[0]) > 0.5 ||
+            Math.abs(C.y - B.y - w[1]) > 0.5 ||
+            Math.abs(C.z - B.z - w[2]) > 0.5) continue;
+        const key = [A.id, B.id, C.id, D.id].slice().sort().join("|");
+        if (seen.has(key)) continue;
+        seen.add(key);
+        const n = cross(v1, w);
+        const nl = Math.hypot(n[0], n[1], n[2]) || 1;
+        rects.push({
+          nodes: [A.id, B.id, C.id, D.id],
+          dims: [L1, wl],
+          center: [(A.x + B.x + C.x + D.x) / 4, (A.y + B.y + C.y + D.y) / 4, (A.z + B.z + C.z + D.z) / 4],
+          normal: [n[0] / nl, n[1] / nl, n[2] / nl],
+          u: unit(v1),
+          v: unit(w),
+        });
       }
     }
     return rects;
