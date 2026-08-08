@@ -770,6 +770,37 @@ export class SceneManager {
     const armStubGeo = new THREE.CylinderGeometry(armRadius, armRadius, armStubLen, 12);
     const armStubOff = cs / 2 + armStubLen / 2 - 0.4;
 
+    // Richtungen der an einem Knoten TATSAECHLICH angeschlossenen Rohre.
+    // Einmal fuer alle Knoten aufgebaut (sonst waere die Pruefung je Knoten ueber
+    // alle Rohre quadratisch). Bei Bogenrohren zaehlt die Tangente am Knoten,
+    // nicht die Sehne zum Gegenknoten -- sonst gilt ein belegter Arm faelschlich
+    // als frei.
+    const tubeDirsAt = new Map();
+    const pushDir = (nodeId, vx, vy, vz) => {
+      const L = Math.hypot(vx, vy, vz);
+      if (L < 1e-6) return;
+      if (!tubeDirsAt.has(nodeId)) tubeDirsAt.set(nodeId, []);
+      tubeDirsAt.get(nodeId).push([vx / L, vy / L, vz / L]);
+    };
+    for (const t of model.tubes.values()) {
+      const na = model.nodes.get(t.a), nb = model.nodes.get(t.b);
+      if (!na || !nb) continue;
+      if (t.bow && t.bowCenter) {
+        const [cx, cy, cz] = t.bowCenter;
+        pushDir(t.a, nb.x - cx, nb.y - cy, nb.z - cz);
+        pushDir(t.b, na.x - cx, na.y - cy, na.z - cz);
+      } else {
+        pushDir(t.a, nb.x - na.x, nb.y - na.y, nb.z - na.z);
+        pushDir(t.b, na.x - nb.x, na.y - nb.y, na.z - nb.z);
+      }
+    }
+    // Ist diese Arm-Richtung von einem Rohr belegt?
+    const armIsUsed = (nodeId, d) => {
+      const dirs = tubeDirsAt.get(nodeId);
+      if (!dirs) return false;
+      return dirs.some((v) => v[0] * d[0] + v[1] * d[1] + v[2] * d[2] > 0.9);
+    };
+
     // Zustand eines Teils im Aufbaumodus: "done" | "current" | "future".
     const stateOf = (id) => {
       if (!asm) return "done";
@@ -805,14 +836,17 @@ export class SceneManager {
         this.buildGroup.add(mesh);
         if (st !== "future") this.pickNodes.push(mesh);
 
-        // Echte Arm-Stutzen der Kupplung (variant2 -> node.arms): zeigen alle
-        // physisch vorhandenen Arme inkl. OFFENER -- der Knoten sieht aus wie das
-        // reale Teil (Wuerfel + Arme), und freie Arme markieren Anbau-Stellen.
+        // Arm-Stutzen der Kupplung (variant2 -> node.arms). Es werden NUR Arme
+        // gezeichnet, an denen wirklich ein Rohr steckt: die Kupplung zeigt damit
+        // immer genau ihr tatsaechliches Anschlussbild. Offene Stutzen entfallen
+        // -- die Herstellersoftware kennt sie ebenfalls nicht, und die
+        // variant2-Maske der QDF-Datei fuehrt sonst Arme ins Leere.
         if (n.arms) {
           for (const d of n.arms) {
             const dv = new THREE.Vector3(d[0], d[1], d[2]);
             if (dv.lengthSq() < 0.1) continue;
             dv.normalize();
+            if (!armIsUsed(n.id, [dv.x, dv.y, dv.z])) continue;
             const stub = new THREE.Mesh(armStubGeo, mat);
             stub.position.set(n.x + dv.x * armStubOff, n.y + dv.y * armStubOff, n.z + dv.z * armStubOff);
             stub.quaternion.setFromUnitVectors(UP, dv);
@@ -1122,7 +1156,7 @@ export class SceneManager {
   // an ihr Ende -> die feste ~140cm-Form ergibt sich aus der Distanz. Ersetzt die
   // fehlplatzierte Viewer-Transformation (fester Block + rotateY45 + Offsets).
   _addStraightSlide(sl, model, mat, st) {
-    const P0 = new THREE.Vector3(sl.x, sl.y, sl.z);
+    let P0 = new THREE.Vector3(sl.x, sl.y, sl.z);
     let target = null, bestD = Infinity;
     for (const s2 of model.slides.values()) {
       if (s2 === sl) continue;
@@ -1135,10 +1169,21 @@ export class SceneManager {
     if (target) {
       P1 = target.kind === "slide-end2" ? this._slideEndConnectPoint(target) : new THREE.Vector3(target.x, target.y, target.z);
     } else {
+      // Einzelne Rutsche ohne Folgeteil: Die QDF-Position ist dann der FUSS
+      // (Auslauf am Boden), nicht der Einstieg -- alle Rutschen-Records einer
+      // solchen Datei liegen auf y = 0. Die Rutsche steigt entgegen der
+      // Laufrichtung auf Plattformhoehe an: 2 Ebenen hoch (80 cm) bei 100 cm
+      // horizontal. Frueher lief der Fallback stattdessen 130 cm nach vorn und
+      // 60 cm nach UNTEN -- die Rutsche lag dadurch flach unter dem Boden.
+      // Geprueft an QuadroTobezimmer.qdf: Fuss (40,0,100) + Anstieg trifft
+      // exakt die Kupplung (40,80,0), an der die Rutsche eingehaengt ist.
+      const SLIDE_RUN = 100, SLIDE_RISE = 80;
       const fwd = new THREE.Vector3(1, 0, 0);
       if (sl.quat && sl.quat.length === 4) fwd.applyQuaternion(new THREE.Quaternion(sl.quat[0], sl.quat[1], sl.quat[2], sl.quat[3]).normalize());
-      if (fwd.lengthSq() < 0.01) fwd.set(1, 0, 0); fwd.normalize();
-      P1 = P0.clone().addScaledVector(fwd, 130).add(new THREE.Vector3(0, -60, 0));
+      if (fwd.lengthSq() < 0.01) fwd.set(1, 0, 0);
+      fwd.normalize();
+      P1 = P0.clone();                       // Auslauf = QDF-Position
+      P0 = P1.clone().addScaledVector(fwd, SLIDE_RUN).setY(P1.y + SLIDE_RISE); // Einstieg oben
     }
     if (P0.distanceTo(P1) < 1) { this._slideChainFrame = null; this._slideChainNextId = null; return; }
     // Plan-Verlauf GERADE (Kontrollpunkt horizontal mittig), aber Seitenprofil

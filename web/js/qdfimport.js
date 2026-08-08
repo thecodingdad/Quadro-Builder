@@ -659,6 +659,26 @@ export function parseQDF(text, opts = {}) {
     }
   }
 
+  // Rutschen-Fussrohr verwerfen: Am Auslauf einer Rutsche steht in der QDF-Datei
+  // ein Rohr (samt Kupplungen), dessen Mitte exakt auf der Rutschen-Position
+  // liegt. Die Herstellersoftware zeichnet es nicht -- es gehoert zum Rutschen-
+  // Bauteil und ist real kein eigenes Rohr. Ohne diesen Filter steht es lose im
+  // Raum und taucht faelschlich in der Stueckliste auf. Die dadurch verwaisten
+  // Kupplungen raeumt der folgende Block mit weg.
+  if (slides.length) {
+    const FOOT_TOL = 3; // cm
+    const nodeById = new Map(nodes.map((n) => [n.id, n]));
+    for (let i = tubes.length - 1; i >= 0; i--) {
+      const t = tubes[i];
+      const a = nodeById.get(t.a), b = nodeById.get(t.b);
+      if (!a || !b) continue;
+      const mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2, mz = (a.z + b.z) / 2;
+      if (slides.some((s) => Math.hypot(s.x - mx, s.y - my, s.z - mz) <= FOOT_TOL)) {
+        tubes.splice(i, 1);
+      }
+    }
+  }
+
   // Frei schwebende Verbinder-Knoten (kein Rohr, keine Platte) entfernen --
   // diese Markierungen tragen nichts zum Modell bei und wuerden lose herumstehen.
   {
