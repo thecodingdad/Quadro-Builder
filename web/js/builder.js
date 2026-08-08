@@ -641,8 +641,17 @@ export class Builder {
     const h = this.scene.pickHandle(e.clientX, e.clientY);
     if (!h || !h.data || !h.data.slideMount) return;
     const m = h.data.slideMount;
+    // Richtung aus der angeklickten SEITE des Feldes: die Rutsche faellt zu der
+    // Seite ab, von der aus man draufschaut. Das Feld ist eine duenne Flaeche,
+    // also entscheidet die Lage der Kamera bezueglich seiner Ebene -- so laesst
+    // sich dieselbe Montagestelle wahlweise nach vorn oder nach hinten belegen.
+    const n = m.normal.slice();
+    const cam = this.scene.camera.position;
+    if ((cam.x - m.hook[0]) * n[0] + (cam.z - m.hook[2]) * n[2] < 0) {
+      n[0] = -n[0]; n[2] = -n[2];
+    }
     let added = null;
-    this.recordHistory(() => { added = this.model.addSlide(m.hook, m.normal); });
+    this.recordHistory(() => { added = this.model.addSlide(m.hook, n); });
     if (!added) this.onNotice(t("notice_slide_exists"));
     this.refresh();
   }
