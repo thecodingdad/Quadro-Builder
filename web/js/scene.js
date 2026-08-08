@@ -1177,7 +1177,7 @@ export class SceneManager {
       // 60 cm nach UNTEN -- die Rutsche lag dadurch flach unter dem Boden.
       // Geprueft an QuadroTobezimmer.qdf: Fuss (40,0,100) + Anstieg trifft
       // exakt die Kupplung (40,80,0), an der die Rutsche eingehaengt ist.
-      const SLIDE_RUN = 100, SLIDE_RISE = 80;
+      const SLIDE_RUN = 100, SLIDE_RISE = 80; // Rueckfall, falls nichts passt
       const fwd = new THREE.Vector3(1, 0, 0);
       if (sl.quat && sl.quat.length === 4) fwd.applyQuaternion(new THREE.Quaternion(sl.quat[0], sl.quat[1], sl.quat[2], sl.quat[3]).normalize());
       if (fwd.lengthSq() < 0.01) fwd.set(1, 0, 0);
@@ -1188,7 +1188,26 @@ export class SceneManager {
       // des Turms.
       fwd.applyAxisAngle(new THREE.Vector3(0, 1, 0), Math.PI / 2);
       P1 = P0.clone();                       // Auslauf = QDF-Position
-      P0 = P1.clone().addScaledVector(fwd, SLIDE_RUN).setY(P1.y + SLIDE_RISE); // Einstieg oben
+      // Einstieg = die Kupplung, an der die Rutsche oben eingehaengt ist: erhoeht,
+      // in Laufrichtung vor dem Fuss und seitlich auf der Rutschenachse. Damit
+      // reicht die Rutsche bis an das Geruest, statt frei in der Luft zu enden.
+      // Von mehreren Kandidaten gewinnt der mit der rutschentypischen Neigung
+      // (~35 Grad) -- sonst wuerde die oberste Ebene gewaehlt und die Rutsche
+      // stuende viel zu steil.
+      const IDEAL_SLOPE = 35 * Math.PI / 180;
+      let hook = null, bestSlope = Infinity;
+      for (const n of model.nodes.values()) {
+        const rel = new THREE.Vector3(n.x - P1.x, 0, n.z - P1.z);
+        const along = rel.dot(fwd);
+        if (along < 20) continue;                                   // liegt hinter dem Fuss
+        if (rel.clone().addScaledVector(fwd, -along).length() > 25) continue; // zu weit seitlich
+        if (n.y < P1.y + 20) continue;                              // nicht erhoeht
+        const off = Math.abs(Math.atan2(n.y - P1.y, along) - IDEAL_SLOPE);
+        if (off < bestSlope) { bestSlope = off; hook = { y: n.y, along }; }
+      }
+      P0 = hook
+        ? new THREE.Vector3(P1.x + fwd.x * hook.along, hook.y, P1.z + fwd.z * hook.along)
+        : P1.clone().addScaledVector(fwd, SLIDE_RUN).setY(P1.y + SLIDE_RISE);
     }
     if (P0.distanceTo(P1) < 1) { this._slideChainFrame = null; this._slideChainNextId = null; return; }
     // Plan-Verlauf GERADE (Kontrollpunkt horizontal mittig), aber Seitenprofil
