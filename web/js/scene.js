@@ -839,6 +839,7 @@ export class SceneManager {
     // Kupplungen (Wuerfel)
     for (const n of model.nodes.values()) {
       const st = stateOf(n.id);
+      if (st === "future") continue;   // noch nicht gebaute Teile bleiben unsichtbar
       let mat;
       if (st === "future") mat = this._ghostMaterial();
       else if (st === "current") mat = this._connMaterial(true);
@@ -970,6 +971,7 @@ export class SceneManager {
       const a = model.nodes.get(t.a), b = model.nodes.get(t.b);
       if (!a || !b) continue;
       const st = stateOf(t.id);
+      if (st === "future") continue;   // noch nicht gebaute Teile bleiben unsichtbar
       // Reine Konnektivitaets-Kanten (Daten): C45-Adapter-Arm wird als Huelse am
       // c45body-Knoten gezeichnet, die Doppelrohr-Verbindung als "8"-Klemme --
       // beide nicht hier als Rohr.
@@ -1052,6 +1054,7 @@ export class SceneManager {
       const ns = p.nodes.map((id) => model.nodes.get(id));
       if (ns.some((n) => !n)) continue;
       const st = stateOf(p.id);
+      if (st === "future") continue;
       const [A, B, , D] = ns;
       const va = new THREE.Vector3(A.x, A.y, A.z);
       const u = new THREE.Vector3(B.x, B.y, B.z).sub(va);
@@ -1092,7 +1095,8 @@ export class SceneManager {
     const ringGeo = this._clampRingGeometry();
     for (const c of (model.clamps ? model.clamps.values() : [])) {
       const st = stateOf(c.id);
-      const mat = st === "future" ? this._ghostMaterial() : this._clampMaterial();
+      if (st === "future") continue;
+      const mat = this._clampMaterial();
       const dir = c.dir ? new THREE.Vector3(c.dir[0], c.dir[1], c.dir[2]).normalize() : new THREE.Vector3(1, 0, 0);
       const q = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 0, 1), dir);
       const h = c.off ? [c.off[0] / 2, c.off[1] / 2, c.off[2] / 2] : null;
@@ -1115,6 +1119,7 @@ export class SceneManager {
       const ns = tx.nodes.map((id) => model.nodes.get(id));
       if (ns.some((n) => !n)) continue;
       const st = stateOf(tx.id);
+      if (st === "future") continue;
       const [A, B, , D] = ns;
       const va = new THREE.Vector3(A.x, A.y, A.z);
       const u = new THREE.Vector3(B.x, B.y, B.z).sub(va);
@@ -1144,8 +1149,9 @@ export class SceneManager {
     for (const sl of (model.slides ? model.slides.values() : [])) {
       if (reinforce) continue;
       const st = stateOf(sl.id);
-      const mat = st === "future" ? this._ghostMaterial()
-        : (asm && st === "done") ? this._fadedMaterial(sl.color ? colorHex(sl.color) : 0xd23b3b)
+      if (st === "future") continue;
+      const mat = (asm && st === "done")
+        ? this._fadedMaterial(sl.color ? colorHex(sl.color) : 0xd23b3b)
         : this._slideMatFor(sl.kind, st === "current", sl.color);
 
       // Beschriftung: Name des Rutschenenteils/Dachs wenn Labels aktiv.

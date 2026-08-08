@@ -85,7 +85,16 @@ function levelIndex(levels, y) {
   for (let i = 0; i < levels.length; i++) {
     if (Math.abs(y - levels[i]) <= Y_EPS) return i;
   }
-  return levels.length - 1;
+  // Zwischenwert (z. B. der Einhaengepunkt einer Rutsche, der bewusst etwas
+  // ueber der Kupplung sitzt): die NAECHSTGELEGENE Ebene nehmen. Frueher fiel
+  // das auf die letzte Ebene zurueck -- solche Teile rutschten dadurch ans
+  // Ende des Bauplans.
+  let best = 0, bestD = Infinity;
+  for (let i = 0; i < levels.length; i++) {
+    const d = Math.abs(y - levels[i]);
+    if (d < bestD) { bestD = d; best = i; }
+  }
+  return best;
 }
 
 function round1(v) {
@@ -187,7 +196,12 @@ export function computeBuildPlan(model, order = "y+") {
   }
   const slidesByLevel = levels.map(() => []);
   for (const sl of (model.slides ? model.slides.values() : [])) {
-    slidesByLevel[levelIndex(levels, coord(sl))].push(sl);
+    // Eine Rutsche wird eingebaut, sobald ihr OBERER Anschluss steht -- nicht
+    // erst auf Hoehe ihres Auslaufs (sonst faellt sie ans Ende des Plans).
+    // hook ist der Einhaengepunkt am senkrechten Rohrpaar; importierte Rutschen
+    // ohne hook bleiben bei ihrer eigenen Position.
+    const anchor = sl.hook ? { x: sl.hook[0], y: sl.hook[1], z: sl.hook[2] } : sl;
+    slidesByLevel[levelIndex(levels, coord(anchor))].push(sl);
   }
 
   for (let i = 0; i < levels.length; i++) {
