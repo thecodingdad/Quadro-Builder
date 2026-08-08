@@ -536,7 +536,13 @@ export class SceneManager {
       if (t.arm || t.link) continue;
       const o = t.a === n.id ? model.nodes.get(t.b) : t.b === n.id ? model.nodes.get(t.a) : null;
       if (!o) continue;
-      const v = [o.x - n.x, o.y - n.y, o.z - n.z], L = Math.hypot(...v) || 1, u = v.map((c) => c / L);
+      // Bogenrohr: die Tangente am Knoten zaehlt, nicht die Sehne. Die Sehne
+      // eines Viertelkreises steht 45 Grad schief -- die Kupplung am freien
+      // Bogenende wuerde sonst um 45 Grad verdreht gezeichnet.
+      const v = t.bow && t.bowCenter
+        ? [o.x - t.bowCenter[0], o.y - t.bowCenter[1], o.z - t.bowCenter[2]]
+        : [o.x - n.x, o.y - n.y, o.z - n.z];
+      const L = Math.hypot(...v) || 1, u = v.map((c) => c / L);
       if (Math.max(...u.map(Math.abs)) >= 0.99) continue; // kardinal
       const act = [0, 1, 2].filter((a) => Math.abs(u[a]) > 0.3);
       if (act.length !== 2) continue;
