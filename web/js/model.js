@@ -253,7 +253,7 @@ export class BuildModel {
 
   // Rutsche an einer Montagestelle einhaengen. Der Fuss liegt am Boden, um die
   // rutschentypische Neigung vom Einhaengepunkt entfernt.
-  addSlide(hook, normal, kind = "slide-new2") {
+  addSlide(hook, normal, kind = "slide-new2", color = null) {
     // Die Rutsche ist ein starres Fertigteil: feste Bahnlaenge UND fester
     // Neigungswinkel. Hoehenunterschied und waagerechter Auslauf stehen damit
     // fest; der Fuss liegt so tief unter dem Einhaengepunkt, wie das Teil es
@@ -266,7 +266,7 @@ export class BuildModel {
       y: round(hook[1] - drop),
       z: round(hook[2] + normal[2] * run),
       hook: [round(hook[0]), round(hook[1]), round(hook[2])],
-      kind,
+      kind, color,
     };
     for (const s of this.slides.values()) {
       if (s.hook && Math.hypot(s.hook[0] - slide.hook[0], s.hook[1] - slide.hook[1], s.hook[2] - slide.hook[2]) < 1) {
@@ -575,7 +575,8 @@ export class BuildModel {
       slides: [...this.slides.values()].map((s) => {
         const o = { id: s.id, x: round(s.x), y: round(s.y), z: round(s.z), kind: s.kind };
         if (s.quat) o.quat = s.quat;
-        if (s.hook) o.hook = s.hook; // manuell gesetzt: Einhaengepunkt am Rohrpaar // Three-Quaternion x,y,z,w (vor Rz90)
+        if (s.hook) o.hook = s.hook; // manuell gesetzt: Einhaengepunkt am Rohrpaar
+        if (s.color) o.color = s.color; // Three-Quaternion x,y,z,w (vor Rz90)
         return o;
       }),
     };
@@ -634,7 +635,7 @@ export class BuildModel {
       maxSeq = Math.max(maxSeq, parseSeq(t.id));
     }
     for (const s of data.slides || []) {
-      this.slides.set(s.id, { id: s.id, x: s.x, y: s.y, z: s.z, quat: s.quat || null, hook: s.hook || null, kind: s.kind });
+      this.slides.set(s.id, { id: s.id, x: s.x, y: s.y, z: s.z, quat: s.quat || null, hook: s.hook || null, color: s.color || null, kind: s.kind });
       maxSeq = Math.max(maxSeq, parseSeq(s.id));
     }
     this._seq = maxSeq + 1;

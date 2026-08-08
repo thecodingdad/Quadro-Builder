@@ -225,7 +225,7 @@ export class SceneManager {
 
   // Rutschen-Material je Art, SOLIDE (Gregor): gerade Rutsche rot, Bogenrutsche
   // gruen, Auslauf gelb, Dach grau. Im Aufbau-Modus hervorgehoben.
-  _slideMatFor(kind, isCurrent) {
+  _slideMatFor(kind, isCurrent, colorId) {
     const COL = {
       "slide2": 0xd23b3b, "slide-new2": 0xd23b3b,  // gerade Rutsche = rot
       "curved-slide2": 0x37a23f,                    // Bogenrutsche = gruen
@@ -233,10 +233,13 @@ export class SceneManager {
       "roof2": 0x37a23f,                            // Dach-Tuch = gruen, durchsichtig
     };
     const transp = kind === "roof2"; // Dach-Tuch durchsichtig wie ein Textil (Gregor)
-    const key = "slidem_" + kind + (isCurrent ? "_c" : "");
+    // Im Editor gesetzte Rutschen tragen die gewaehlte Baufarbe; importierte
+    // ohne Farbangabe behalten die feste Farbe ihrer Art.
+    const hex = colorId ? colorHex(colorId) : (COL[kind] || 0x9aa3ad);
+    const key = "slidem_" + kind + (colorId || "") + (isCurrent ? "_c" : "");
     if (!this._materials[key]) {
       this._materials[key] = new THREE.MeshStandardMaterial({
-        color: new THREE.Color(COL[kind] || 0x9aa3ad), roughness: transp ? 0.9 : 0.6, metalness: 0.05,
+        color: new THREE.Color(hex), roughness: transp ? 0.9 : 0.6, metalness: 0.05,
         side: THREE.DoubleSide,
         transparent: transp, opacity: transp ? 0.5 : 1,
         emissive: new THREE.Color(isCurrent ? 0x3a2400 : 0x000000),
@@ -1121,7 +1124,7 @@ export class SceneManager {
     for (const sl of (model.slides ? model.slides.values() : [])) {
       if (reinforce) continue;
       const st = stateOf(sl.id);
-      const mat = st === "future" ? this._ghostMaterial() : this._slideMatFor(sl.kind, st === "current");
+      const mat = st === "future" ? this._ghostMaterial() : this._slideMatFor(sl.kind, st === "current", sl.color);
 
       // Beschriftung: Name des Rutschenenteils/Dachs wenn Labels aktiv.
       if (slideNameFor && st !== "future") {

@@ -171,7 +171,7 @@ export function initUI({ scene, model, builder }) {
 
   function setMode(m) {
     builder.setMode(m);
-    $("mode-add").classList.toggle("active", m === "add" || m === "panel");
+    $("mode-add").classList.toggle("active", m === "add" || m === "panel" || m === "slide");
     $("mode-clamp").classList.toggle("active", m === "clamp");
     $("mode-delete").classList.toggle("active", m === "delete");
     $("mode-reinforce").classList.toggle("active", m === "reinforce");

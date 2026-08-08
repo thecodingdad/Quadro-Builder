@@ -647,7 +647,7 @@ export class Builder {
       n[0] = -n[0]; n[2] = -n[2];
     }
     let added = null;
-    this.recordHistory(() => { added = this.model.addSlide(m.hook, n); });
+    this.recordHistory(() => { added = this.model.addSlide(m.hook, n, "slide-new2", this.color); });
     if (!added) this.onNotice(t("notice_slide_exists"));
     this.refresh();
   }
