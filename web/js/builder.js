@@ -354,13 +354,36 @@ export class Builder {
   _hasDiagonalTube(node) {
     for (const t of this.model.tubes.values()) {
       if (t.arm || t.link) continue;
-      const o = t.a === node.id ? this.model.nodes.get(t.b)
-        : t.b === node.id ? this.model.nodes.get(t.a) : null;
-      if (!o) continue;
-      const dx = o.x - node.x, dy = o.y - node.y, dz = o.z - node.z, L = Math.hypot(dx, dy, dz) || 1;
-      if (Math.max(Math.abs(dx / L), Math.abs(dy / L), Math.abs(dz / L)) < DIR_ALIGN_TOL) return true;
+      const u = this._tubeDirAt(t, node);
+      if (!u) continue;
+      if (Math.max(Math.abs(u[0]), Math.abs(u[1]), Math.abs(u[2])) < DIR_ALIGN_TOL) return true;
     }
     return false;
+  }
+
+  // Richtung, in der ein Rohr den Knoten VERLAESST (normiert), oder null wenn es
+  // dort nicht anliegt. Bei Bogenrohren zaehlt die Tangente am Knoten, nicht die
+  // Sehne zum Gegenknoten: die Sehne eines Viertelkreises steht 45 Grad schief,
+  // wodurch die Kupplung sonst als Schraeg-Kupplung gilt und nur noch diagonale
+  // Anbau-Richtungen angeboten bekommt.
+  _tubeDirAt(t, node) {
+    const a = this.model.nodes.get(t.a), b = this.model.nodes.get(t.b);
+    if (!a || !b) return null;
+    let v;
+    if (t.bow && t.bowCenter) {
+      const c = t.bowCenter;
+      if (t.a === node.id) v = [b.x - c[0], b.y - c[1], b.z - c[2]];
+      else if (t.b === node.id) v = [a.x - c[0], a.y - c[1], a.z - c[2]];
+      else return null;
+    } else if (t.a === node.id) {
+      v = [b.x - a.x, b.y - a.y, b.z - a.z];
+    } else if (t.b === node.id) {
+      v = [a.x - b.x, a.y - b.y, a.z - b.z];
+    } else {
+      return null;
+    }
+    const L = Math.hypot(v[0], v[1], v[2]) || 1;
+    return [v[0] / L, v[1] / L, v[2] / L];
   }
 
   _occupiedDirs(node) {
@@ -405,12 +428,9 @@ export class Builder {
     // Konnektor). Arm-/Link-Kanten zaehlen nicht.
     for (const t of this.model.tubes.values()) {
       if (t.arm || t.link) continue;
-      const nb = t.a === node.id ? this.model.nodes.get(t.b)
-        : t.b === node.id ? this.model.nodes.get(t.a) : null;
-      if (!nb) continue;
-      const dx = nb.x - node.x, dy = nb.y - node.y, dz = nb.z - node.z;
-      const len = Math.hypot(dx, dy, dz) || 1;
-      const ux = dx / len, uy = dy / len, uz = dz / len;
+      const u = this._tubeDirAt(t, node);
+      if (!u) continue;
+      const [ux, uy, uz] = u;
       for (const d of DIRECTIONS) if (ux * d.vec[0] + uy * d.vec[1] + uz * d.vec[2] > DIR_ALIGN_TOL) occ.add(d.name);
       for (const d of DIAGONAL_DIRECTIONS) if (ux * d.vec[0] + uy * d.vec[1] + uz * d.vec[2] > DIR_ALIGN_TOL) occ.add(d.name);
     }
