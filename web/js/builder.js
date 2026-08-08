@@ -628,11 +628,7 @@ export class Builder {
   // Montagestellen fuer Rutschen: Felder aus zwei senkrechten, parallelen Rohren.
   _buildSlideHandles() {
     for (const m of this.model.slideMounts()) {
-      const corners = m.nodes.map((id) => {
-        const n = this.model.nodes.get(id);
-        return [n.x, n.y, n.z];
-      });
-      this.scene.addPanelHandle(corners, { slideMount: m });
+      this.scene.addPanelHandle(m.corners, { slideMount: m });
     }
   }
 

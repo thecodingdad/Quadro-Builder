@@ -197,36 +197,56 @@ export class BuildModel {
   // Kupplungen), normal die Richtung, in die die Rutsche abfaellt.
   slideMounts(width = 40, tol = 2) {
     const out = [];
-    for (const r of this.findRectangles()) {
-      // u = Rohrrichtung, v = Abstand der beiden Rohre.
-      if (Math.abs(r.u[1]) < 0.95) continue;                 // Rohre nicht senkrecht
-      if (Math.abs(r.dims[1] - width) > tol) continue;        // falscher Abstand
-      const ns = r.nodes.map((id) => this.nodes.get(id)).filter(Boolean);
-      if (ns.length !== 4) continue;
-      const minY = Math.min(...ns.map((n) => n.y));
-      const low = ns.filter((n) => n.y - minY < 0.5);
-      if (low.length !== 2) continue;
-      const hook = [
-        (low[0].x + low[1].x) / 2,
-        minY + SLIDE_HOOK_LIFT,
-        (low[0].z + low[1].z) / 2,
-      ];
-      // Abfallrichtung: waagerechte Feld-Normale, und zwar die Seite mit
-      // weniger Bauteilen -- die Rutsche laeuft vom Geruest weg, nicht hinein.
-      // Starres Teil: zu tief eingehaengt landet der Auslauf unter dem Boden --
-      // dort laesst sich real keine Rutsche montieren, also nicht anbieten.
-      if (hook[1] < SLIDE_LENGTH * Math.sin(SLIDE_SLOPE) - 1) continue;
-      const nrm = [r.normal[0], 0, r.normal[2]];
-      const nl = Math.hypot(nrm[0], nrm[2]);
-      if (nl < 0.5) continue;                                 // Feld liegt waagerecht
-      nrm[0] /= nl; nrm[2] /= nl;
-      let front = 0, back = 0;
-      for (const n of this.nodes.values()) {
-        const d = (n.x - hook[0]) * nrm[0] + (n.z - hook[2]) * nrm[2];
-        if (d > 5) front++; else if (d < -5) back++;
+    const seen = new Set();
+    const drop = SLIDE_LENGTH * Math.sin(SLIDE_SLOPE);
+    // Alle SENKRECHTEN Rohre samt ihrem unteren Endknoten. Die Rohrlaenge ist
+    // egal -- entscheidend ist nur, dass beide Rohre senkrecht stehen, ihre
+    // unteren Kupplungen gleich hoch liegen und der Abstand der Rutschenbreite
+    // entspricht. (Die Suche lief frueher ueber findRectangles und verlangte
+    // dadurch gleich lange Rohre; beim Bauen kommen aber auch ungleiche vor.)
+    const posts = [];
+    for (const t of this.tubes.values()) {
+      if (t.arm || t.link || t.bow) continue;
+      const a = this.nodes.get(t.a), b = this.nodes.get(t.b);
+      if (!a || !b) continue;
+      if (Math.abs(a.x - b.x) > 0.5 || Math.abs(a.z - b.z) > 0.5) continue; // nicht senkrecht
+      if (Math.abs(a.y - b.y) < 0.5) continue;
+      posts.push({ x: a.x, z: a.z, low: Math.min(a.y, b.y), high: Math.max(a.y, b.y) });
+    }
+    for (let i = 0; i < posts.length; i++) {
+      for (let j = i + 1; j < posts.length; j++) {
+        const p = posts[i], q = posts[j];
+        if (Math.abs(p.low - q.low) > 0.5) continue;          // untere Kupplungen versetzt
+        const dx = q.x - p.x, dz = q.z - p.z;
+        const d = Math.hypot(dx, dz);
+        if (Math.abs(d - width) > tol) continue;              // falscher Abstand
+        const hook = [(p.x + q.x) / 2, p.low + SLIDE_HOOK_LIFT, (p.z + q.z) / 2];
+        // Starres Teil: zu tief eingehaengt landet der Auslauf unter dem Boden.
+        if (hook[1] < drop - 1) continue;
+        const key = [Math.round(hook[0]), Math.round(hook[1]), Math.round(hook[2])].join("|");
+        if (seen.has(key)) continue;
+        seen.add(key);
+        // Abfallrichtung: waagerecht, quer zur Verbindung der beiden Rohre.
+        // Voreinstellung ist die Seite mit weniger Bauteilen (weg vom Geruest);
+        // die tatsaechliche Seite entscheidet beim Klick der Blickwinkel.
+        const nrm = [-dz / d, 0, dx / d];
+        let front = 0, back = 0;
+        for (const n of this.nodes.values()) {
+          const sdist = (n.x - hook[0]) * nrm[0] + (n.z - hook[2]) * nrm[2];
+          if (sdist > 5) front++; else if (sdist < -5) back++;
+        }
+        const dir = front > back ? [-nrm[0], 0, -nrm[2]] : nrm;
+        // Auswahlflaeche: unten am Rohrpaar, eine Rutschenbreite hoch.
+        const top = Math.min(p.high, q.high);
+        const h2 = Math.min(top, p.low + width);
+        out.push({
+          hook, normal: dir,
+          corners: [
+            [p.x, p.low, p.z], [q.x, q.low, q.z],
+            [q.x, h2, q.z], [p.x, h2, p.z],
+          ],
+        });
       }
-      const dir = front > back ? [-nrm[0], 0, -nrm[2]] : nrm;
-      out.push({ nodes: r.nodes.slice(), hook, normal: dir, center: r.center, u: r.u, v: r.v });
     }
     return out;
   }
