@@ -11,9 +11,9 @@ const UP = new THREE.Vector3(0, 1, 0);
 // (null = scharfkantiger Wuerfel), tube = Umfangssegmente der Rohre.
 export const QUALITY_LEVELS = ["low", "medium", "high"];
 const QUALITY = {
-  low:    { conn: null,      tube: 8,  bow: 8 },
-  medium: { conn: [16, 10],  tube: 16, bow: 14 },
-  high:   { conn: [48, 32],  tube: 44, bow: 32 },
+  low:    { conn: null,      tube: 8,  bow: 8,  shadow: 0,    antialias: false },
+  medium: { conn: [16, 10],  tube: 16, bow: 14, shadow: 1024, antialias: true  },
+  high:   { conn: [48, 32],  tube: 44, bow: 32, shadow: 2048, antialias: true  },
 };
 const DEFAULT_QUALITY = "medium";
 
@@ -41,21 +41,11 @@ export class SceneManager {
   constructor(container) {
     this.container = container;
 
-    this.renderer = new THREE.WebGLRenderer({ antialias: true });
-    this.renderer.setPixelRatio(window.devicePixelRatio || 1);
     // Nur zeichnen, wenn sich wirklich etwas geaendert hat (siehe requestRender).
     this._needsRender = true;
-    // updateStyle = false: die CSS-Groesse des Canvas kommt aus dem Stylesheet
-    // (100 % des Containers), nicht als feste px-Werte -> siehe onResize().
-    this.renderer.setSize(container.clientWidth, container.clientHeight, false);
-    this.renderer.shadowMap.enabled = true;
-    // Die Schattenkarte wird NICHT pro Bild neu gerechnet: das waere ein zweiter
-    // Durchgang ueber alle ~1850 Werfer, obwohl sich Licht und Modell selten
-    // aendern. _shadowsDirty() stoesst sie gezielt an (Modell, Szene, Schnitt).
-    this.renderer.shadowMap.autoUpdate = false;
-    this.renderer.shadowMap.needsUpdate = true;
-    this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-    container.appendChild(this.renderer.domElement);
+    this._quality = DEFAULT_QUALITY;
+    this._makeRenderer(QUALITY[DEFAULT_QUALITY].antialias);
+    this.onRendererReplaced = () => {};   // Builder haengt seine Listener neu ein
 
     this.scene = new THREE.Scene();
     this.scene.background = new THREE.Color(0xeef1f5);
@@ -106,6 +96,8 @@ export class SceneManager {
     this._dirLight.shadow.bias          = -0.0005;
     this._dirLight.shadow.radius        =   3;
     this.scene.add(this._dirLight);
+    // Schattenaufloesung richtet sich nach der Qualitaetsstufe.
+    this._applyShadowQuality();
 
     // Boden-Raster (20 cm Zellen)
     const grid = new THREE.GridHelper(800, 40, 0xb8c0cc, 0xd6dce4);
@@ -152,7 +144,6 @@ export class SceneManager {
     // freigeben -- frueher war das ein Array, das pro Aufruf neu gebaut und je
     // Mesh linear durchsucht wurde.
     this._keepGeos = new Set();
-    this._quality = DEFAULT_QUALITY;
     this._materials = {};
 
     window.addEventListener("resize", () => this.onResize());
@@ -301,6 +292,47 @@ export class SceneManager {
     return geo;
   }
 
+  /**
+   * Renderer anlegen bzw. ersetzen. Antialiasing laesst sich an einem
+   * bestehenden WebGLRenderer nicht umschalten -- dafuer muss ein neuer her.
+   */
+  _makeRenderer(antialias) {
+    const old = this.renderer;
+    this.renderer = new THREE.WebGLRenderer({ antialias: !!antialias });
+    this.renderer.setPixelRatio(window.devicePixelRatio || 1);
+    // updateStyle = false: die CSS-Groesse des Canvas kommt aus dem Stylesheet
+    // (100 % des Containers), nicht als feste px-Werte -> siehe onResize().
+    this.renderer.setSize(this.container.clientWidth, this.container.clientHeight, false);
+    this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    // Die Schattenkarte wird NICHT pro Bild neu gerechnet: das waere ein zweiter
+    // Durchgang ueber alle ~1850 Werfer, obwohl sich Licht und Modell selten
+    // aendern. _shadowsDirty() stoesst sie gezielt an (Modell, Szene, Schnitt).
+    this.renderer.shadowMap.autoUpdate = false;
+    this.renderer.shadowMap.needsUpdate = true;
+    this.renderer.shadowMap.enabled = QUALITY[this._quality].shadow > 0;
+    if (this._clipPlane) this.renderer.clippingPlanes = [this._clipPlane];
+    if (old) {
+      old.dispose();
+      old.domElement.remove();
+    }
+    this.container.appendChild(this.renderer.domElement);
+    this._needsRender = true;
+  }
+
+  /** Schattenaufloesung der Stufe anwenden (0 = Schatten aus). */
+  _applyShadowQuality() {
+    const size = QUALITY[this._quality].shadow;
+    this.renderer.shadowMap.enabled = size > 0;
+    if (size > 0 && this._dirLight) {
+      const sh = this._dirLight.shadow;
+      if (sh.mapSize.width !== size) {
+        sh.mapSize.set(size, size);
+        if (sh.map) { sh.map.dispose(); sh.map = null; }
+      }
+    }
+    this._shadowsDirty();
+  }
+
   /** Aktuelle Qualitaetsstufe (Aufloesung der Geometrien). */
   get quality() { return this._quality; }
 
@@ -311,6 +343,7 @@ export class SceneManager {
    */
   setQuality(level) {
     if (!QUALITY[level] || level === this._quality) return false;
+    const prev = this._quality;
     this._quality = level;
     this._shadowsDirty();
     for (const key of ["_connGeo", "_c45Geo", "_c45StubGeo", "_clampGeo", "_clampRingGeo"]) {
@@ -320,10 +353,42 @@ export class SceneManager {
     // Rohr-Segmentzahl haengt an der Stufe -> Cache leeren.
     for (const g of this._tubeGeos.values()) { this._keepGeos.delete(g); g.dispose(); }
     this._tubeGeos.clear();
+    this._applyShadowQuality();
+    // Kantenglaettung nur ueber einen neuen Renderer moeglich. Danach haengen
+    // OrbitControls und die Zeiger-Listener am alten Canvas -> neu binden.
+    if (QUALITY[level].antialias !== QUALITY[prev].antialias) this._replaceRenderer();
     return true;
   }
 
   _q() { return QUALITY[this._quality] || QUALITY[DEFAULT_QUALITY]; }
+
+  /**
+   * Renderer austauschen und alles neu verbinden, was am Canvas haengt:
+   * OrbitControls (Ziel/Position bleiben erhalten) und die Zeiger-Listener des
+   * Builders ueber onRendererReplaced.
+   */
+  _replaceRenderer() {
+    const pos = this.camera.position.clone();
+    const target = this.controls.target.clone();
+    const zoom = this.camera.zoom;
+    this.controls.dispose();
+    this._makeRenderer(QUALITY[this._quality].antialias);
+    this.controls = new OrbitControls(this.camera, this.renderer.domElement);
+    this.controls.enableDamping = true;
+    this.controls.dampingFactor = 0.08;
+    this.controls.zoomToCursor = true;
+    this.controls.mouseButtons.LEFT = null;   // Drehen macht der Builder selbst
+    this.controls.addEventListener("end", () => {
+      if (!this.orbiting) this._reanchorTarget();
+      this.onCameraChange();
+    });
+    this.camera.position.copy(pos);
+    this.camera.zoom = zoom;
+    this.camera.updateProjectionMatrix();
+    this.controls.target.copy(target);
+    this.controls.update();
+    this.onRendererReplaced();
+  }
 
   // Rohr-Geometrie, gecacht je Laenge/Radius/Segmentzahl. Vorher entstand pro
   // Rohr und pro Render-Durchlauf eine neue CylinderGeometry (~425 Stueck), die

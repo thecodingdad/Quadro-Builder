@@ -52,6 +52,9 @@ export class Builder {
     this._down = null;
     this._boxing = false;
     this._attach();
+    // Wird der Renderer ersetzt (Kantenglaettung), haengt das alte Canvas nicht
+    // mehr im DOM -- die Zeiger-Listener muessen ans neue.
+    this.scene.onRendererReplaced = () => this._attach();
     this.refresh();
   }
 
@@ -767,8 +770,11 @@ export class Builder {
   _onUp(e) {
     const d = this._down;
     this._down = null;
-    this.scene.endOrbit();
-    if (!d) return;
+    if (!d) { this.scene.endOrbit(); return; }
+    // endOrbit() fuehrt den Drehpunkt nach und ruft controls.update() -- das
+    // kann die Kamera minimal versetzen. Deshalb ERST den Klick auswerten,
+    // sonst zielt der Pick auf einen veralteten Bildpunkt.
+    const finish = () => this.scene.endOrbit();
     if (this._boxing) {
       this._boxing = false;
       this.scene.hideSelectBox();
@@ -776,16 +782,18 @@ export class Builder {
       // Auswahl zusammensetzen. Aufgehoben wird sie per Klick ins Leere.
       const found = this.scene.pickInRect(d.x, d.y, e.clientX, e.clientY);
       for (const [id, kind] of found) this.selection.set(id, kind);
+      finish();
       this.refresh();
       return;
     }
-    if (Math.hypot(e.clientX - d.x, e.clientY - d.y) > CLICK_TOLERANCE) return; // Drehen
+    if (Math.hypot(e.clientX - d.x, e.clientY - d.y) > CLICK_TOLERANCE) { finish(); return; } // Drehen
     if (this.mode === "select") this._clickSelect(e);
     else if (this.mode === "add") this._clickAdd(e);
     else if (this.mode === "panel") this._clickPanel(e);
     else if (this.mode === "slide") this._clickSlide(e);
     else if (this.mode === "clamp") this._clickClamp(e);
     else if (this.mode === "reinforce") this._clickReinforce(e);
+    finish();
     // Aufbaumodus: nur ansehen/drehen, keine Modelländerung
   }
 
