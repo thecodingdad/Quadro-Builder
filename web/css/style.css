@@ -277,6 +277,13 @@ select {
   padding: 0;
 }
 .swatch.active { outline: 2px solid var(--ink); transform: scale(1.08); }
+/* Zufallsfarbe: alle Baufarben als Tortenstuecke, damit der Schalter ohne
+   Beschriftung erkennbar ist (Schwarz ist dabei, weil Platten es duerfen). */
+.swatch-random {
+  background: conic-gradient(
+    #d42e2e 0deg 72deg, #2e9e4a 72deg 144deg, #f4c020 144deg 216deg,
+    #1f63b5 216deg 288deg, #2b2b2b 288deg 360deg);
+}
 
 /* Main */
 :root { --sidebar-w: 320px; }

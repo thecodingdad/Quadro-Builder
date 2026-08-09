@@ -5,6 +5,7 @@ import { computeBOM, compareInventory, connectorsForNode } from "./bom.js";
 import { computeBuildPlan } from "./buildplan.js";
 import { parseQDF } from "./qdfimport.js";
 import { QUALITY_LEVELS } from "./scene.js";
+import { RANDOM_COLOR } from "./builder.js";
 import * as storage from "./storage.js";
 import { t, getLang, setLang, applyTranslations } from "./i18n.js";
 
@@ -429,10 +430,13 @@ export function initUI({ scene, model, builder }) {
 
   /** Aktive Tube/Panel-Buttons in der gewählten Baufarbe einfärben. */
   function syncPartColors() {
+    // Zufallsfarbe: es gibt keine Farbe, die der Teile-Button zeigen koennte --
+    // also bleibt er neutral.
+    const random = builder.color === RANDOM_COLOR;
     const hex = colorHexFor(builder.color);
     const ink = needsDarkInk(hex) ? "var(--ink)" : "#fff";
     document.querySelectorAll(".btn.part[data-tube], .btn.part[data-panel]").forEach((b) => {
-      if (b.classList.contains("active")) {
+      if (b.classList.contains("active") && !random) {
         b.style.setProperty("--part-bg", hex);
         b.style.setProperty("--part-ink", ink);
       } else {
@@ -576,6 +580,18 @@ export function initUI({ scene, model, builder }) {
       });
       colorWrap.appendChild(sw);
     }
+    // Zufallsfarbe: faerbt jedes neu gesetzte Teil einzeln ein. Steht schon eine
+    // Auswahl, wuerfelt ein Klick sie neu -- auch ein zweiter Klick, deshalb
+    // ohne die "schon aktiv"-Abkuerzung.
+    const rnd = el("button", "swatch swatch-random");
+    rnd.title = t("color_random");
+    rnd.dataset.color = RANDOM_COLOR;
+    rnd.addEventListener("click", () => {
+      builder.setColor(RANDOM_COLOR);
+      renderColorButtons();
+      syncPartColors();
+    });
+    colorWrap.appendChild(rnd);
     colorWrap.querySelectorAll("button").forEach((x) =>
       x.classList.toggle("active", x.dataset.color === builder.color));
   }

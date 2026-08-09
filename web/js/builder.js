@@ -1,7 +1,7 @@
 // Bau-Interaktion: Auswahl, Anbau ueber Richtungs-Handles, Loeschen.
 
 import { DIRECTIONS, DIAGONAL_DIRECTIONS, DIR_ALIGN_TOL, ARM_ALIGN_TOL, CLAMP_LINK_DIST } from "./config.js";
-import { geometry, getTube, spacingFor, getPanel, defaultPanel, diagonalTubeId, slideKindLabel, isCurvedTube, gridSpacing } from "./catalog.js";
+import { geometry, getTube, spacingFor, getPanel, defaultPanel, diagonalTubeId, slideKindLabel, isCurvedTube, gridSpacing, tubeColors } from "./catalog.js";
 import { computeBuildPlan, connectorLabelInfo } from "./buildplan.js";
 import { t } from "./i18n.js";
 import { round2 } from "./util.js";
@@ -16,6 +16,14 @@ const CLICK_TOLERANCE = 9; // px: groessere Bewegung = Kamera drehen, kein Klick
 // 5 / 3,75 cm -- der Adapter klebte dadurch direkt am Basis-Wuerfel.
 const C45_SLEEVE_LEN = 10.83;
 const C45_ARM_LEN = 3.61;
+
+// Zufallsfarbe: kein echter Farbwert, sondern ein Schalter in builder.color.
+// Jedes Teil wuerfelt beim Setzen (bzw. beim Umfaerben einer Auswahl) seine
+// eigene Farbe -- sonst waere es nur eine weitere feste Farbe.
+export const RANDOM_COLOR = "random";
+// Schwarz ist eine Platten-Farbe: es gibt keine schwarzen Rohre. Dieselbe
+// Trennung wie bei den Farbschaltern der Toolbar.
+const PANEL_RANDOM_EXTRA = ["black"];
 
 export class Builder {
   constructor(scene, model, { onChange } = {}) {
@@ -136,13 +144,28 @@ export class Builder {
     if (this.mode === "select" && this.selection.size) this.colorSelection(colorId);
   }
 
+  /**
+   * Farbe fuer ein NEU gesetztes Teil. Normalerweise die Toolbar-Farbe; bei
+   * "Zufall" wuerfelt jedes Teil einzeln. Platten duerfen dabei auch schwarz
+   * werden, Rohre nicht (schwarze Rohre gibt es beim Hersteller nicht).
+   */
+  colorFor(kind) {
+    if (this.color !== RANDOM_COLOR) return this.color;
+    const pool = tubeColors().map((c) => c.id);
+    if (kind === "panel") pool.push(...PANEL_RANDOM_EXTRA);
+    return pool[Math.floor(Math.random() * pool.length)];
+  }
+
   // --- Cursor-Modus -------------------------------------------------------
   /** Faerbt alle faerbbaren Teile der Auswahl um. */
   colorSelection(colorId) {
     let changed = 0;
+    const random = colorId === RANDOM_COLOR;
     this.recordHistory(() => {
-      for (const [id, kind] of this.selection)
-        if (this.model.setColorOf(kind, id, colorId)) changed++;
+      for (const [id, kind] of this.selection) {
+        const c = random ? this.colorFor(kind) : colorId;
+        if (this.model.setColorOf(kind, id, c)) changed++;
+      }
     });
     if (changed) this.onNotice(t("notice_color_changed"));
     this.refresh();
@@ -288,9 +311,9 @@ export class Builder {
     let res;
     this.recordHistory(() => {
       res = isCurvedTube(this.tubeId)
-        ? this.model.extendBow(node.id, dirVec, this._bowNormal(dirVec), this.tubeId, this.color, gridSpacing())
+        ? this.model.extendBow(node.id, dirVec, this._bowNormal(dirVec), this.tubeId, this.colorFor("tube"), gridSpacing())
         : this.model.extend(
-            node.id, dirVec, this.tubeId, this.color, tube.length_cm, spacingFor(tube.length_cm)
+            node.id, dirVec, this.tubeId, this.colorFor("tube"), tube.length_cm, spacingFor(tube.length_cm)
           );
     });
     if (res && res.collision) this.onNotice(t("notice_collision"));
@@ -366,7 +389,7 @@ export class Builder {
     let res;
     this.recordHistory(() => {
       res = this.model.extendC45Diagonal(
-        node.id, dirVec, axis, dt.id, this.color,
+        node.id, dirVec, axis, dt.id, this.colorFor("tube"),
         dt.length_cm, spacingFor(dt.length_cm), C45_SLEEVE_LEN, C45_ARM_LEN
       );
     });
@@ -680,7 +703,7 @@ export class Builder {
     this.recordHistory(() => {
       const n1 = this.model.addNode(round2(p1[0]), round2(p1[1]), round2(p1[2]));
       const n2 = this.model.addNode(round2(p2[0]), round2(p2[1]), round2(p2[2]));
-      this.model.addTube(n1.id, n2.id, tube.id, this.color, tube.length_cm);
+      this.model.addTube(n1.id, n2.id, tube.id, this.colorFor("tube"), tube.length_cm);
       // Jedes Ende an seinen ausgerichteten Nachbar-Knoten (~Versatz) anbinden,
       // damit die Klemme beide Rohre als Paar zusammenhaelt.
       for (const nn of [n1, n2]) {
@@ -852,7 +875,7 @@ export class Builder {
       n[0] = -n[0]; n[2] = -n[2];
     }
     let added = null;
-    this.recordHistory(() => { added = this.model.addSlide(m.hook, n, "slide-new2", this.color); });
+    this.recordHistory(() => { added = this.model.addSlide(m.hook, n, "slide-new2", this.colorFor("slide")); });
     if (!added) this.onNotice(t("notice_slide_exists"));
     this.refresh();
   }
@@ -861,7 +884,7 @@ export class Builder {
     // Umfaerben passiert ausschliesslich im Cursor-Modus -- hier wird nur gebaut.
     const h = this.scene.pickHandle(e.clientX, e.clientY);
     if (h && h.data.panelCell) {
-      this.recordHistory(() => this.model.addPanel(h.data.rectNodes, this.panelId, this.color));
+      this.recordHistory(() => this.model.addPanel(h.data.rectNodes, this.panelId, this.colorFor("panel")));
       this.refresh();
     }
   }
@@ -887,7 +910,7 @@ export class Builder {
         this.recordHistory(() => {
           res = this.model.extendC45Diagonal(
             h.data.nodeId, h.data.dir, axis, dt.id,
-            this.color, dt.length_cm, spacingFor(dt.length_cm), C45_SLEEVE_LEN, C45_ARM_LEN
+            this.colorFor("tube"), dt.length_cm, spacingFor(dt.length_cm), C45_SLEEVE_LEN, C45_ARM_LEN
           );
         });
       } else if (h.data.slope) {
@@ -896,7 +919,7 @@ export class Builder {
         const dt = this._diagonalTube();
         this.recordHistory(() => {
           res = this.model.extendDiagonalSnap(
-            h.data.nodeId, h.data.dir, dt.id, this.color, dt.length_cm, spacingFor(dt.length_cm)
+            h.data.nodeId, h.data.dir, dt.id, this.colorFor("tube"), dt.length_cm, spacingFor(dt.length_cm)
           );
         });
       } else {
@@ -906,9 +929,9 @@ export class Builder {
         const tube = getTube(this.tubeId);
         this.recordHistory(() => {
           res = isCurvedTube(this.tubeId)
-            ? this.model.extendBow(h.data.nodeId, h.data.dir, this._bowNormal(h.data.dir), tube.id, this.color, gridSpacing())
+            ? this.model.extendBow(h.data.nodeId, h.data.dir, this._bowNormal(h.data.dir), tube.id, this.colorFor("tube"), gridSpacing())
             : this.model.extend(
-                h.data.nodeId, h.data.dir, tube.id, this.color, tube.length_cm, spacingFor(tube.length_cm)
+                h.data.nodeId, h.data.dir, tube.id, this.colorFor("tube"), tube.length_cm, spacingFor(tube.length_cm)
               );
         });
       }
