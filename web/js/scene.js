@@ -31,6 +31,14 @@ const HIGHLIGHT_EMISSIVE = 0x3a0066;
 // bei 5 waren es 1 cm, die Kupplung wirkte dadurch klobig.
 const CONNECTOR_ROUNDNESS = 3;
 
+// Herauszoomen begrenzen: sonst schrumpft das Modell zu einem Punkt in der
+// Bildmitte und man findet ohne Zuruecksetzen nicht mehr hin. Grenze ist ein
+// Vielfaches der Modelldiagonale -- bei diesem Abstand fuellt das Modell noch
+// rund ein Drittel der Bildhoehe. Der Mindestwert gilt fuer kleine und leere
+// Modelle, damit man das Raster (800 cm) noch ganz sieht.
+const ZOOM_OUT_FACTOR = 3;
+const MIN_ZOOM_OUT_DISTANCE = 600;   // cm
+
 // Hintergrundfarben fuer die Beschriftung nach Kategorie (Aufbaumodus-Hervorhebung).
 const LABEL_BG = {
   tube75: "rgba(139,61,245,0.94)",  // 75er Rohre - violett
@@ -227,6 +235,50 @@ export class SceneManager {
     o.left = -width / 2; o.right = width / 2;
     o.top = height / 2; o.bottom = -height / 2;
     o.updateProjectionMatrix();
+    // Der kleinste Zoomfaktor haengt an der Bildhoehe -- die hat sich hier
+    // gerade geaendert.
+    this._applyZoomLimits();
+  }
+
+  /**
+   * Grenze fuers Herauszoomen setzen. Mit model wird sie aus dessen Groesse neu
+   * berechnet, ohne Argument nur erneut angewendet (Fenstergroesse, Projektion).
+   *
+   * Perspektivisch begrenzt OrbitControls den Abstand zum Ziel, orthografisch
+   * dagegen camera.zoom -- dort bleibt die Kamera stehen und nur der Aus-
+   * schnitt waechst. Deshalb dieselbe Grenze zusaetzlich als Zoomfaktor.
+   */
+  _applyZoomLimits(model) {
+    if (model !== undefined) {
+      const b = model && model.bounds ? model.bounds(0) : null;
+      const diag = b ? Math.hypot(b.size[0], b.size[1], b.size[2]) : 0;
+      this._maxDistance = Math.max(MIN_ZOOM_OUT_DISTANCE, diag * ZOOM_OUT_FACTOR);
+    }
+    const maxDist = this._maxDistance || MIN_ZOOM_OUT_DISTANCE;
+    if (!this.controls) return;
+    this.controls.maxDistance = maxDist;
+    const o = this._orthoCam;
+    const maxHeight = 2 * maxDist * Math.tan((this._perspCam.fov / 2) * (Math.PI / 180));
+    const minZoom = maxHeight > 0 ? (o.top - o.bottom) / maxHeight : 0;
+    this.controls.minZoom = minZoom;
+
+    // Steht die Kamera schon zu weit draussen (kleineres Modell geladen), sie
+    // gleich heranholen. OrbitControls klemmt sonst erst beim naechsten Zug.
+    const t = this.controls.target;
+    if (this._projection === "orthographic") {
+      if (this.camera.zoom < minZoom) {
+        this.camera.zoom = minZoom;
+        this.camera.updateProjectionMatrix();
+        this._needsRender = true;
+      }
+    } else {
+      const d = this.camera.position.distanceTo(t);
+      if (d > maxDist) {
+        this.camera.position.copy(t)
+          .addScaledVector(this.camera.position.clone().sub(t).normalize(), maxDist);
+        this._needsRender = true;
+      }
+    }
   }
 
   onResize() {
@@ -355,9 +407,13 @@ export class SceneManager {
       if (this[key]) { this._keepGeos.delete(this[key]); this[key].dispose(); }
       this[key] = null;
     }
-    // Rohr-Segmentzahl haengt an der Stufe -> Cache leeren.
+    // Rohr- und Deckel-Segmentzahl haengen an der Stufe -> Cache leeren.
     for (const g of this._tubeGeos.values()) { this._keepGeos.delete(g); g.dispose(); }
     this._tubeGeos.clear();
+    if (this._capGeos) {
+      for (const g of this._capGeos.values()) { this._keepGeos.delete(g); g.dispose(); }
+      this._capGeos.clear();
+    }
     this._applyShadowQuality();
     // Kantenglaettung nur ueber einen neuen Renderer moeglich. Danach haengen
     // OrbitControls und die Zeiger-Listener am alten Canvas -> neu binden.
@@ -404,6 +460,20 @@ export class SceneManager {
     if (!geo) {
       geo = new THREE.CylinderGeometry(radius, radius, length, segments);
       this._tubeGeos.set(key, geo);
+      this._keepGeos.add(geo);
+    }
+    return geo;
+  }
+
+  // Abschluss-Scheibe fuer die Enden eines Bogenrohrs, gecacht wie die
+  // Rohr-Geometrien. Liegt in der XY-Ebene, Normale +Z.
+  _capGeometry(radius, segments) {
+    if (!this._capGeos) this._capGeos = new Map();
+    const key = `${radius.toFixed(2)}:${segments}`;
+    let geo = this._capGeos.get(key);
+    if (!geo) {
+      geo = new THREE.CircleGeometry(radius, segments);
+      this._capGeos.set(key, geo);
       this._keepGeos.add(geo);
     }
     return geo;
@@ -1212,6 +1282,13 @@ export class SceneManager {
     const qual = this._q();   // Aufloesung je Qualitaetsstufe
     const armStubGeo = this._tubeGeometry(armRadius, armStubLen, Math.max(6, qual.tube - 4));
     const armStubOff = cs / 2 + armStubLen / 2 - 0.4;
+    // Am BOGENROHR laeuft der Stutzen gerade, das Rohr biegt aber weg: bei
+    // 6,85 cm Stutzenende weicht der Bogen schon 0,58 cm von der Tangente ab --
+    // mehr als zwischen Stutzen (Radius ~2,1) und Rohrwand (2,45) Platz ist,
+    // der Stutzen durchstiess die Wand. Dort also ein kurzer Stutzen.
+    const bowStubLen = cs * 0.32;
+    const bowStubGeo = this._tubeGeometry(armRadius, bowStubLen, Math.max(6, qual.tube - 4));
+    const bowStubOff = cs / 2 + bowStubLen / 2 - 0.4;
 
     // Richtungen der an einem Knoten TATSAECHLICH angeschlossenen Rohre.
     // Einmal fuer alle Knoten aufgebaut (sonst waere die Pruefung je Knoten ueber
@@ -1219,22 +1296,22 @@ export class SceneManager {
     // nicht die Sehne zum Gegenknoten -- sonst gilt ein belegter Arm faelschlich
     // als frei.
     const tubeDirsAt = new Map();
-    const pushDir = (nodeId, vx, vy, vz) => {
+    const pushDir = (nodeId, vx, vy, vz, bow) => {
       const L = Math.hypot(vx, vy, vz);
       if (L < 1e-6) return;
       if (!tubeDirsAt.has(nodeId)) tubeDirsAt.set(nodeId, []);
-      tubeDirsAt.get(nodeId).push([vx / L, vy / L, vz / L]);
+      tubeDirsAt.get(nodeId).push({ d: [vx / L, vy / L, vz / L], bow: !!bow });
     };
     for (const t of model.tubes.values()) {
       const na = model.nodes.get(t.a), nb = model.nodes.get(t.b);
       if (!na || !nb) continue;
       if (t.bow && t.bowCenter) {
         const [cx, cy, cz] = t.bowCenter;
-        pushDir(t.a, nb.x - cx, nb.y - cy, nb.z - cz);
-        pushDir(t.b, na.x - cx, na.y - cy, na.z - cz);
+        pushDir(t.a, nb.x - cx, nb.y - cy, nb.z - cz, true);
+        pushDir(t.b, na.x - cx, na.y - cy, na.z - cz, true);
       } else {
-        pushDir(t.a, nb.x - na.x, nb.y - na.y, nb.z - na.z);
-        pushDir(t.b, na.x - nb.x, na.y - nb.y, na.z - nb.z);
+        pushDir(t.a, nb.x - na.x, nb.y - na.y, nb.z - na.z, false);
+        pushDir(t.b, na.x - nb.x, na.y - nb.y, na.z - nb.z, false);
       }
     }
 
@@ -1283,12 +1360,13 @@ export class SceneManager {
         // und die variant2-Maske importierter Dateien fuehrt Arme ins Leere.
         // Quelle sind die tatsaechlichen Rohrrichtungen, nicht node.arms: sonst
         // haetten im Editor gebaute Kupplungen (ohne variant2) gar keine.
-        for (const d of tubeDirsAt.get(n.id) || []) {
-          const dv = new THREE.Vector3(d[0], d[1], d[2]);
+        for (const e of tubeDirsAt.get(n.id) || []) {
+          const dv = new THREE.Vector3(e.d[0], e.d[1], e.d[2]);
+          const off = e.bow ? bowStubOff : armStubOff;
           const p = new THREE.Vector3(
-            n.x + dv.x * armStubOff, n.y + dv.y * armStubOff, n.z + dv.z * armStubOff);
+            n.x + dv.x * off, n.y + dv.y * off, n.z + dv.z * off);
           const q = new THREE.Quaternion().setFromUnitVectors(UP, dv);
-          this._batchAdd(armStubGeo, matFor(n.id, mat),
+          this._batchAdd(e.bow ? bowStubGeo : armStubGeo, matFor(n.id, mat),
             new THREE.Matrix4().compose(p, q, ONE), "node", n.id, this.pickNodes);
         }
       }
@@ -1390,7 +1468,8 @@ export class SceneManager {
       const len = va.distanceTo(vb);
 
       // Bogenrohr: als Roehre entlang des Kreisbogens um bowCenter zeichnen.
-      const bowCurve = t.bow && t.bowCenter ? this._bowCurve(va, vb, t.bowCenter) : null;
+      // cs / 2 je Ende -- dieselbe Kuerzung wie beim geraden Rohr (drawLen).
+      const bowCurve = t.bow && t.bowCenter ? this._bowCurve(va, vb, t.bowCenter, cs / 2) : null;
       if (bowCurve) {
         const bowMat = st === "future" ? this._ghostMaterial()
           : st === "current" ? this._tubeHighlight(t.color)
@@ -1399,14 +1478,30 @@ export class SceneManager {
           : (reinforce || collision) ? this._tubeGray()
           : (asm && st === "done") ? this._fadedMaterial(colorHex(t.color))
           : this._tubeMaterial(t.color);
+        const bowFinalMat = matFor(t.id, bowMat);
         const bowMesh = new THREE.Mesh(
           new THREE.TubeGeometry(bowCurve, 24, tubeRadius, qual.bow, false),
-          matFor(t.id, bowMat)
+          bowFinalMat
         );
         bowMesh.userData = { kind: "tube", id: t.id };
         bowMesh.castShadow = true;
         this.buildGroup.add(bowMesh);
         if (st !== "future") this.pickTubes.push(bowMesh);
+
+        // TubeGeometry ist ein offener Schlauch. Ohne Deckel sieht man in das
+        // Rohr hinein (die Rueckseiten werden weggeschnitten) -- es wirkt als
+        // blosse Flaeche, waehrend gerade Rohre als CylinderGeometry
+        // geschlossen sind. Also je Ende eine Scheibe, Normale nach aussen.
+        const capGeo = this._capGeometry(tubeRadius, qual.bow);
+        for (const [u01, sign] of [[0, -1], [1, 1]]) {
+          const cap = new THREE.Mesh(capGeo, bowFinalMat);
+          cap.position.copy(bowCurve.getPointAt(u01));
+          const outward = bowCurve.getTangentAt(u01).multiplyScalar(sign);
+          cap.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), outward);
+          cap.userData = { kind: "tube", id: t.id };
+          this.buildGroup.add(cap);
+          if (st !== "future") this.pickTubes.push(cap);
+        }
         continue;
       }
 
@@ -1614,6 +1709,9 @@ export class SceneManager {
 
     // Bäume: bei Bedarf ausblenden wenn zu nah an Knoten.
     this._updateTrees(model);
+
+    // Zoom-Grenze richtet sich nach der Modellgroesse.
+    this._applyZoomLimits(model);
 
     // Der Szenegraph ist neu -> Schattenkarte einmal nachziehen.
     this._shadowsDirty();
@@ -1835,7 +1933,12 @@ export class SceneManager {
   // Kreisbogen von va nach vb um den Mittelpunkt center (Bogenrohr, 90 Grad).
   // Liefert null, wenn die Punkte keinen echten Bogen aufspannen (dann wird das
   // Rohr wie ein gerades gezeichnet).
-  _bowCurve(va, vb, center) {
+  //
+  // trim = Bogenlaenge, die an BEIDEN Enden entfaellt. va/vb sind Kupplungs-
+  // MITTEN; ohne Kuerzung liefe die Roehre bis dorthin und schnitte sichtbar
+  // durch den Kupplungswuerfel. Gerade Rohre kuerzen dafuer ihre Laenge um
+  // connectorSize, hier ist es der zugehoerige Winkel trim/R je Ende.
+  _bowCurve(va, vb, center, trim = 0) {
     const C = new THREE.Vector3(center[0], center[1], center[2]);
     const u = va.clone().sub(C);
     const v = vb.clone().sub(C);
@@ -1848,14 +1951,35 @@ export class SceneManager {
     if (w.lengthSq() < 1e-6) return null; // kollinear -> kein Bogen
     w.normalize();
     const ang = Math.acos(Math.max(-1, Math.min(1, u.dot(v))));
-    const pts = [];
-    const SEG = 16;
-    for (let i = 0; i <= SEG; i++) {
-      const th = (ang * i) / SEG;
-      pts.push(C.clone()
-        .addScaledVector(u, R * Math.cos(th))
-        .addScaledVector(w, R * Math.sin(th)));
+    // Punkt und Tangente auf dem Bogen (Winkel waechst von va nach vb).
+    const pAt = (th) => C.clone()
+      .addScaledVector(u, R * Math.cos(th))
+      .addScaledVector(w, R * Math.sin(th));
+    const tAt = (th) => w.clone().multiplyScalar(Math.cos(th))
+      .addScaledVector(u, -Math.sin(th)).normalize();
+
+    if (trim <= 0) {
+      const pts = [];
+      const SEG = 16;
+      for (let i = 0; i <= SEG; i++) pts.push(pAt((ang * i) / SEG));
+      return new THREE.CatmullRomCurve3(pts);
     }
+
+    // Das Rohrende muss BUENDIG auf der Kupplungsflaeche sitzen. Kuerzt man nur
+    // den Bogenwinkel, steht die Tangente dort schon um trim/R gedreht -- der
+    // Endring wird schraeg angeschnitten (gemessen: 0,51 cm Versatz ueber den
+    // Querschnitt, das Ende ragte halb in die Kupplung und halb heraus).
+    // Deshalb laeuft das letzte Stueck GERADE in der Kupplungsachse: der Bogen
+    // wird um trim + LEAD gekuerzt und um LEAD entlang der Achse am Knoten
+    // verlaengert. Die Mittellinie weicht dabei um R*(1-cos) < 0,1 cm vom
+    // echten Kreis ab -- unsichtbar, das Ende dafuer exakt rechtwinklig.
+    const LEAD = 1.5;
+    const dth = Math.min((trim + LEAD) / R, ang * 0.4);
+    const span = ang - 2 * dth;
+    const pts = [pAt(dth).addScaledVector(tAt(0), -LEAD)];
+    const SEG = 16;
+    for (let i = 0; i <= SEG; i++) pts.push(pAt(dth + (span * i) / SEG));
+    pts.push(pAt(ang - dth).addScaledVector(tAt(ang), LEAD));
     return new THREE.CatmullRomCurve3(pts);
   }
 
@@ -2159,19 +2283,43 @@ export class SceneManager {
     const minY = Math.min(y0, y1), maxY = Math.max(y0, y1);
     const out = new Map();
     const v = new THREE.Vector3();
-    const mat = new THREE.Matrix4();
-    this.scene.updateMatrixWorld();
-    const meshes = [...this.pickNodes, ...this.pickTubes, ...this.pickPanels,
-                    ...this.pickClamps, ...this.pickTextiles, ...this.pickSlides];
-    // Mittelpunkt eines Teils auf den Bildschirm projizieren und pruefen.
-    const test = (m, world, d) => {
-      if (!d || !d.id || out.has(d.id)) return;
-      if (!m.geometry.boundingBox) m.geometry.computeBoundingBox();
-      m.geometry.boundingBox.getCenter(v).applyMatrix4(world).project(this.camera);
+    this._forEachPickable((d, center) => {
+      if (out.has(d.id)) return;
+      v.copy(center).project(this.camera);
       if (v.z > 1) return;   // hinter der Kamera
       const sx = r.left + (v.x * 0.5 + 0.5) * r.width;
       const sy = r.top + (-v.y * 0.5 + 0.5) * r.height;
       if (sx >= minX && sx <= maxX && sy >= minY && sy <= maxY) out.set(d.id, d.kind);
+    });
+    return out;
+  }
+
+  /** Alles, was gerade waehlbar ist (Strg+A). Liefert id -> kind. */
+  selectableParts() {
+    const out = new Map();
+    this._forEachPickable((d) => { if (!out.has(d.id)) out.set(d.id, d.kind); });
+    return out;
+  }
+
+  /**
+   * Ruft cb(data, weltMittelpunkt) fuer jedes waehlbare Teil auf. Der Mittel-
+   * punkt entscheidet (nicht die Huelle): ein langes Rohr, das nur durch das
+   * Rechteck streift, gilt damit als nicht enthalten. Weggeschnittene Teile
+   * (Schnittebene) bleiben aussen vor -- sie sind nicht sichtbar und sollen
+   * deshalb auch per Rechteck oder Strg+A nicht in die Auswahl geraten.
+   */
+  _forEachPickable(cb) {
+    const c = new THREE.Vector3();
+    const mat = new THREE.Matrix4();
+    this.scene.updateMatrixWorld();
+    const meshes = [...this.pickNodes, ...this.pickTubes, ...this.pickPanels,
+                    ...this.pickClamps, ...this.pickTextiles, ...this.pickSlides];
+    const emit = (m, world, d) => {
+      if (!d || !d.id) return;
+      if (!m.geometry.boundingBox) m.geometry.computeBoundingBox();
+      m.geometry.boundingBox.getCenter(c).applyMatrix4(world);
+      if (this._clipPlane && this._clipPlane.distanceToPoint(c) < 0) return;
+      cb(d, c);
     };
     for (const m of meshes) {
       if (m.isInstancedMesh) {
@@ -2179,13 +2327,12 @@ export class SceneManager {
         for (let i = 0; i < list.length; i++) {
           if (!list[i]) continue;
           m.getMatrixAt(i, mat);
-          test(m, mat.premultiply(m.matrixWorld), list[i]);
+          emit(m, mat.premultiply(m.matrixWorld), list[i]);
         }
       } else {
-        test(m, m.matrixWorld, m.userData);
+        emit(m, m.matrixWorld, m.userData);
       }
     }
-    return out;
   }
 
   setHover(object) {
