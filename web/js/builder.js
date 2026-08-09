@@ -35,6 +35,7 @@ export class Builder {
     // Cursor-Modus: id -> kind ("tube"/"panel"/"node"/...). Die ids sind ueber
     // alle Kategorien hinweg eindeutig (gemeinsamer Zaehler in model._id).
     this.selection = new Map();
+    this.highlight = null;   // reine Sicht-Hervorhebung (Bestandsliste)
 
     this.showLabels = false;     // Kupplungs-Namen im normalen Bauen anzeigen
     this.diagonal = false;       // schraege (45-Grad) Streben statt Achsen
@@ -173,6 +174,16 @@ export class Builder {
   modelReplaced() {
     this.selection.clear();
     this.selectedNodeId = null;
+  }
+
+  /**
+   * Teile fuer eine reine Sicht-Hervorhebung markieren (z. B. eine Zeile im
+   * Bestand). Unabhaengig von der Cursor-Auswahl: nichts wird dadurch
+   * loeschbar oder umfaerbbar, und es gilt in jedem Modus.
+   */
+  setHighlight(ids) {
+    this.highlight = ids && ids.size ? ids : null;
+    this.refresh();
   }
 
   clearSelection() {
@@ -384,7 +395,8 @@ export class Builder {
     // erkennt und die uebrigen Rohre grau zeichnet.
     const collide = this.mode === "collision" ? this.model.collisions() : null;
     const selected = this.mode === "select" && this.selection.size ? this.selection : null;
-    this.scene.renderModel(this.model, this.selectedNodeId, { labelFor, slideNameFor, labelIds, assembly, suggest, reinforce, collide, selected });
+    this.scene.renderModel(this.model, this.selectedNodeId,
+      { labelFor, slideNameFor, labelIds, assembly, suggest, reinforce, collide, selected, highlight: this.highlight });
     this._buildHandles();
     this.onChange();
   }

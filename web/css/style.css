@@ -452,6 +452,10 @@ body.sidebar-hidden #sidebar, body.sidebar-hidden #sidebar-resizer { display: no
   border-radius: 6px;
 }
 .inv-row.bad { background: #fdeceb; }
+/* Bestandszeile ist anklickbar; die markierte hebt ihre Teile im Modell hervor.
+   Muss NACH .bad stehen, sonst gewinnt dort der rote Hintergrund. */
+.inv-row { cursor: pointer; }
+.inv-row.marked { background: #fff3e3; box-shadow: inset 0 0 0 1px #ffb765; }
 .inv-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .inv-need { color: var(--muted); font-size: 12px; }
 .inv-input { width: 56px; padding: 4px 6px; border: 1px solid var(--line); border-radius: 6px; font-size: 13px; }

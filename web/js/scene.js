@@ -17,6 +17,13 @@ const QUALITY = {
 };
 const DEFAULT_QUALITY = "medium";
 
+// Hervorhebung (Cursor-Auswahl und Bestandsliste): immer dasselbe Lila,
+// unabhaengig von der Teilefarbe. Nur die Emissive einzufaerben liess die
+// Grundfarbe durchschlagen -- ein rotes und ein blaues Rohr sahen dann
+// unterschiedlich aus. Lila kommt im Teile-Katalog nicht vor.
+const HIGHLIGHT_COLOR = 0x9b30ff;
+const HIGHLIGHT_EMISSIVE = 0x3a0066;
+
 // Rundung des Kupplungs-Wuerfels (p-Norm des Superellipsoids). 2 waere die
 // Kugel, grosse Werte ein scharfer Wuerfel. Bei 3 liegen die Flanken buendig
 // auf 2,5 cm (Rohrradius 2,45) und die Ecken stehen nur noch 0,5 cm ueber --
@@ -68,7 +75,11 @@ export class SceneManager {
     // bekommt OrbitControls die linke Taste gar nicht erst.
     this.controls.mouseButtons.LEFT = null;
     this.onCameraChange = () => {};   // von der UI zum Sichern ueberschrieben
-    this.controls.addEventListener("end", () => this.onCameraChange());
+    this.controls.addEventListener("end", () => {
+      // Nach Zoomen/Schieben den Bezugspunkt nachfuehren (siehe _reanchorTarget).
+      if (!this.orbiting) this._reanchorTarget();
+      this.onCameraChange();
+    });
     this.controls.target.set(...this._defaultCam.target);
 
     // Licht: warmes Sonnenlicht + Himmelslicht + weiche Schatten
@@ -363,15 +374,31 @@ export class SceneManager {
     return geo;
   }
 
-  // Auswahl-Variante eines beliebigen Bauteil-Materials: gleiche Farbe, aber
-  // orange leuchtend (wie die gewaehlte Kupplung im Bau-Modus). Pro Basis-
-  // Material einmal geklont und gecacht -- _disposeGroup gibt nur Geometrien frei.
+  // Hervorhebungs-Variante eines beliebigen Bauteil-Materials: durchgehend lila.
+  // Geklont statt neu gebaut, damit Eigenschaften wie DoubleSide oder
+  // Transparenz (Platten, Netze) erhalten bleiben. Pro Basis-Material einmal
+  // gecacht -- _disposeGroup gibt nur Geometrien frei.
   _selectedMaterial(base) {
     const key = "sel:" + base.uuid;
     if (!this._materials[key]) {
       const m = base.clone();
-      if (m.emissive) m.emissive = new THREE.Color(0x8a4a00);
-      else m.color = new THREE.Color(0xff8c1a);
+      m.color = new THREE.Color(HIGHLIGHT_COLOR);
+      if (m.emissive) m.emissive = new THREE.Color(HIGHLIGHT_EMISSIVE);
+      this._materials[key] = m;
+    }
+    return this._materials[key];
+  }
+
+  // Zurueckgetretene Variante eines Bauteil-Materials: gleiche Farbe, stark
+  // durchscheinend. depthWrite aus, damit die hervorgehobenen Teile dahinter
+  // nicht weggeschnitten werden.
+  _dimmedMaterial(base) {
+    const key = "dim:" + base.uuid;
+    if (!this._materials[key]) {
+      const m = base.clone();
+      m.transparent = true;
+      m.opacity = (base.opacity != null ? base.opacity : 1) * 0.25;
+      m.depthWrite = false;
       this._materials[key] = m;
     }
     return this._materials[key];
@@ -1050,12 +1077,6 @@ export class SceneManager {
         pushDir(t.b, na.x - nb.x, na.y - nb.y, na.z - nb.z);
       }
     }
-    // Ist diese Arm-Richtung von einem Rohr belegt?
-    const armIsUsed = (nodeId, d) => {
-      const dirs = tubeDirsAt.get(nodeId);
-      if (!dirs) return false;
-      return dirs.some((v) => v[0] * d[0] + v[1] * d[1] + v[2] * d[2] > 0.9);
-    };
 
     // Zustand eines Teils im Aufbaumodus: "done" | "current" | "future".
     const stateOf = (id) => {
@@ -1094,24 +1115,21 @@ export class SceneManager {
         this.buildGroup.add(mesh);
         if (st !== "future") this.pickNodes.push(mesh);
 
-        // Arm-Stutzen der Kupplung (variant2 -> node.arms). Es werden NUR Arme
-        // gezeichnet, an denen wirklich ein Rohr steckt: die Kupplung zeigt damit
-        // immer genau ihr tatsaechliches Anschlussbild. Offene Stutzen entfallen
-        // -- die Herstellersoftware kennt sie ebenfalls nicht, und die
-        // variant2-Maske der QDF-Datei fuehrt sonst Arme ins Leere.
-        if (n.arms) {
-          for (const d of n.arms) {
-            const dv = new THREE.Vector3(d[0], d[1], d[2]);
-            if (dv.lengthSq() < 0.1) continue;
-            dv.normalize();
-            if (!armIsUsed(n.id, [dv.x, dv.y, dv.z])) continue;
-            const stub = new THREE.Mesh(armStubGeo, mat);
-            stub.position.set(n.x + dv.x * armStubOff, n.y + dv.y * armStubOff, n.z + dv.z * armStubOff);
-            stub.quaternion.setFromUnitVectors(UP, dv);
-            stub.userData = { kind: "node", id: n.id };
-            this.buildGroup.add(stub);
-            if (st !== "future") this.pickNodes.push(stub);
-          }
+        // Arm-Stutzen der Kupplung: kurze Zylinder, die in die Rohre greifen.
+        // Gezeichnet wird je Richtung, in der wirklich ein Rohr steckt -- die
+        // Kupplung zeigt damit genau ihr tatsaechliches Anschlussbild. Offene
+        // Stutzen entfallen; die Herstellersoftware kennt sie ebenfalls nicht,
+        // und die variant2-Maske importierter Dateien fuehrt Arme ins Leere.
+        // Quelle sind die tatsaechlichen Rohrrichtungen, nicht node.arms: sonst
+        // haetten im Editor gebaute Kupplungen (ohne variant2) gar keine.
+        for (const d of tubeDirsAt.get(n.id) || []) {
+          const dv = new THREE.Vector3(d[0], d[1], d[2]);
+          const stub = new THREE.Mesh(armStubGeo, mat);
+          stub.position.set(n.x + dv.x * armStubOff, n.y + dv.y * armStubOff, n.z + dv.z * armStubOff);
+          stub.quaternion.setFromUnitVectors(UP, dv);
+          stub.userData = { kind: "node", id: n.id };
+          this.buildGroup.add(stub);
+          if (st !== "future") this.pickNodes.push(stub);
         }
       }
 
@@ -1230,13 +1248,12 @@ export class SceneManager {
         continue;
       }
 
-      // Sichtbare Rohrlaenge: das echte Rohr, NICHT der Knotenabstand. Zwischen
-      // zwei Kupplungsmitten liegen Rohrlaenge + connectorSize; ein Zylinder ueber
-      // die volle Distanz ragt darum an beiden Enden 2,5 cm in die Kupplungen
-      // hinein und schaut dort heraus.
-      // Gerechnet wird aus der Distanz, nicht aus der Katalog-Laenge: im
-      // Schraegen-Raster (importierte Diagonalen, ~41,5 statt 40) klaffte sonst
-      // eine Luecke zwischen Rohrende und Kupplung.
+      // Sichtbare Rohrlaenge: das echte Rohr, NICHT der Knotenabstand -- zwischen
+      // zwei Kupplungsmitten liegen Rohrlaenge + connectorSize, ein Zylinder ueber
+      // die volle Distanz schaut sonst aus der Kupplung wieder heraus. Gerechnet
+      // wird aus der Distanz statt aus der Katalog-Laenge: im Schraegen-Raster
+      // (importierte Diagonalen, ~41,5 statt 40) klaffte sonst eine Luecke.
+      // Die Luecke zur Kupplung fuellen die Arm-Stutzen (siehe oben).
       const drawLen = Math.max(1, len - cs);
       const isReinforceActive = reinforce && t.reinforced;
       const effectiveRadius = isReinforceActive ? tubeRadius * 1.08 : tubeRadius;
@@ -1418,10 +1435,19 @@ export class SceneManager {
     // Cursor-Modus: ausgewaehlte Teile hervorheben. Als Nachlauf ueber die
     // fertige Gruppe, damit nicht jeder einzelne Material-Aufruf eine
     // Auswahl-Variante kennen muss.
-    if (opts.selected && opts.selected.size) {
+    // Cursor-Auswahl und Bestands-Hervorhebung nutzen dieselbe Darstellung.
+    // Bei der Bestands-Hervorhebung treten alle uebrigen Teile zusaetzlich
+    // zurueck (halbtransparent), damit die gesuchten im Gewirr auffallen. Fuer
+    // die Cursor-Auswahl waere das stoerend: dort waehlt man staendig etwas an.
+    const selected = opts.selected && opts.selected.size ? opts.selected : null;
+    const highlight = opts.highlight && opts.highlight.size ? opts.highlight : null;
+    const marked = selected || highlight;
+    const dimOthers = !selected && !!highlight;
+    if (marked) {
       this.buildGroup.traverse((o) => {
-        if (!o.isMesh || !o.userData || !opts.selected.has(o.userData.id)) return;
-        o.material = this._selectedMaterial(o.material);
+        if (!o.isMesh || !o.userData) return;
+        if (marked.has(o.userData.id)) o.material = this._selectedMaterial(o.material);
+        else if (dimOthers) o.material = this._dimmedMaterial(o.material);
       });
     }
 
@@ -1807,7 +1833,36 @@ export class SceneManager {
   endOrbit() {
     if (!this._orbitPivot) return;
     this._orbitPivot = null;
+    this._reanchorTarget();
     this.onCameraChange();
+  }
+
+  /**
+   * controls.target wieder auf die Modelloberflaeche in Blickmitte setzen.
+   *
+   * OrbitControls leitet BEIDES vom Abstand Kamera<->target ab: die Schrittweite
+   * beim Zoomen (multiplikativ) und die Geschwindigkeit beim Verschieben
+   * (proportional). Zoomt man laenger hinein, schrumpft dieser Abstand
+   * geometrisch gegen null -- danach bewegt sich beim Schieben fast nichts mehr
+   * und die Zoomschritte sind winzig. Der target wandert durch zoomToCursor
+   * ausserdem seitlich aus dem Modell heraus.
+   *
+   * Der neue Punkt liegt auf der BLICKACHSE, nicht am Trefferpunkt: so bleibt
+   * das Bild unveraendert (OrbitControls richtet die Kamera per lookAt auf den
+   * target aus), nur der Bezugsabstand stimmt wieder.
+   */
+  _reanchorTarget() {
+    if (!this.controls) return false;
+    const r = this.renderer.domElement.getBoundingClientRect();
+    const p = this._pointUnderCursor(r.left + r.width / 2, r.top + r.height / 2);
+    if (!p) return false;
+    const dist = this.camera.position.distanceTo(p);
+    if (!(dist > 0.01)) return false;
+    const fwd = new THREE.Vector3();
+    this.camera.getWorldDirection(fwd);
+    this.controls.target.copy(this.camera.position).addScaledVector(fwd, dist);
+    this.controls.update();
+    return true;
   }
 
   get orbiting() { return !!this._orbitPivot; }
@@ -2158,7 +2213,9 @@ export class SceneManager {
     this.scene.background.set(0xc9dff2);
   }
 
-  // Prozedurale Bäume am Rand der Grasfläche (r 320–440 cm).
+  // Prozedurale Bäume am Rand der Grasfläche (Ring r 620–780 cm; die Fläche
+  // reicht bis 790). Frueher standen sie bei 450–700 cm und ragten damit in
+  // grosse Modelle hinein.
   // Geometrien und Materialien werden einmalig geteilt; per-Baum nur Transform.
   _buildTrees() {
     const trunkMat  = new THREE.MeshLambertMaterial({ color: 0x6b5a3e }); // graubraun (Obstbaumrinde)
@@ -2180,7 +2237,7 @@ export class SceneManager {
     const rng = () => { seed = (seed * 1664525 + 1013904223) >>> 0; return seed / 0x100000000; };
 
     for (let i = 0; i < 60; i++) {
-      const r = 450 + rng() * 250;          // 450–700 cm vom Mittelpunkt
+      const r = 620 + rng() * 160;          // 620–780 cm vom Mittelpunkt
       const θ = rng() * Math.PI * 2;
       const tx = Math.cos(θ) * r, tz = Math.sin(θ) * r;
       if (Math.abs(tx) > 790 || Math.abs(tz) > 790) continue; // außerhalb der Fläche
@@ -2256,12 +2313,23 @@ export class SceneManager {
   // Bäume ausblenden, die zu nah an einem Modellknoten stehen.
   // Prüft Abstand zu Modellknoten und setzt t.blocked. Die tatsächliche
   // Sichtbarkeit wird pro Frame von _updateTreeCamera() kombiniert.
+  // Bewuchs ausblenden, der dem Bauwerk zu nahe kommt. Zwei Kriterien:
+  // direkt an einer Kupplung (dichter Bewuchs im Geruest) und innerhalb des
+  // Grundrisses plus Sicherheitsabstand -- Letzteres faengt grosse Modelle ab,
+  // die sonst bis in den Baumring reichen wuerden. Die Baumpositionen selbst
+  // stehen fest (einmal gestreut), nur die Sichtbarkeit wird nachgefuehrt.
   _updateTrees(model) {
     if (!this._treeNodes) return;
     const nodes = model && model.nodes ? [...model.nodes.values()] : [];
     const CLEAR2 = 90 * 90;
+    const KEEP_OUT = 250;   // cm Abstand zum Grundriss
+    // Grundriss-Radius um den Ursprung (waagerecht).
+    let reach = 0;
+    for (const n of nodes) reach = Math.max(reach, Math.hypot(n.x, n.z));
+    const keepOut2 = (reach + KEEP_OUT) * (reach + KEEP_OUT);
     const markBlocked = (list) => {
       for (const t of list) {
+        if (t.x * t.x + t.z * t.z < keepOut2) { t.blocked = true; continue; }
         let close = false;
         for (const n of nodes) {
           const dx = t.x - n.x, dz = t.z - n.z;

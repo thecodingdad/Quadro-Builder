@@ -1,7 +1,7 @@
 // Verkabelt die Bedienoberflaeche (Toolbar, Tastatur, Stueckliste, Bestand).
 
 import { buildableTubes, buildableCurvedTubes, buildablePanels, tubeColors, geometry, allTubes, allConnectors, panels, reinforcements, slideKindName, partName } from "./catalog.js";
-import { computeBOM, compareInventory } from "./bom.js";
+import { computeBOM, compareInventory, connectorsForNode } from "./bom.js";
 import { computeBuildPlan } from "./buildplan.js";
 import { parseQDF } from "./qdfimport.js";
 import { QUALITY_LEVELS } from "./scene.js";
@@ -109,6 +109,23 @@ export function initUI({ scene, model, builder }) {
     const show = open == null ? pop.hidden : open;
     pop.hidden = !show;
     $("btn-file").classList.toggle("active", show);
+    // #toolbar-left scrollt waagerecht (overflow-x) und schneidet damit auch
+    // senkrecht ab -- ein absolut positioniertes Popup waere unsichtbar.
+    // Deshalb fixed unter dem Button platzieren.
+    if (show) placePopupUnder(pop, $("btn-file"));
+  }
+
+  /** Popup fixed unter einem Anker-Button platzieren, am rechten Rand geklemmt. */
+  function placePopupUnder(pop, anchorBtn) {
+    const rect = anchorBtn.getBoundingClientRect();
+    pop.style.position = "fixed";
+    pop.style.top = (rect.bottom + 5) + "px";
+    pop.style.left = rect.left + "px";
+    pop.style.right = "auto";
+    requestAnimationFrame(() => {
+      const maxLeft = window.innerWidth - pop.offsetWidth - 8;
+      if (parseFloat(pop.style.left) > maxLeft) pop.style.left = Math.max(8, maxLeft) + "px";
+    });
   }
   $("btn-file").addEventListener("click", (e) => { e.stopPropagation(); toggleFileMenu(); });
   document.addEventListener("click", (e) => {
@@ -119,9 +136,15 @@ export function initUI({ scene, model, builder }) {
   // Schneidet das Modell entlang einer Achse auf, damit man hineinsehen und
   // weiter innen bauen kann. Kein eigener Modus: laeuft parallel zu Bauen,
   // Platten setzen usw. weiter.
+  const SLICE_KEY = "quadro.slice.v1";
   const sliceBar = $("slice-bar");
   const sliceRange = $("slice-range");
   const slice = { on: false, axis: "z", value: 0, flip: false };
+  try {
+    const st = JSON.parse(localStorage.getItem(SLICE_KEY));
+    if (st && ["x", "y", "z"].includes(st.axis) && typeof st.value === "number")
+      Object.assign(slice, { on: !!st.on, axis: st.axis, value: st.value, flip: !!st.flip });
+  } catch { /* kaputter Eintrag -> Standard */ }
 
   function sliceLimits() {
     const b = model.bounds(geometry().connectorSize / 2);
@@ -147,6 +170,10 @@ export function initUI({ scene, model, builder }) {
     builder.refresh();   // Handles neu: verdeckte sind nicht mehr anklickbar
   }
 
+  function saveSlice() {
+    localStorage.setItem(SLICE_KEY, JSON.stringify(slice));
+  }
+
   if (sliceBar) {
     $("btn-slice").addEventListener("click", () => {
       slice.on = !slice.on;
@@ -155,16 +182,16 @@ export function initUI({ scene, model, builder }) {
         const lim = sliceLimits();
         slice.value = Math.round((lim.min + lim.max) / 2);
       }
-      applySlice();
+      applySlice(); saveSlice();
     });
-    $("slice-close").addEventListener("click", () => { slice.on = false; applySlice(); });
-    $("slice-flip").addEventListener("click", () => { slice.flip = !slice.flip; applySlice(); });
+    $("slice-close").addEventListener("click", () => { slice.on = false; applySlice(); saveSlice(); });
+    $("slice-flip").addEventListener("click", () => { slice.flip = !slice.flip; applySlice(); saveSlice(); });
     for (const b of $("slice-axes").querySelectorAll("button")) {
       b.addEventListener("click", () => {
         slice.axis = b.dataset.axis;
         const lim = sliceLimits();
         slice.value = Math.round((lim.min + lim.max) / 2);
-        applySlice();
+        applySlice(); saveSlice();
       });
     }
     sliceRange.addEventListener("input", () => {
@@ -173,7 +200,9 @@ export function initUI({ scene, model, builder }) {
       scene.setClip(slice.axis, slice.value, slice.flip);
     });
     // Erst beim Loslassen neu aufbauen -- waehrend des Ziehens waere das zaeh.
-    sliceRange.addEventListener("change", () => builder.refresh());
+    sliceRange.addEventListener("change", () => { builder.refresh(); saveSlice(); });
+    // Gemerkten Schnitt beim Start wiederherstellen.
+    if (slice.on) applySlice();
   }
 
   // --- Kamera merken -----------------------------------------------------
@@ -354,9 +383,8 @@ export function initUI({ scene, model, builder }) {
     // gewählten Panel (oder zu). Andere Modi lassen das Panel unberührt.
     if (m === "assembly") {
       // Szene beim Wechsel in den Aufbau-Modus ausblenden.
-      scene.setScene(false);
-      grassOn = false;
-      $("scene-toggle").classList.add("off");
+      // Aufbau-Modus blendet die Szene aus, ohne die Vorliebe zu ueberschreiben.
+      applyScene(false, false);
       showSidebarPanel("assembly");
     }
     else if (currentPanel === "assembly")
@@ -456,19 +484,7 @@ export function initUI({ scene, model, builder }) {
     }
 
     document.body.appendChild(pop);
-
-    // Popup unter dem Anker-Button positionieren (fixed, damit kein Clipping)
-    const rect = anchorBtn.getBoundingClientRect();
-    pop.style.position = "fixed";
-    pop.style.top = (rect.bottom + 5) + "px";
-    pop.style.left = rect.left + "px";
-
-    // Rechts am Viewport-Rand ausrichten wenn nötig
-    requestAnimationFrame(() => {
-      const pw = pop.offsetWidth;
-      const maxLeft = window.innerWidth - pw - 8;
-      if (parseFloat(pop.style.left) > maxLeft) pop.style.left = maxLeft + "px";
-    });
+    placePopupUnder(pop, anchorBtn);
 
     activePopup = pop;
     popupAnchor = anchorBtn;
@@ -790,16 +806,19 @@ export function initUI({ scene, model, builder }) {
   $("toggle-bom").addEventListener("click", () => toggleSidebarPanel("bom"));
   $("toggle-inventory").addEventListener("click", () => toggleSidebarPanel("inventory"));
 
-  // Szene ein-/ausblenden via Canvas-Icon (Standard: aus).
+  // Szene (Gras, Baeume, Himmel) ein-/ausblenden via Canvas-Icon. Der Zustand
+  // wird gemerkt; Standard beim allerersten Start ist aus.
+  const SCENE_KEY = "quadro.scene.v1";
   let grassOn = false;
   const sceneIcon = $("scene-toggle");
-  const applyScene = (on) => {
+  const applyScene = (on, save = true) => {
     grassOn = on;
     scene.setScene(on);
     sceneIcon.classList.toggle("off", !on);
+    if (save) localStorage.setItem(SCENE_KEY, on ? "1" : "0");
   };
   sceneIcon.addEventListener("click", () => applyScene(!grassOn));
-  applyScene(false); // Startzustand: Szene aus
+  applyScene(localStorage.getItem(SCENE_KEY) === "1", false);
 
   // Startzustand: zuletzt gewähltes Panel (Standard: zu)
   showSidebarPanel(localStorage.getItem(SIDEBAR_PANEL_KEY) || null);
@@ -1130,6 +1149,42 @@ export function initUI({ scene, model, builder }) {
     }
   }
 
+  // Welche Bestandszeile ist gerade hervorgehoben ("group:key" oder null)?
+  let invHighlightKey = null;
+
+  /** Teile im Modell, die zu einer Bestandszeile gehoeren. */
+  function partsForInventoryRow(r) {
+    const ids = new Set();
+    if (r.group === "tubes") {
+      for (const t of model.tubes.values())
+        if (!t.arm && !t.link && t.tubeId === r.key) ids.add(t.id);
+    } else if (r.group === "panels") {
+      for (const p of model.panels.values()) if (p.panelId === r.key) ids.add(p.id);
+    } else if (r.group === "connectors") {
+      for (const n of model.nodes.values())
+        if (connectorsForNode(model, n).includes(r.key)) ids.add(n.id);
+      // Doppelrohrverbinder haengen nicht an Knoten, sondern sind eigene Teile.
+      for (const c of (model.clamps ? model.clamps.values() : []))
+        if ((c.connectorId || "double_tube") === r.key) ids.add(c.id);
+    } else if (r.group === "reinforcements") {
+      for (const t of model.tubes.values()) if (t.reinforced) ids.add(t.id);
+    }
+    return ids;
+  }
+
+  function setInventoryHighlight(r) {
+    invHighlightKey = r ? r.group + ":" + r.key : null;
+    builder.setHighlight(r ? partsForInventoryRow(r) : null);
+    for (const el2 of $("inventory-body").querySelectorAll(".inv-row"))
+      el2.classList.remove("marked");
+    if (!r) return;
+    const rows = [...$("inventory-body").querySelectorAll(".inv-row")];
+    const idx = lastInvRows.findIndex((x) => x.group === r.group && x.key === r.key);
+    if (idx >= 0 && rows[idx]) rows[idx].classList.add("marked");
+  }
+
+  let lastInvRows = [];
+
   function renderInventory(bom) {
     renderModelSize();
     const body = $("inventory-body"); body.innerHTML = "";
@@ -1138,11 +1193,27 @@ export function initUI({ scene, model, builder }) {
       body.appendChild(el("div", "muted", t("inv_empty_build")));
       banner.className = "feasibility";
       banner.textContent = "";
+      lastInvRows = [];
+      if (invHighlightKey) { invHighlightKey = null; builder.setHighlight(null); }
       return;
     }
     const cmp = compareInventory(bom, inventory);
+    lastInvRows = cmp.rows;
+    // Modell kann sich geaendert haben -> ids der markierten Zeile neu bestimmen,
+    // sonst zeigt die Hervorhebung auf geloeschte oder veraltete Teile.
+    const stillThere = cmp.rows.find((r) => r.group + ":" + r.key === invHighlightKey);
+    if (invHighlightKey) {
+      if (stillThere) builder.highlight = partsForInventoryRow(stillThere);
+      else { invHighlightKey = null; builder.highlight = null; }
+    }
     for (const r of cmp.rows) {
-      const row = el("div", "inv-row" + (r.ok ? "" : " bad"));
+      const rowKey = r.group + ":" + r.key;
+      const row = el("div", "inv-row" + (r.ok ? "" : " bad") + (rowKey === invHighlightKey ? " marked" : ""));
+      // Klick auf die Zeile hebt die zugehoerigen Teile im Modell hervor.
+      row.addEventListener("click", (e) => {
+        if (e.target.tagName === "INPUT") return;   // Mengenfeld nicht abfangen
+        setInventoryHighlight(rowKey === invHighlightKey ? null : r);
+      });
       row.appendChild(el("span", "inv-name", r.name));
       row.appendChild(el("span", "inv-need", t("inv_need", r.need)));
       const inp = document.createElement("input");
