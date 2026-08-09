@@ -1331,7 +1331,11 @@ export class SceneManager {
       this._nodePoints.push(new THREE.Vector3(n.x, n.y, n.z));
       let mat;
       if (st === "future") mat = this._ghostMaterial();
-      else if (st === "current") mat = this._connMaterial(true);
+      // Aufbau-Modus: Kupplungen des aktuellen Schritts schwarz wie am fertigen
+      // Modell. Orange (die Hervorhebung der Bau-Kupplung) waere hier falsch --
+      // vom schon Gebauten heben sie sich bereits durch dessen blasses,
+      // durchscheinendes Material ab.
+      else if (st === "current") mat = this._connMaterial(false);
       else if (asm && st === "done") mat = this._fadedMaterial(connectorColor().hex);
       else mat = this._connMaterial(n.id === selectedNodeId);
       // Adapter-Koerper (importierte C45, n.c45body) sind keine eigenstaendige
