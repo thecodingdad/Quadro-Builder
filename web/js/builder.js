@@ -398,6 +398,7 @@ export class Builder {
     this.scene.renderModel(this.model, this.selectedNodeId,
       { labelFor, slideNameFor, labelIds, assembly, suggest, reinforce, collide, selected, highlight: this.highlight });
     this._buildHandles();
+    this.scene.requestRender();
     this.onChange();
   }
 

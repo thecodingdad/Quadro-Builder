@@ -43,10 +43,17 @@ export class SceneManager {
 
     this.renderer = new THREE.WebGLRenderer({ antialias: true });
     this.renderer.setPixelRatio(window.devicePixelRatio || 1);
+    // Nur zeichnen, wenn sich wirklich etwas geaendert hat (siehe requestRender).
+    this._needsRender = true;
     // updateStyle = false: die CSS-Groesse des Canvas kommt aus dem Stylesheet
     // (100 % des Containers), nicht als feste px-Werte -> siehe onResize().
     this.renderer.setSize(container.clientWidth, container.clientHeight, false);
     this.renderer.shadowMap.enabled = true;
+    // Die Schattenkarte wird NICHT pro Bild neu gerechnet: das waere ein zweiter
+    // Durchgang ueber alle ~1850 Werfer, obwohl sich Licht und Modell selten
+    // aendern. _shadowsDirty() stoesst sie gezielt an (Modell, Szene, Schnitt).
+    this.renderer.shadowMap.autoUpdate = false;
+    this.renderer.shadowMap.needsUpdate = true;
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     container.appendChild(this.renderer.domElement);
 
@@ -140,6 +147,11 @@ export class SceneManager {
     this._c45Geo = null;      // lazy (45-Grad-Adapter-Koerper, Box)
     this._c45StubGeo = null;  // lazy (Diagonal-Stutzen des Adapters)
     this._panelGeos = new Map(); // lazy, pro Plattenmass/Lochbild (siehe _panelGeometry)
+    this._tubeGeos = new Map();  // lazy, pro Rohrlaenge (siehe _tubeGeometry)
+    // Alle dauerhaft gecachten Geometrien. _disposeGroup darf sie nicht
+    // freigeben -- frueher war das ein Array, das pro Aufruf neu gebaut und je
+    // Mesh linear durchsucht wurde.
+    this._keepGeos = new Set();
     this._quality = DEFAULT_QUALITY;
     this._materials = {};
 
@@ -156,6 +168,7 @@ export class SceneManager {
   }
 
   resetCamera() {
+    this._needsRender = true;
     this.camera.position.set(...this._defaultCam.pos);
     this.camera.lookAt(...this._defaultCam.target);
     this.camera.zoom = 1;
@@ -195,6 +208,7 @@ export class SceneManager {
     to.updateProjectionMatrix();
     this._projection = mode;
     this.camera = to;
+    this._needsRender = true;
     this._updateOrthoFrustum();
     if (this.controls) {
       this.controls.object = to;
@@ -220,6 +234,7 @@ export class SceneManager {
   }
 
   onResize() {
+    this._needsRender = true;
     const w = this.container.clientWidth, h = this.container.clientHeight;
     if (!w || !h) return;
     // Unveraenderte Groesse ignorieren: sonst kann der ResizeObserver sich
@@ -297,14 +312,32 @@ export class SceneManager {
   setQuality(level) {
     if (!QUALITY[level] || level === this._quality) return false;
     this._quality = level;
+    this._shadowsDirty();
     for (const key of ["_connGeo", "_c45Geo", "_c45StubGeo", "_clampGeo", "_clampRingGeo"]) {
-      if (this[key]) this[key].dispose();
+      if (this[key]) { this._keepGeos.delete(this[key]); this[key].dispose(); }
       this[key] = null;
     }
+    // Rohr-Segmentzahl haengt an der Stufe -> Cache leeren.
+    for (const g of this._tubeGeos.values()) { this._keepGeos.delete(g); g.dispose(); }
+    this._tubeGeos.clear();
     return true;
   }
 
   _q() { return QUALITY[this._quality] || QUALITY[DEFAULT_QUALITY]; }
+
+  // Rohr-Geometrie, gecacht je Laenge/Radius/Segmentzahl. Vorher entstand pro
+  // Rohr und pro Render-Durchlauf eine neue CylinderGeometry (~425 Stueck), die
+  // beim naechsten Durchlauf wieder weggeworfen wurde.
+  _tubeGeometry(radius, length, segments) {
+    const key = `${radius.toFixed(2)}:${length.toFixed(2)}:${segments}`;
+    let geo = this._tubeGeos.get(key);
+    if (!geo) {
+      geo = new THREE.CylinderGeometry(radius, radius, length, segments);
+      this._tubeGeos.set(key, geo);
+      this._keepGeos.add(geo);
+    }
+    return geo;
+  }
 
   _connGeometry() {
     if (!this._connGeo) {
@@ -371,6 +404,7 @@ export class SceneManager {
       geo = new THREE.BoxGeometry(w, thickness, d);
     }
     this._panelGeos.set(key, geo);
+    this._keepGeos.add(geo);
     return geo;
   }
 
@@ -1050,7 +1084,7 @@ export class SceneManager {
     // stecken im Rohr (Arm dünner als Rohr) -> sichtbar nur die freien Arme.
     const armStubLen = cs * 0.85;
     const qual = this._q();   // Aufloesung je Qualitaetsstufe
-    const armStubGeo = new THREE.CylinderGeometry(armRadius, armRadius, armStubLen, Math.max(6, qual.tube - 4));
+    const armStubGeo = this._tubeGeometry(armRadius, armStubLen, Math.max(6, qual.tube - 4));
     const armStubOff = cs / 2 + armStubLen / 2 - 0.4;
 
     // Richtungen der an einem Knoten TATSAECHLICH angeschlossenen Rohre.
@@ -1257,9 +1291,9 @@ export class SceneManager {
       const drawLen = Math.max(1, len - cs);
       const isReinforceActive = reinforce && t.reinforced;
       const effectiveRadius = isReinforceActive ? tubeRadius * 1.08 : tubeRadius;
-      const geo = new THREE.CylinderGeometry(tubeRadius, tubeRadius, drawLen, qual.tube);
+      const geo = this._tubeGeometry(tubeRadius, drawLen, qual.tube);
       const geo2 = isReinforceActive
-        ? new THREE.CylinderGeometry(effectiveRadius, effectiveRadius, drawLen, qual.tube)
+        ? this._tubeGeometry(effectiveRadius, drawLen, qual.tube)
         : geo;
       const mat = st === "future" ? this._ghostMaterial()
         : st === "current" ? this._tubeHighlight(t.color)
@@ -1284,7 +1318,7 @@ export class SceneManager {
         // Verstaerkungsprofil: ~30 mm Durchmesser (gemessen), passt in das hohle
         // Rohr (49 mm aussen, 3 mm Wandstaerke -> 43 mm Innen-Durchmesser).
         const rodRadius = 1.5;  // 15 mm Radius = 30 mm Durchmesser in cm
-        const rodGeo = new THREE.CylinderGeometry(rodRadius, rodRadius, len, 8);
+        const rodGeo = this._tubeGeometry(rodRadius, len, 8);
         const rodMesh = new THREE.Mesh(rodGeo, this._rodMaterial());
         rodMesh.position.copy(mid);
         rodMesh.quaternion.copy(mesh.quaternion);
@@ -1475,6 +1509,9 @@ export class SceneManager {
 
     // Bäume: bei Bedarf ausblenden wenn zu nah an Knoten.
     this._updateTrees(model);
+
+    // Der Szenegraph ist neu -> Schattenkarte einmal nachziehen.
+    this._shadowsDirty();
   }
 
   // Gerade Rutsche (slide2/slide-new2): schraege Rampe (Rutschflaeche + 2 erhoehte
@@ -1718,11 +1755,13 @@ export class SceneManager {
   }
 
   clearHandles() {
+    this._needsRender = true;
     this._disposeGroup(this.handleGroup);
     this.handleMeshes = [];
   }
 
   addHandle(position, userData, kind = "dir") {
+    this._needsRender = true;
     const isOrigin = kind === "origin";
     const isDiag = kind === "diag";
     const geo = isOrigin
@@ -1740,6 +1779,7 @@ export class SceneManager {
 
   // Anklickbares Kandidaten-Feld fuer eine Platte (Quad aus 4 Eckpunkten).
   addPanelHandle(corners, userData) {
+    this._needsRender = true;
     const cx = (corners[0][0] + corners[1][0] + corners[2][0] + corners[3][0]) / 4;
     const cy = (corners[0][1] + corners[1][1] + corners[2][1] + corners[3][1]) / 4;
     const cz = (corners[0][2] + corners[1][2] + corners[2][2] + corners[3][2]) / 4;
@@ -1862,6 +1902,7 @@ export class SceneManager {
     this.camera.getWorldDirection(fwd);
     this.controls.target.copy(this.camera.position).addScaledVector(fwd, dist);
     this.controls.update();
+    this._needsRender = true;
     return true;
   }
 
@@ -1870,6 +1911,7 @@ export class SceneManager {
   orbitBy(dx, dy) {
     const P = this._orbitPivot;
     if (!P) return;
+    this._needsRender = true;
     const h = this.container.clientHeight || 1;
     const yaw = -2 * Math.PI * dx / h;
     const pitch = -2 * Math.PI * dy / h;
@@ -1904,6 +1946,7 @@ export class SceneManager {
   }
 
   restoreCameraState(st) {
+    this._needsRender = true;
     if (!st || !this.controls || !Array.isArray(st.pos) || !Array.isArray(st.target)) return false;
     this.camera.position.fromArray(st.pos);
     this.controls.target.fromArray(st.target);
@@ -1926,11 +1969,13 @@ export class SceneManager {
     if (this._clipPlane) this._clipPlane.set(normal, constant);
     else this._clipPlane = new THREE.Plane(normal, constant);
     this.renderer.clippingPlanes = [this._clipPlane];
+    this._shadowsDirty();
   }
 
   clearClip() {
     this._clipPlane = null;
     this.renderer.clippingPlanes = [];
+    this._shadowsDirty();
   }
 
   get clipping() { return !!this._clipPlane; }
@@ -1962,6 +2007,7 @@ export class SceneManager {
   // --- Auswahl-Rechteck (Cursor-Modus) ------------------------------------
 
   showSelectBox(x0, y0, x1, y1) {
+    this._needsRender = true;
     if (!this._selectBox) {
       this._selectBox = document.createElement("div");
       this._selectBox.className = "select-box";
@@ -1977,6 +2023,7 @@ export class SceneManager {
   }
 
   hideSelectBox() {
+    this._needsRender = true;
     if (this._selectBox) this._selectBox.hidden = true;
   }
 
@@ -2010,6 +2057,7 @@ export class SceneManager {
 
   setHover(object) {
     if (this._hover === object) return;
+    this._needsRender = true;
     if (this._hover && this._hover.userData.kind === "handle") {
       if (this._hover.userData.panelCell) this._hover.material = this._panelHandleMaterial(false);
       else this._hover.scale.setScalar(1);
@@ -2023,13 +2071,14 @@ export class SceneManager {
   }
 
   _disposeGroup(group) {
-    const cached = [this._connGeo, this._clampGeo, this._clampRingGeo, this._c45Geo, this._c45StubGeo,
-      ...this._panelGeos.values()];
+    const keep = this._keepGeos;
+    for (const g of [this._connGeo, this._clampGeo, this._clampRingGeo, this._c45Geo, this._c45StubGeo])
+      if (g) keep.add(g);
     for (let i = group.children.length - 1; i >= 0; i--) {
       const c = group.children[i];
       // Rekursiv (verschachtelte Gruppen, z.B. Rutschen) Geometrien freigeben.
       c.traverse((o) => {
-        if (o.geometry && !cached.includes(o.geometry)) o.geometry.dispose();
+        if (o.geometry && !keep.has(o.geometry)) o.geometry.dispose();
       });
       group.remove(c);
     }
@@ -2349,27 +2398,33 @@ export class SceneManager {
     const cx = this.camera.position.x - tx, cz = this.camera.position.z - tz;
     const cl = Math.hypot(cx, cz);
 
+    // Liefert true, wenn sich mindestens eine Sichtbarkeit geaendert hat --
+    // nur dann braucht es ein neues Bild.
+    let changed = false;
+    const setVis = (t, v) => { if (t.group.visible !== v) { t.group.visible = v; changed = true; } };
     const updateNodes = (nodes, groupVisible) => {
       if (!nodes || !groupVisible) return;
-      if (cl < 1) { nodes.forEach(t => { if (!t.blocked) t.group.visible = true; }); return; }
+      if (cl < 1) { nodes.forEach(t => { if (!t.blocked) setVis(t, true); }); return; }
       const cnx = cx / cl, cnz = cz / cl;
       for (const t of nodes) {
-        if (t.blocked) { t.group.visible = false; continue; }
+        if (t.blocked) { setVis(t, false); continue; }
         const dx = t.x - tx, dz = t.z - tz;
         const dl = Math.hypot(dx, dz);
-        if (dl < 1) { t.group.visible = true; continue; }
+        if (dl < 1) { setVis(t, true); continue; }
         // dot > cos(45°)=0.707 → Objekt im 90°-Kamera-Sektor → ausblenden.
-        t.group.visible = (dx / dl) * cnx + (dz / dl) * cnz < 0.707;
+        setVis(t, (dx / dl) * cnx + (dz / dl) * cnz < 0.707);
       }
     };
 
     updateNodes(this._treeNodes, this._treeGroup?.visible);
     updateNodes(this._bushNodes, this._bushGroup?.visible);
+    return changed;
   }
 
   // Szene komplett ein-/ausblenden (Gras, Bäume, Himmel, Licht, Schatten).
   // Ersetzt setGrass(); wird weiterhin von ui.js als scene.setScene(on) aufgerufen.
   setScene(on) {
+    this._shadowsDirty();
     const v = !!on;
     if (this._grassEnv)  this._grassEnv.visible  = v;
     if (this._skyMesh)   this._skyMesh.visible    = v;
@@ -2391,10 +2446,26 @@ export class SceneManager {
     if (this.scene.background) this.scene.background.set(v ? 0xc9dff2 : 0xeef1f5);
   }
 
+  /**
+   * Ein Bild anfordern. Gezeichnet wird nur nach einer echten Aenderung --
+   * die Schleife lief vorher stur mit 60 Bildern/s weiter, auch wenn nichts
+   * passierte. Bei jedem Zweifel lieber ein Bild zu viel anfordern.
+   */
+  requestRender() { this._needsRender = true; }
+
+  /** Schattenkarte einmalig neu rechnen lassen (Modell/Szene/Schnitt geaendert). */
+  _shadowsDirty() {
+    this.renderer.shadowMap.needsUpdate = true;
+    this._needsRender = true;
+  }
+
   _animate() {
     requestAnimationFrame(this._animate);
-    this.controls.update();
-    this._updateTreeCamera();
+    // controls.update() liefert true, solange das Damping noch nachlaeuft.
+    if (this.controls.update()) this._needsRender = true;
+    if (this._updateTreeCamera()) this._needsRender = true;
+    if (!this._needsRender) return;
+    this._needsRender = false;
     this.renderer.render(this.scene, this.camera);
   }
 }
