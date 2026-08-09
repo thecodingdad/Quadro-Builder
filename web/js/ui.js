@@ -1001,6 +1001,15 @@ export function initUI({ scene, model, builder }) {
       builder.redo();
       return;
     }
+    // Strg+A: alles auswaehlen -- nur im Cursor-Modus, sonst gibt es keine
+    // Auswahl, die es treffen koennte (und der Browser markiert die Seite).
+    if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "a") {
+      if (builder.mode !== "select") return;
+      e.preventDefault();
+      const n = builder.selectAll();
+      flash(t("flash_selected_n", n));
+      return;
+    }
     if (e.metaKey || e.ctrlKey || e.altKey) return;
     const k = e.key;
 

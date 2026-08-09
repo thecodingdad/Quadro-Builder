@@ -172,6 +172,18 @@ export class Builder {
     return changed;
   }
 
+  /**
+   * Alles Sichtbare auswaehlen (Strg+A). Quelle ist die Szene, nicht das
+   * Modell: nur was gerade gezeichnet und nicht weggeschnitten ist, laesst
+   * sich auch anklicken.
+   */
+  selectAll() {
+    if (this.mode !== "select") return 0;
+    this.selection = this.scene.selectableParts();
+    this.refresh();
+    return this.selection.size;
+  }
+
   /** Loescht alle ausgewaehlten Teile. Kupplungen zuletzt (nehmen Rohre mit). */
   deleteSelection() {
     if (!this.selection.size) return 0;

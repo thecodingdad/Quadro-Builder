@@ -167,6 +167,7 @@ const de = {
   flash_inv_exported: 'Bestand exportiert.',
   flash_inv_imported: 'Bestand importiert.',
   flash_deleted_n: (n) => `${n} Teil(e) gelöscht.`,
+  flash_selected_n: (n) => `${n} Teil(e) ausgewählt.`,
 
   // Bestätigungs- und Eingabedialoge
   prompt_save_name: 'Name für diesen Entwurf:',
@@ -405,6 +406,7 @@ const en = {
   flash_inv_exported: 'Inventory exported.',
   flash_inv_imported: 'Inventory imported.',
   flash_deleted_n: (n) => `${n} part(s) deleted.`,
+  flash_selected_n: (n) => `${n} part(s) selected.`,
 
   // Confirm / prompt dialogs
   prompt_save_name: 'Name for this design:',
