@@ -745,9 +745,11 @@ export class Builder {
     }
     const x = e.clientX, y = e.clientY;
     const handle = () => this.scene.pickHandle(x, y)?.object || null;
+    // Liefert den Treffer selbst (nicht nur das Mesh): Kupplungen und Rohre
+    // werden instanziert gezeichnet, die id steht deshalb nur in pick.data.
     const build = (kinds) => {
       const p = this.scene.pickBuild(x, y);
-      return p && (!kinds || kinds.includes(p.data.kind)) ? p.object : null;
+      return p && (!kinds || kinds.includes(p.data.kind)) ? p : null;
     };
     let obj = null;
     if (this.mode === "select") {
@@ -756,13 +758,13 @@ export class Builder {
     } else if (this.mode === "add") {
       // Handles + anbaubare Kupplungen (Winkelkupplungen sind es nicht).
       const n = build(["node"]);
-      obj = handle() || (n && this._isBuildable(n.userData.id) ? n : null);
+      obj = handle() || (n && this._isBuildable(n.data.id) ? n.object : null);
     } else if (this.mode === "panel" || this.mode === "slide") {
       obj = handle();                            // nur die Feld-Handles
     } else if (this.mode === "clamp") {
-      obj = handle() || build(["tube", "clamp"]);
+      obj = handle() || build(["tube", "clamp"])?.object || null;
     } else if (this.mode === "reinforce") {
-      obj = build(["tube"]);
+      obj = build(["tube"])?.object || null;
     }
     this.scene.setHover(obj);
   }

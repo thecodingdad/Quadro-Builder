@@ -5,6 +5,7 @@ import { OrbitControls } from "../vendor/three/OrbitControls.js";
 import { geometry, colorHex, connectorColor, getPanel } from "./catalog.js";
 
 const UP = new THREE.Vector3(0, 1, 0);
+const ONE = new THREE.Vector3(1, 1, 1);
 
 // Render-Qualitaet: steuert nur die Aufloesung der gecachten Geometrien, nicht
 // die Masse. conn = [Segmente breit, hoch] des abgerundeten Kupplungs-Wuerfels
@@ -145,6 +146,10 @@ export class SceneManager {
     // Mesh linear durchsucht wurde.
     this._keepGeos = new Set();
     this._materials = {};
+    // Sammelbecken fuer instanziert gezeichnete Teile (siehe _batchAdd).
+    this._batches = new Map();
+    // Weltpositionen der gezeichneten Kupplungen (Drehpunkt-Suche).
+    this._nodePoints = [];
 
     window.addEventListener("resize", () => this.onResize());
     // Container-Größe verfolgen: Layout der Sidebar steht beim Konstruieren
@@ -1113,6 +1118,43 @@ export class SceneManager {
     this.labelMeshes = [];
   }
 
+  // --- Instanziertes Zeichnen ---------------------------------------------
+  // Kupplungen, Arm-Stutzen und Rohre sind Hunderte gleicher Koerper. Statt je
+  // Teil ein eigenes Mesh (= ein Draw-Call) werden sie nach Geometrie UND
+  // Material gebuendelt und als ein InstancedMesh gezeichnet.
+  //
+  // Gebuendelt wird nach dem FERTIGEN Material, nicht ueber instanceColor: die
+  // Varianten (grau im Kollisions-Modus, rot, orange, blass, lila) unter-
+  // scheiden sich nicht nur in der Farbe, sondern auch in Rauheit, Emissive und
+  // Transparenz -- das laesst sich nicht je Instanz setzen. Da es nur eine
+  // Handvoll Rohrlaengen und Farben gibt, bleiben es trotzdem wenige Buendel.
+  //
+  // kind/id duerfen null sein (nicht anklickbare Teile wie die Alu-Profile).
+  _batchAdd(geo, mat, matrix, kind, id, pickList) {
+    const key = geo.uuid + "|" + mat.uuid;
+    let b = this._batches.get(key);
+    if (!b) { b = { geo, mat, mats: [], items: [], pick: pickList || null }; this._batches.set(key, b); }
+    b.mats.push(matrix);
+    b.items.push(kind ? { kind, id } : null);
+  }
+
+  // Gesammelte Buendel als InstancedMesh in die Bau-Gruppe haengen. Die
+  // Zuordnung Instanz -> Bauteil steht in userData.instances und wird beim
+  // Picking ueber intersection.instanceId aufgeloest (siehe _hitData).
+  _batchFlush() {
+    for (const b of this._batches.values()) {
+      const im = new THREE.InstancedMesh(b.geo, b.mat, b.mats.length);
+      for (let i = 0; i < b.mats.length; i++) im.setMatrixAt(i, b.mats[i]);
+      im.instanceMatrix.needsUpdate = true;
+      im.userData = { instances: b.items };
+      im.castShadow = true;
+      im.receiveShadow = true;
+      this.buildGroup.add(im);
+      if (b.pick) b.pick.push(im);
+    }
+    this._batches.clear();
+  }
+
   // Baut die Szene aus dem Modell neu auf.
   // opts.labelFor(node) -> string|null  : Beschriftung an der Kupplung.
   // opts.slideNameFor(slide) -> string|null : Beschriftung an der Rutsche/Dach.
@@ -1126,6 +1168,25 @@ export class SceneManager {
     this.pickClamps = [];
     this.pickTextiles = [];
     this.pickSlides = [];
+    this._nodePoints = [];
+    this._batches.clear();
+
+    // Hervorhebung (Cursor-Auswahl und Bestandsliste). Frueher lief das als
+    // Nachlauf ueber die fertige Gruppe und tauschte je Mesh das Material.
+    // Instanzen teilen sich ihr Material, deshalb muss die Entscheidung schon
+    // beim Anlegen fallen -- matFor() liefert das endgueltige Material.
+    // Bei der Bestands-Hervorhebung treten alle uebrigen Teile zusaetzlich
+    // zurueck (halbtransparent), damit die gesuchten im Gewirr auffallen. Fuer
+    // die Cursor-Auswahl waere das stoerend: dort waehlt man staendig etwas an.
+    const selected = opts.selected && opts.selected.size ? opts.selected : null;
+    const highlight = opts.highlight && opts.highlight.size ? opts.highlight : null;
+    const marked = selected || highlight;
+    const dimOthers = !selected && !!highlight;
+    const matFor = (id, base) => {
+      if (!marked) return base;
+      if (id != null && marked.has(id)) return this._selectedMaterial(base);
+      return dimOthers ? this._dimmedMaterial(base) : base;
+    };
 
     const tubeRadius = geometry().tubeRadius;
     const armRadius = geometry().armRadius; // C45-Arm: ~42 mm, duenner als das Rohr
@@ -1189,6 +1250,8 @@ export class SceneManager {
     for (const n of model.nodes.values()) {
       const st = stateOf(n.id);
       if (st === "future") continue;   // noch nicht gebaute Teile bleiben unsichtbar
+      // Bezugspunkte fuer die Drehpunkt-Suche (_pointUnderCursor).
+      this._nodePoints.push(new THREE.Vector3(n.x, n.y, n.z));
       let mat;
       if (st === "future") mat = this._ghostMaterial();
       else if (st === "current") mat = this._connMaterial(true);
@@ -1198,21 +1261,20 @@ export class SceneManager {
       // Kupplung -> kein dunkler Wuerfel; sie werden unten in Adapter-Farbe
       // gezeichnet (Huelse + Koerper + 45°-Arm).
       if (!n.c45body) {
-        const mesh = new THREE.Mesh(this._connGeometry(), mat);
-        mesh.position.set(n.x, n.y, n.z);
+        const pos = new THREE.Vector3(n.x, n.y, n.z);
+        const quat = new THREE.Quaternion();
         // Importierte Kupplung: Wuerfel exakt um ihre Quaternion drehen, damit die
         // Arme aus den Flaechen kommen -- auch bei Rampenwinkeln (30°/60°). Kardinale
         // Kupplungen sind invariant. Manuell gebaute Schraegen (ohne quat) drehen wie
         // bisher 45° um die Schraegen-Achse (_slopeRotationAxis).
         if (n.quat && n.quat.length === 4) {
-          mesh.quaternion.set(n.quat[0], n.quat[1], n.quat[2], n.quat[3]).normalize();
+          quat.set(n.quat[0], n.quat[1], n.quat[2], n.quat[3]).normalize();
         } else {
           const sa = this._slopeRotationAxis(model, n);
-          if (sa) mesh.quaternion.setFromAxisAngle(sa, Math.PI / 4);
+          if (sa) quat.setFromAxisAngle(sa, Math.PI / 4);
         }
-        mesh.userData = { kind: "node", id: n.id };
-        this.buildGroup.add(mesh);
-        if (st !== "future") this.pickNodes.push(mesh);
+        this._batchAdd(this._connGeometry(), matFor(n.id, mat),
+          new THREE.Matrix4().compose(pos, quat, ONE), "node", n.id, this.pickNodes);
 
         // Arm-Stutzen der Kupplung: kurze Zylinder, die in die Rohre greifen.
         // Gezeichnet wird je Richtung, in der wirklich ein Rohr steckt -- die
@@ -1223,12 +1285,11 @@ export class SceneManager {
         // haetten im Editor gebaute Kupplungen (ohne variant2) gar keine.
         for (const d of tubeDirsAt.get(n.id) || []) {
           const dv = new THREE.Vector3(d[0], d[1], d[2]);
-          const stub = new THREE.Mesh(armStubGeo, mat);
-          stub.position.set(n.x + dv.x * armStubOff, n.y + dv.y * armStubOff, n.z + dv.z * armStubOff);
-          stub.quaternion.setFromUnitVectors(UP, dv);
-          stub.userData = { kind: "node", id: n.id };
-          this.buildGroup.add(stub);
-          if (st !== "future") this.pickNodes.push(stub);
+          const p = new THREE.Vector3(
+            n.x + dv.x * armStubOff, n.y + dv.y * armStubOff, n.z + dv.z * armStubOff);
+          const q = new THREE.Quaternion().setFromUnitVectors(UP, dv);
+          this._batchAdd(armStubGeo, matFor(n.id, mat),
+            new THREE.Matrix4().compose(p, q, ONE), "node", n.id, this.pickNodes);
         }
       }
 
@@ -1236,6 +1297,7 @@ export class SceneManager {
       // KARDINALEN Arm der Basiskupplung gesteckt, davon zweigt ein 45°-Arm ab,
       // der in die Tube greift.
       if (n.c45 && st !== "future") {
+        const c45mat = matFor(n.id, this._c45Material());
         if (n.c45body) {
           // Import: n ist der Adapter-Koerper am Diagonal-Fuss; die Basis sitzt
           // am anderen Ende der Arm-Kante. Huelse laeuft kardinal von der Basis.
@@ -1245,7 +1307,7 @@ export class SceneManager {
             if (ad.baseArmLen > 0.5) {
               const baseArm = new THREE.Mesh(
                 new THREE.CylinderGeometry(armRadius, armRadius, ad.baseArmLen, 14),
-                this._c45Material());
+                c45mat);
               baseArm.position.copy(ad.baseArmMid);
               baseArm.quaternion.setFromUnitVectors(UP, ad.sleeveDir);
               baseArm.userData = { kind: "node", id: n.id };
@@ -1254,14 +1316,14 @@ export class SceneManager {
             // C45-Huelse: etwas breiter als das Rohr, der Basis-Arm steckt darin.
             const sleeve = new THREE.Mesh(
               new THREE.CylinderGeometry(tubeRadius * 1.18, tubeRadius * 1.18, ad.sleeveLen, 14),
-              this._c45Material());
+              c45mat);
             sleeve.position.copy(ad.sleeveMid);
             sleeve.quaternion.setFromUnitVectors(UP, ad.sleeveDir);
             sleeve.userData = { kind: "node", id: n.id };
             this.buildGroup.add(sleeve);
             if (st !== "future") this.pickNodes.push(sleeve);
 
-            const body = new THREE.Mesh(this._c45Geometry(), this._c45Material());
+            const body = new THREE.Mesh(this._c45Geometry(), c45mat);
             body.position.copy(ad.bodyPos);
             body.userData = { kind: "node", id: n.id };
             this.buildGroup.add(body);
@@ -1269,7 +1331,7 @@ export class SceneManager {
             if (ad.armLen > 0.5) {
               const arm = new THREE.Mesh(
                 new THREE.CylinderGeometry(armRadius, armRadius, ad.armLen, 14),
-                this._c45Material());
+                c45mat);
               arm.position.copy(ad.armMid);
               arm.quaternion.setFromUnitVectors(UP, ad.armDir);
               arm.userData = { kind: "node", id: n.id };
@@ -1283,11 +1345,11 @@ export class SceneManager {
             const dv = new THREE.Vector3(d[0], d[1], d[2]).normalize();
             const cv = this._c45ArmDirAt(model, n, d);
             const bx = n.x + cv.x * cs, by = n.y + cv.y * cs, bz = n.z + cv.z * cs;
-            const body = new THREE.Mesh(this._c45Geometry(), this._c45Material());
+            const body = new THREE.Mesh(this._c45Geometry(), c45mat);
             body.position.set(bx, by, bz);
             body.userData = { kind: "node", id: n.id };
             this.buildGroup.add(body);
-            const stub = new THREE.Mesh(this._c45StubGeometry(), this._c45Material());
+            const stub = new THREE.Mesh(this._c45StubGeometry(), c45mat);
             const stubOff = cs * 0.75;
             stub.position.set(bx + dv.x * stubOff, by + dv.y * stubOff, bz + dv.z * stubOff);
             stub.quaternion.setFromUnitVectors(UP, dv);
@@ -1338,7 +1400,8 @@ export class SceneManager {
           : (asm && st === "done") ? this._fadedMaterial(colorHex(t.color))
           : this._tubeMaterial(t.color);
         const bowMesh = new THREE.Mesh(
-          new THREE.TubeGeometry(bowCurve, 24, tubeRadius, qual.bow, false), bowMat
+          new THREE.TubeGeometry(bowCurve, 24, tubeRadius, qual.bow, false),
+          matFor(t.id, bowMat)
         );
         bowMesh.userData = { kind: "tube", id: t.id };
         bowMesh.castShadow = true;
@@ -1368,13 +1431,10 @@ export class SceneManager {
         : (reinforce || collision) ? this._tubeGray()
         : (asm && st === "done") ? this._fadedMaterial(colorHex(t.color))
         : this._tubeMaterial(t.color);
-      const mesh = new THREE.Mesh(isReinforceActive ? geo2 : geo, mat);
-      mesh.position.copy(mid);
       const dir = vb.clone().sub(va).normalize();
-      mesh.quaternion.setFromUnitVectors(UP, dir);
-      mesh.userData = { kind: "tube", id: t.id };
-      this.buildGroup.add(mesh);
-      if (st !== "future") this.pickTubes.push(mesh);
+      const quat = new THREE.Quaternion().setFromUnitVectors(UP, dir);
+      this._batchAdd(isReinforceActive ? geo2 : geo, matFor(t.id, mat),
+        new THREE.Matrix4().compose(mid, quat, ONE), "tube", t.id, this.pickTubes);
 
       // Verstaerkungsprofil: dünner Alu-Innenstab im Bauen-Modus sichtbar.
       // Das Profil (ca. 2,5 cm) liegt im hohlen Rohr (5 cm Außen-Ø) und ragt
@@ -1384,10 +1444,9 @@ export class SceneManager {
         // Rohr (49 mm aussen, 3 mm Wandstaerke -> 43 mm Innen-Durchmesser).
         const rodRadius = 1.5;  // 15 mm Radius = 30 mm Durchmesser in cm
         const rodGeo = this._tubeGeometry(rodRadius, len, 8);
-        const rodMesh = new THREE.Mesh(rodGeo, this._rodMaterial());
-        rodMesh.position.copy(mid);
-        rodMesh.quaternion.copy(mesh.quaternion);
-        this.buildGroup.add(rodMesh);
+        // Nicht anklickbar (kind null) -- das Profil steckt im Rohr.
+        this._batchAdd(rodGeo, matFor(null, this._rodMaterial()),
+          new THREE.Matrix4().compose(mid, quat, ONE), null, null, null);
       }
 
       // Laengen-Beschriftung: gleiche Sichtbarkeitsregel wie die Kupplungs-Namen.
@@ -1424,19 +1483,18 @@ export class SceneManager {
       const mat = st === "future" ? this._ghostMaterial()
         : (asm && st === "done") ? this._fadedMaterial(colorHex(p.color))
         : this._panelMaterial(p.color, st === "current", false);
-      const mesh = new THREE.Mesh(geo, mat);
-      mesh.quaternion.setFromRotationMatrix(new THREE.Matrix4().makeBasis(xAxis, yAxis, zAxis));
-      mesh.position.copy(center);
-      mesh.userData = { kind: "panel", id: p.id };
-      this.buildGroup.add(mesh);
-      if (st !== "future") this.pickPanels.push(mesh);
+      // Gleiches Mass + gleiche Farbe teilen sich Geometrie und Material -> ein
+      // Buendel. In grossen Modellen sind die Platten sonst der groesste
+      // verbliebene Posten (56 Platten = 56 Draw-Calls).
+      const basis = new THREE.Matrix4().makeBasis(xAxis, yAxis, zAxis).setPosition(center);
+      this._batchAdd(geo, matFor(p.id, mat), basis, "panel", p.id, this.pickPanels);
 
       // Bällebad-Boden: Wasser-Volumen (75 % Füllhöhe) über dem Boden rendern.
       if (p.panelId === "pool_floor" && st !== "future") {
         const wallH = 40;                   // Wandhöhe pool2 in cm
         const waterH = wallH * 0.75;        // 30 cm Wasserstand
         const wGeo = new THREE.BoxGeometry(u.length(), waterH, w.length());
-        const wMesh = new THREE.Mesh(wGeo, this._waterMaterial());
+        const wMesh = new THREE.Mesh(wGeo, matFor(null, this._waterMaterial()));
         // Mitte des Wassers: Boden-Deckfläche + waterH/2  (kein Z-Fighting mit Bodenplatte)
         wMesh.quaternion.setFromRotationMatrix(new THREE.Matrix4().makeBasis(xAxis, yAxis, zAxis));
         wMesh.position.copy(center).addScaledVector(yAxis, thickness / 2 + waterH / 2);
@@ -1451,7 +1509,7 @@ export class SceneManager {
     for (const c of (model.clamps ? model.clamps.values() : [])) {
       const st = stateOf(c.id);
       if (st === "future") continue;
-      const mat = this._clampMaterial();
+      const mat = matFor(c.id, this._clampMaterial());
       const dir = c.dir ? new THREE.Vector3(c.dir[0], c.dir[1], c.dir[2]).normalize() : new THREE.Vector3(1, 0, 0);
       const q = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 0, 1), dir);
       const h = c.off ? [c.off[0] / 2, c.off[1] / 2, c.off[2] / 2] : null;
@@ -1459,12 +1517,9 @@ export class SceneManager {
         ? [[c.x - h[0], c.y - h[1], c.z - h[2]], [c.x + h[0], c.y + h[1], c.z + h[2]]]
         : [[c.x, c.y, c.z]];
       for (const [px, py, pz] of centers) {
-        const mesh = new THREE.Mesh(ringGeo, mat);
-        mesh.position.set(px, py, pz);
-        mesh.quaternion.copy(q);
-        mesh.userData = { kind: "clamp", id: c.id };
-        this.buildGroup.add(mesh);
-        if (st !== "future") this.pickClamps.push(mesh);
+        this._batchAdd(ringGeo, mat,
+          new THREE.Matrix4().compose(new THREE.Vector3(px, py, pz), q, ONE),
+          "clamp", c.id, this.pickClamps);
       }
     }
 
@@ -1486,7 +1541,8 @@ export class SceneManager {
       const zAxis = w.clone().normalize();
       const yAxis = new THREE.Vector3().crossVectors(zAxis, xAxis).normalize();
       const geo = new THREE.BoxGeometry(u.length(), 0.6, w.length());
-      const mat = st === "future" ? this._ghostMaterial() : this._panelMaterial(tx.color, st === "current", true);
+      const mat = matFor(tx.id,
+        st === "future" ? this._ghostMaterial() : this._panelMaterial(tx.color, st === "current", true));
       const mesh = new THREE.Mesh(geo, mat);
       mesh.quaternion.setFromRotationMatrix(new THREE.Matrix4().makeBasis(xAxis, yAxis, zAxis));
       mesh.position.copy(center);
@@ -1505,9 +1561,9 @@ export class SceneManager {
       if (hideFlat) continue;
       const st = stateOf(sl.id);
       if (st === "future") continue;
-      const mat = (asm && st === "done")
+      const mat = matFor(sl.id, (asm && st === "done")
         ? this._fadedMaterial(sl.color ? colorHex(sl.color) : 0xd23b3b)
-        : this._slideMatFor(sl.kind, st === "current", sl.color);
+        : this._slideMatFor(sl.kind, st === "current", sl.color));
 
       // Beschriftung: Name des Rutschenenteils/Dachs wenn Labels aktiv.
       if (slideNameFor && wantsLabel(sl.id) && st !== "future") {
@@ -1531,24 +1587,8 @@ export class SceneManager {
       if (sl.kind === "roof2") { this._addRoof(sl, model, mat, st); continue; }
     }
 
-    // Cursor-Modus: ausgewaehlte Teile hervorheben. Als Nachlauf ueber die
-    // fertige Gruppe, damit nicht jeder einzelne Material-Aufruf eine
-    // Auswahl-Variante kennen muss.
-    // Cursor-Auswahl und Bestands-Hervorhebung nutzen dieselbe Darstellung.
-    // Bei der Bestands-Hervorhebung treten alle uebrigen Teile zusaetzlich
-    // zurueck (halbtransparent), damit die gesuchten im Gewirr auffallen. Fuer
-    // die Cursor-Auswahl waere das stoerend: dort waehlt man staendig etwas an.
-    const selected = opts.selected && opts.selected.size ? opts.selected : null;
-    const highlight = opts.highlight && opts.highlight.size ? opts.highlight : null;
-    const marked = selected || highlight;
-    const dimOthers = !selected && !!highlight;
-    if (marked) {
-      this.buildGroup.traverse((o) => {
-        if (!o.isMesh || !o.userData) return;
-        if (marked.has(o.userData.id)) o.material = this._selectedMaterial(o.material);
-        else if (dimOthers) o.material = this._dimmedMaterial(o.material);
-      });
-    }
+    // Gesammelte Kupplungen, Arm-Stutzen und Rohre als InstancedMesh anlegen.
+    this._batchFlush();
 
     // Schnittebene: Materialien muessen clipShadows tragen, sonst werfen
     // weggeschnittene Teile weiterhin Schatten auf den Boden. Die Materialien
@@ -1890,6 +1930,21 @@ export class SceneManager {
   }
 
   /**
+   * Nutzdaten eines Treffers. Bei instanziert gezeichneten Teilen (Kupplungen,
+   * Rohre) traegt nicht das Mesh die id, sondern der Platz in userData.instances
+   * -- welcher Platz, sagt intersection.instanceId.
+   */
+  _hitData(hit) {
+    if (!hit) return null;
+    const o = hit.object;
+    if (o.isInstancedMesh) {
+      const list = o.userData && o.userData.instances;
+      return (list && hit.instanceId != null && list[hit.instanceId]) || null;
+    }
+    return o.userData || null;
+  }
+
+  /**
    * Weltpunkt unter dem Mauszeiger (Bauteil-Treffer, sonst Bodenebene).
    */
   _pointUnderCursor(clientX, clientY) {
@@ -1903,10 +1958,8 @@ export class SceneManager {
     // Daneben getroffen: die Kupplung nehmen, die dem Sehstrahl am naechsten
     // liegt. Ein Drehpunkt auf dem leeren Boden liegt sonst je nach Blickwinkel
     // weit weg vom Modell und das Drehen fuehlt sich wieder aus wie um nichts.
-    const v = new THREE.Vector3();
     let best = null, bestD = Infinity;
-    for (const m of this.pickNodes) {
-      v.setFromMatrixPosition(m.matrixWorld);
+    for (const v of this._nodePoints) {
       if (this._clipPlane && this._clipPlane.distanceToPoint(v) < 0) continue;
       const d = this._raycaster.ray.distanceToPoint(v);
       if (d < bestD) { bestD = d; best = v.clone(); }
@@ -2055,7 +2108,8 @@ export class SceneManager {
       clientX, clientY,
       [...this.pickNodes, ...this.pickTubes, ...this.pickPanels, ...this.pickClamps, ...this.pickTextiles]
     );
-    return hit ? { object: hit.object, data: hit.object.userData, point: hit.point } : null;
+    const data = this._hitData(hit);
+    return data ? { object: hit.object, data, point: hit.point } : null;
   }
 
   // Wie pickBuild, aber inkl. Rutschen/Dächer (nur fuers Loeschen relevant; im
@@ -2066,7 +2120,8 @@ export class SceneManager {
       [...this.pickNodes, ...this.pickTubes, ...this.pickPanels, ...this.pickClamps,
        ...this.pickTextiles, ...this.pickSlides]
     );
-    return hit ? { object: hit.object, data: hit.object.userData, point: hit.point } : null;
+    const data = this._hitData(hit);
+    return data ? { object: hit.object, data, point: hit.point } : null;
   }
 
   // --- Auswahl-Rechteck (Cursor-Modus) ------------------------------------
@@ -2104,18 +2159,31 @@ export class SceneManager {
     const minY = Math.min(y0, y1), maxY = Math.max(y0, y1);
     const out = new Map();
     const v = new THREE.Vector3();
+    const mat = new THREE.Matrix4();
     this.scene.updateMatrixWorld();
     const meshes = [...this.pickNodes, ...this.pickTubes, ...this.pickPanels,
                     ...this.pickClamps, ...this.pickTextiles, ...this.pickSlides];
-    for (const m of meshes) {
-      const d = m.userData;
-      if (!d || !d.id || out.has(d.id)) continue;
+    // Mittelpunkt eines Teils auf den Bildschirm projizieren und pruefen.
+    const test = (m, world, d) => {
+      if (!d || !d.id || out.has(d.id)) return;
       if (!m.geometry.boundingBox) m.geometry.computeBoundingBox();
-      m.geometry.boundingBox.getCenter(v).applyMatrix4(m.matrixWorld).project(this.camera);
-      if (v.z > 1) continue;   // hinter der Kamera
+      m.geometry.boundingBox.getCenter(v).applyMatrix4(world).project(this.camera);
+      if (v.z > 1) return;   // hinter der Kamera
       const sx = r.left + (v.x * 0.5 + 0.5) * r.width;
       const sy = r.top + (-v.y * 0.5 + 0.5) * r.height;
       if (sx >= minX && sx <= maxX && sy >= minY && sy <= maxY) out.set(d.id, d.kind);
+    };
+    for (const m of meshes) {
+      if (m.isInstancedMesh) {
+        const list = (m.userData && m.userData.instances) || [];
+        for (let i = 0; i < list.length; i++) {
+          if (!list[i]) continue;
+          m.getMatrixAt(i, mat);
+          test(m, mat.premultiply(m.matrixWorld), list[i]);
+        }
+      } else {
+        test(m, m.matrixWorld, m.userData);
+      }
     }
     return out;
   }
@@ -2143,6 +2211,9 @@ export class SceneManager {
       const c = group.children[i];
       // Rekursiv (verschachtelte Gruppen, z.B. Rutschen) Geometrien freigeben.
       c.traverse((o) => {
+        // InstancedMesh haelt eigene Attribut-Puffer (Matrizen) auf der GPU --
+        // die gibt nur dispose() frei, nicht das Wegwerfen der Geometrie.
+        if (o.isInstancedMesh) o.dispose();
         if (o.geometry && !keep.has(o.geometry)) o.geometry.dispose();
       });
       group.remove(c);
