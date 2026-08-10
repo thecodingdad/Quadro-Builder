@@ -39,6 +39,17 @@ const CONNECTOR_ROUNDNESS = 3;
 const ZOOM_OUT_FACTOR = 3;
 const MIN_ZOOM_OUT_DISTANCE = 600;   // cm
 
+// Wie nah darf der Blick an Drauf- und Untersicht heran? OrbitControls rechnet
+// mit fester Oben-Achse und entartet genau am Pol, deshalb bleibt ein Rest von
+// gut einem Zehntelgrad -- sichtbar ist der nicht.
+const POLE_GAP = 0.002;                          // rad
+const MAX_PITCH = Math.PI / 2 - POLE_GAP;
+
+// Ansichtswuerfel oben rechts im Viewport (Fusion-Vorbild).
+const CUBE_PX = 104;        // Kantenlaenge des Ausschnitts in CSS-Pixeln
+const CUBE_MARGIN = 14;
+const CUBE_SNAP_MS = 320;   // Dauer des Kameraschwenks beim Klick
+
 // Hintergrundfarben fuer die Beschriftung nach Kategorie (Aufbaumodus-Hervorhebung).
 const LABEL_BG = {
   tube75: "rgba(139,61,245,0.94)",  // 75er Rohre - violett
@@ -167,6 +178,7 @@ export class SceneManager {
       this._resizeObserver = new ResizeObserver(() => this.onResize());
       this._resizeObserver.observe(container);
     }
+    this._buildViewCube();
     this._animate = this._animate.bind(this);
     this._animate();
   }
@@ -2148,6 +2160,15 @@ export class SceneManager {
     return !!this._orbitPivot;
   }
 
+  /**
+   * Drehen um den aktuellen Bezugspunkt statt um einen Punkt unter dem Zeiger.
+   * Fuer das Ziehen am Ansichtswuerfel: dort liegt der Zeiger neben der Szene.
+   */
+  beginOrbitAtTarget() {
+    this._orbitPivot = this.controls ? this.controls.target.clone() : null;
+    return !!this._orbitPivot;
+  }
+
   endOrbit() {
     if (!this._orbitPivot) return;
     this._orbitPivot = null;
@@ -2195,16 +2216,29 @@ export class SceneManager {
     const pitch = -2 * Math.PI * dy / h;
     const cam = this.camera;
     cam.updateMatrixWorld();
-    const right = new THREE.Vector3().setFromMatrixColumn(cam.matrixWorld, 0).normalize();
+    // Waagerecht halten: nur um die Welt-Y-Achse und um die WAAGERECHTE
+    // Kamera-Rechtsachse drehen -- so sammelt sich keine Rollung an.
+    const right = new THREE.Vector3().setFromMatrixColumn(cam.matrixWorld, 0);
+    right.y = 0;
+    if (right.lengthSq() < 1e-8) right.set(1, 0, 0);
+    right.normalize();
     const fwd = new THREE.Vector3();
     cam.getWorldDirection(fwd);
 
+    // Neigung so BEGRENZEN, dass der Blick knapp vor dem Pol stehen bleibt --
+    // frueher wurde sie ab 84 Grad ganz verworfen, die Draufsicht war damit gar
+    // nicht erreichbar. Der Rest von 0,1 Grad haelt OrbitControls (rechnet mit
+    // fester Oben-Achse) aus der Entartung heraus und ist nicht zu sehen.
+    const clamp1 = (v) => Math.max(-1, Math.min(1, v));
+    const phi = Math.asin(clamp1(fwd.y));
+    // Vorzeichen: hebt eine positive Neigung um `right` den Blick oder senkt sie ihn?
+    const probe = fwd.clone().applyQuaternion(
+      new THREE.Quaternion().setFromAxisAngle(right, 1e-3));
+    const sign = probe.y >= fwd.y ? 1 : -1;
+    const phiNext = Math.max(-MAX_PITCH, Math.min(MAX_PITCH, phi + sign * pitch));
     const qYaw = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), yaw);
-    const qPitch = new THREE.Quaternion().setFromAxisAngle(right, pitch);
-    // Ueberschlag am Pol vermeiden: Neigung nur anwenden, solange der Blick
-    // nicht fast senkrecht steht.
-    const q = Math.abs(fwd.clone().applyQuaternion(qPitch).y) > 0.995
-      ? qYaw : qYaw.multiply(qPitch);
+    const qPitch = new THREE.Quaternion().setFromAxisAngle(right, sign * (phiNext - phi));
+    const q = qYaw.multiply(qPitch);
 
     const move = (v) => v.sub(P).applyQuaternion(q).add(P);
     move(cam.position);
@@ -2778,13 +2812,215 @@ export class SceneManager {
     this._needsRender = true;
   }
 
+  // --- Ansichtswuerfel -----------------------------------------------------
+  // Kleiner Wuerfel oben rechts, der die Blickrichtung zeigt und auf Klick die
+  // Kamera dorthin schwenkt (Vorbild Fusion 360).
+  //
+  // Gezeichnet wird er im SELBEN Renderer ueber setViewport/setScissor, nicht
+  // in einem zweiten Canvas: ein zweiter WebGL-Kontext kostet auf der
+  // GPU-losen Testmaschine spuerbar und muesste beim Renderer-Tausch
+  // (Kantenglaettung) mitgezogen werden.
+  _buildViewCube() {
+    this._cubeScene = new THREE.Scene();
+    // Orthografisch, damit der Wuerfel unabhaengig von der Hauptprojektion
+    // immer gleich aussieht. Der Ausschnitt fasst auch die Ecken der Diagonale.
+    this._cubeCam = new THREE.OrthographicCamera(-1.75, 1.75, 1.75, -1.75, 0.1, 40);
+    // Hell ausgeleuchtet: der Wuerfel ist ein Bedienelement, kein Bauteil --
+    // er soll vor jedem Hintergrund gleich gut lesbar sein.
+    this._cubeScene.add(new THREE.AmbientLight(0xffffff, 2.0));
+    const light = new THREE.DirectionalLight(0xffffff, 1.1);
+    light.position.set(4, 6, 5);
+    this._cubeScene.add(light);
+
+    // Wuerfelkoerper. Materialreihenfolge von BoxGeometry: +X, -X, +Y, -Y, +Z, -Z.
+    this._cubeFaceOrder = ["right", "left", "top", "bottom", "front", "back"];
+    this._cubeFaceMats = this._cubeFaceOrder.map(() => new THREE.MeshLambertMaterial({ color: 0xf2f4f8 }));
+    this._cubeBody = new THREE.Mesh(new THREE.BoxGeometry(2, 2, 2), this._cubeFaceMats);
+    this._cubeScene.add(this._cubeBody);
+
+    // Kanten nachziehen, sonst verschwimmt der Wuerfel vor hellem Hintergrund.
+    const edges = new THREE.LineSegments(
+      new THREE.EdgesGeometry(this._cubeBody.geometry),
+      new THREE.LineBasicMaterial({ color: 0x8a94a3 }));
+    this._cubeScene.add(edges);
+
+    // 26 Klickfelder: das 3x3x3-Raster ohne die Mitte. Ein Feld mit einer
+    // Nicht-Null-Achse ist eine Flaeche, mit zweien eine Kante, mit dreien eine
+    // Ecke -- die Blickrichtung ist einfach seine normierte Lage.
+    this._cubeCellMat = new THREE.MeshBasicMaterial({
+      color: 0x1a8cff, transparent: true, opacity: 0, depthWrite: false });
+    this._cubeCellHoverMat = new THREE.MeshBasicMaterial({
+      color: 0x1a8cff, transparent: true, opacity: 0.42, depthWrite: false });
+    this._cubeCells = [];
+    const third = 2 / 3;
+    for (let x = -1; x <= 1; x++) {
+      for (let y = -1; y <= 1; y++) {
+        for (let z = -1; z <= 1; z++) {
+          if (!x && !y && !z) continue;
+          const cell = new THREE.Mesh(
+            new THREE.BoxGeometry(third, third, third), this._cubeCellMat);
+          // Knapp ausserhalb der Wuerfelflaeche, damit die Hervorhebung nicht
+          // mit dem Koerper um dieselben Pixel streitet.
+          cell.position.set(x * third * 1.03, y * third * 1.03, z * third * 1.03);
+          cell.userData = { dir: [x, y, z] };
+          this._cubeScene.add(cell);
+          this._cubeCells.push(cell);
+        }
+      }
+    }
+    this._cubeHover = null;
+    this._cubeEnabled = true;
+  }
+
+  /**
+   * Beschriftung der sechs Flaechen. Kommt von aussen (ui.js), damit scene.js
+   * die Sprachdateien nicht kennen muss; bei Sprachwechsel erneut aufrufen.
+   * labels: { right, left, top, bottom, front, back }
+   */
+  setViewCubeLabels(labels) {
+    if (!this._cubeFaceMats) return;
+    this._cubeFaceOrder.forEach((key, i) => {
+      const mat = this._cubeFaceMats[i];
+      if (mat.map) mat.map.dispose();
+      mat.map = this._cubeFaceTexture(labels[key] || "");
+      mat.needsUpdate = true;
+    });
+    this._needsRender = true;
+  }
+
+  _cubeFaceTexture(text) {
+    const S = 128;
+    const cv = document.createElement("canvas");
+    cv.width = cv.height = S;
+    const g = cv.getContext("2d");
+    g.fillStyle = "#f2f4f8";
+    g.fillRect(0, 0, S, S);
+    g.fillStyle = "#1f2733";
+    g.font = "700 23px system-ui, sans-serif";
+    g.textAlign = "center";
+    g.textBaseline = "middle";
+    g.fillText(String(text).toUpperCase(), S / 2, S / 2);
+    const tex = new THREE.CanvasTexture(cv);
+    // Ohne sRGB-Kennzeichnung liest Three die Farbwerte als linear und die
+    // Schrift kommt ausgewaschen heraus (gemessen: Helligkeit 140 statt 50
+    // gegen einen Grund von 220).
+    tex.colorSpace = THREE.SRGBColorSpace;
+    tex.anisotropy = 4;
+    return tex;
+  }
+
+  /** Ausschnitt des Wuerfels in CSS-Pixeln, gemessen von der linken oberen Ecke. */
+  _cubeRect() {
+    const w = this.container.clientWidth, h = this.container.clientHeight;
+    if (w < CUBE_PX * 2 || h < CUBE_PX * 2) return null;   // zu wenig Platz
+    return { x: w - CUBE_PX - CUBE_MARGIN, y: CUBE_MARGIN, size: CUBE_PX, w, h };
+  }
+
+  _renderViewCube() {
+    if (!this._cubeEnabled) return;
+    const r = this._cubeRect();
+    if (!r) return;
+    // Wuerfel genauso ausrichten wie die Hauptkamera und von aussen anschauen.
+    this._cubeCam.quaternion.copy(this.camera.quaternion);
+    this._cubeCam.position.set(0, 0, 1).applyQuaternion(this.camera.quaternion).multiplyScalar(12);
+    this._cubeCam.updateProjectionMatrix();
+
+    const gl = this.renderer;
+    const yBottom = r.h - r.y - r.size;    // Viewport rechnet von unten
+    gl.autoClear = false;
+    gl.setScissorTest(true);
+    gl.setViewport(r.x, yBottom, r.size, r.size);
+    gl.setScissor(r.x, yBottom, r.size, r.size);
+    gl.clearDepth();
+    // Clipping der Schnittebene gilt nur fuer das Modell.
+    const clip = gl.clippingPlanes;
+    gl.clippingPlanes = [];
+    gl.render(this._cubeScene, this._cubeCam);
+    gl.clippingPlanes = clip;
+    gl.setScissorTest(false);
+    gl.setViewport(0, 0, r.w, r.h);
+    gl.autoClear = true;
+  }
+
+  /** Getroffenes Feld des Ansichtswuerfels oder null. */
+  pickViewCube(clientX, clientY) {
+    if (!this._cubeEnabled) return null;
+    const r = this._cubeRect();
+    if (!r) return null;
+    const box = this.renderer.domElement.getBoundingClientRect();
+    const cx = clientX - box.left, cy = clientY - box.top;
+    if (cx < r.x || cx > r.x + r.size || cy < r.y || cy > r.y + r.size) return null;
+    this._mouse.x = ((cx - r.x) / r.size) * 2 - 1;
+    this._mouse.y = -(((cy - r.y) / r.size) * 2 - 1);
+    this._raycaster.setFromCamera(this._mouse, this._cubeCam);
+    const hits = this._raycaster.intersectObjects(this._cubeCells, false);
+    return hits.length ? hits[0].object : null;
+  }
+
+  setViewCubeHover(cell) {
+    if (this._cubeHover === cell) return;
+    if (this._cubeHover) this._cubeHover.material = this._cubeCellMat;
+    this._cubeHover = cell || null;
+    if (this._cubeHover) this._cubeHover.material = this._cubeCellHoverMat;
+    this._needsRender = true;
+  }
+
+  /**
+   * Kamera auf eine Blickrichtung schwenken (Klick auf den Ansichtswuerfel).
+   * dir zeigt vom Modell zur Kamera. Abstand und Drehpunkt bleiben.
+   */
+  snapToDirection(dir) {
+    if (!this.controls) return false;
+    const target = this.controls.target.clone();
+    const dist = this.camera.position.distanceTo(target) || 200;
+    const v = new THREE.Vector3(dir[0], dir[1], dir[2]);
+    if (v.lengthSq() < 1e-9) return false;
+    v.normalize();
+    // Genau senkrecht waere fuer OrbitControls entartet -- minimal kippen, wie
+    // beim Drehen von Hand (siehe POLE_GAP).
+    if (Math.abs(v.y) > Math.cos(POLE_GAP)) {
+      v.set(0, Math.sign(v.y) * Math.cos(POLE_GAP), -Math.sin(POLE_GAP));
+    }
+    this._camAnim = {
+      from: this.camera.position.clone().sub(target).normalize(),
+      to: v,
+      target,
+      dist,
+      t0: performance.now(),
+    };
+    this._needsRender = true;
+    return true;
+  }
+
+  _stepCameraAnimation() {
+    const a = this._camAnim;
+    if (!a) return false;
+    const k = Math.min(1, (performance.now() - a.t0) / CUBE_SNAP_MS);
+    // Weich anlaufen und auslaufen.
+    const e = k < 0.5 ? 2 * k * k : 1 - Math.pow(-2 * k + 2, 2) / 2;
+    const v = new THREE.Vector3().copy(a.from).lerp(a.to, e);
+    if (v.lengthSq() < 1e-9) v.copy(a.to);
+    v.normalize();
+    this.camera.position.copy(a.target).addScaledVector(v, a.dist);
+    this.camera.up.set(0, 1, 0);
+    this.controls.target.copy(a.target);
+    this.controls.update();
+    if (k >= 1) {
+      this._camAnim = null;
+      this.onCameraChange();
+    }
+    return true;
+  }
+
   _animate() {
     requestAnimationFrame(this._animate);
+    if (this._stepCameraAnimation()) this._needsRender = true;
     // controls.update() liefert true, solange das Damping noch nachlaeuft.
     if (this.controls.update()) this._needsRender = true;
     if (this._updateTreeCamera()) this._needsRender = true;
     if (!this._needsRender) return;
     this._needsRender = false;
     this.renderer.render(this.scene, this.camera);
+    this._renderViewCube();
   }
 }

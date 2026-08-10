@@ -869,6 +869,14 @@ export class Builder {
       };
       this._boxing = false;
       this._last = { x: e.clientX, y: e.clientY };
+      // Ansichtswuerfel liegt ueber allem: ein Zug dort dreht nicht die Szene.
+      this._cubeDown = e.button === 0 ? this.scene.pickViewCube(e.clientX, e.clientY) : null;
+      if (this._cubeDown) {
+        this._down = null;
+        this._cubeDrag = null;
+        this._cubeStart = { x: e.clientX, y: e.clientY };
+        return;
+      }
       // Zeiger festhalten: sonst geht das pointerup verloren, wenn man beim
       // Aufziehen ueber den Rand des Canvas hinauszieht.
       if (el.setPointerCapture) { try { el.setPointerCapture(e.pointerId); } catch { /* egal */ } }
@@ -897,6 +905,29 @@ export class Builder {
   // auch wirklich anklickbar ist -- sonst verspricht er Interaktionen, die es
   // nicht gibt.
   _onMove(e) {
+    // Am Wuerfel ziehen dreht die Ansicht frei -- um den Bezugspunkt, denn der
+    // Zeiger steht ja neben der Szene.
+    if (this._cubeDown && (e.buttons & 1)) {
+      if (!this._cubeDrag &&
+          Math.hypot(e.clientX - this._cubeStart.x, e.clientY - this._cubeStart.y) > CLICK_TOLERANCE) {
+        this._cubeDrag = true;
+        this.scene.beginOrbitAtTarget();
+        this._last = { x: e.clientX, y: e.clientY };
+      }
+      if (this._cubeDrag) {
+        const dx = e.clientX - this._last.x, dy = e.clientY - this._last.y;
+        this._last = { x: e.clientX, y: e.clientY };
+        if (dx || dy) this.scene.orbitBy(dx, dy);
+      }
+      return;
+    }
+    // Ansichtswuerfel zuerst: solange der Zeiger darueber steht, gilt nichts
+    // anderes -- er liegt als Bedienelement ueber der Szene.
+    if (!(e.buttons & 1)) {
+      const cell = this.scene.pickViewCube(e.clientX, e.clientY);
+      this.scene.setViewCubeHover(cell);
+      if (cell) { this.scene.setHover(null); this.scene.setCursor("pointer"); return; }
+    }
     // Cursor-Modus: mit gedrueckter linker Taste ziehen zieht ein Auswahl-
     // Rechteck auf, statt zu drehen (das liegt dort auf der rechten Taste).
     // Auswahl wird gerade geschoben.
@@ -949,6 +980,16 @@ export class Builder {
   }
 
   _onUp(e) {
+    // Klick auf den Ansichtswuerfel: Kamera dorthin schwenken.
+    if (this._cubeDown) {
+      const dragged = this._cubeDrag;
+      this._cubeDown = null;
+      this._cubeDrag = null;
+      if (dragged) { this.scene.endOrbit(); return; }
+      const cell = this.scene.pickViewCube(e.clientX, e.clientY);
+      if (cell) this.scene.snapToDirection(cell.userData.dir);
+      return;
+    }
     const d = this._down;
     this._down = null;
     // Verschieben abschliessen: hier faellt der eine Undo-Schritt an und hier

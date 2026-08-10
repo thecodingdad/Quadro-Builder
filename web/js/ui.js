@@ -71,6 +71,7 @@ export function initUI({ scene, model, builder }) {
       applyTranslations();
       renderHelpTable();
       renderColorButtons();
+      applyViewCubeLabels();
       renderOrderOptions();
       renderPartButtons();
       renderQualityOptions();
@@ -80,6 +81,17 @@ export function initUI({ scene, model, builder }) {
       update();
     });
   }
+
+  // Beschriftung des Ansichtswuerfels. scene.js kennt die Sprachdateien nicht,
+  // deshalb kommen die sechs Woerter von hier -- auch nach jedem Sprachwechsel.
+  function applyViewCubeLabels() {
+    scene.setViewCubeLabels({
+      right: t("cube_right"), left: t("cube_left"),
+      top: t("cube_top"), bottom: t("cube_bottom"),
+      front: t("cube_front"), back: t("cube_back"),
+    });
+  }
+  applyViewCubeLabels();
 
   // --- Hinweise + Undo-Verfuegbarkeit ------------------------------------
   builder.onNotice = (msg) => flash(msg);
