@@ -1311,6 +1311,10 @@ export class SceneManager {
     // null = alle, die labelFor/slideNameFor liefern.
     const labelIds = opts.labelIds || null;
     const wantsLabel = (id) => !labelIds || labelIds.has(id);
+    // Einzeln angeklicktes Teil: wird IMMER beschriftet, auch wenn es im
+    // Aufbaumodus nicht zum aktuellen Schritt gehoert (dort ist Nachschlagen
+    // gerade der Zweck).
+    const soloId = opts.soloId != null ? opts.soloId : null;
     const suggest = opts.suggest || null;
     const reinforce = opts.reinforce || false;
     // Kollisions-Modus: betroffene Rohre rot, alle anderen grau. Platten und
@@ -1486,7 +1490,8 @@ export class SceneManager {
       }
 
       // Beschriftung: im Aufbaumodus nur die aktuelle Ebene, sonst alle sichtbaren.
-      const showLabel = labelFor && wantsLabel(n.id) && (asm ? st === "current" : st !== "future");
+      const showLabel = labelFor && wantsLabel(n.id) &&
+        (n.id === soloId || (asm ? st === "current" : st !== "future"));
       if (showLabel) {
         const info = labelFor(n);
         const text = typeof info === "string" ? info : info && info.text;
@@ -1593,7 +1598,8 @@ export class SceneManager {
       }
 
       // Laengen-Beschriftung: gleiche Sichtbarkeitsregel wie die Kupplungs-Namen.
-      const showTubeLabel = labelFor && wantsLabel(t.id) && (asm ? st === "current" : st !== "future");
+      const showTubeLabel = labelFor && wantsLabel(t.id) &&
+        (t.id === soloId || (asm ? st === "current" : st !== "future"));
       if (showTubeLabel) {
         const cm = t.length != null ? t.length : Math.round(len - cs);
         const category = t.tubeId === "T75" ? "tube75" : null;

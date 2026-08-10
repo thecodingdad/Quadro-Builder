@@ -1029,6 +1029,9 @@ export function initUI({ scene, model, builder }) {
     const plan = builder.buildPlan;
     const total = plan.steps.length;
     const i = builder.assemblyStep;
+    // Wurde die Hervorhebung von aussen aufgehoben (Klick auf ein Teil im
+    // Modell), darf keine Zeile mehr markiert bleiben.
+    if (!builder.highlight) asmHighlightKey = null;
     // Die Hervorhebung gilt immer nur fuer den gezeigten Schritt.
     if (i !== asmShownStep) {
       asmShownStep = i;

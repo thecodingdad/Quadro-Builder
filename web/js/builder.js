@@ -530,9 +530,10 @@ export class Builder {
   refresh() {
     const assembly = this.mode === "assembly" && this.buildPlan.steps.length
       ? this._assemblyVisibility() : null;
-    // Cursor-Modus mit genau EINEM gewaehlten Teil: dessen Namen anzeigen --
-    // dieselben Sprites wie der "Namen"-Schalter, nur auf dieses Teil begrenzt.
-    const soloId = this.mode === "select" && this.selection.size === 1
+    // Genau EIN gewaehltes Teil: dessen Namen anzeigen -- dieselben Sprites wie
+    // der "Namen"-Schalter, nur auf dieses Teil begrenzt. Gilt im Cursor-Modus
+    // und im Aufbau-Modus, wo man so ein Teil nachschlagen kann.
+    const soloId = (this.mode === "select" || this.mode === "assembly") && this.selection.size === 1
       ? [...this.selection.keys()][0] : null;
     const withLabels = this.showLabels || soloId != null;
     const labelFor = withLabels ? (node) => connectorLabelInfo(this.model, node) : null;
@@ -544,9 +545,11 @@ export class Builder {
     // Kollisions-Modus: immer ein Set (auch leeres), damit die Szene den Modus
     // erkennt und die uebrigen Rohre grau zeichnet.
     const collide = this.mode === "collision" ? this.model.collisions() : null;
-    const selected = this.mode === "select" && this.selection.size ? this.selection : null;
+    const selected = (this.mode === "select" || this.mode === "assembly") && this.selection.size
+      ? this.selection : null;
     this.scene.renderModel(this.model, this.selectedNodeId,
-      { labelFor, slideNameFor, labelIds, assembly, suggest, reinforce, collide, selected, highlight: this.highlight });
+      { labelFor, slideNameFor, labelIds, soloId, assembly, suggest, reinforce, collide,
+        selected, highlight: this.highlight });
     this._buildHandles();
     this.scene.requestRender();
     this.onChange();
@@ -970,6 +973,9 @@ export class Builder {
       obj = handle() || build(["tube", "clamp"])?.object || null;
     } else if (this.mode === "reinforce") {
       obj = build(["tube"])?.object || null;
+    } else if (this.mode === "assembly") {
+      // Nur ansehen -- aber die Hand zeigt, dass sich ein Teil nachschlagen laesst.
+      obj = this.scene.pickForDelete(x, y)?.object || null;
     }
     this.scene.setHover(obj);
     // Auf einem ausgewaehlten Teil laesst sich ziehen -- das zeigt der Cursor.
@@ -1018,8 +1024,24 @@ export class Builder {
     else if (this.mode === "slide") this._clickSlide(e);
     else if (this.mode === "clamp") this._clickClamp(e);
     else if (this.mode === "reinforce") this._clickReinforce(e);
+    else if (this.mode === "assembly") this._clickAssembly(e);
     finish();
-    // Aufbaumodus: nur ansehen/drehen, keine Modelländerung
+  }
+
+  /**
+   * Aufbau-Modus: ein Teil anklicken zeigt seinen Namen. Es wird NICHTS am
+   * Modell geaendert -- die Auswahl dient hier nur dem Nachschlagen.
+   */
+  _clickAssembly(e) {
+    const pick = this.scene.pickForDelete(e.clientX, e.clientY);
+    const id = pick ? pick.data.id : null;
+    // Erneuter Klick auf dasselbe Teil nimmt die Anzeige wieder weg.
+    const same = id != null && this.selection.size === 1 && this.selection.has(id);
+    this.selection.clear();
+    if (id != null && !same) this.selection.set(id, pick.data.kind);
+    // Hervorhebung aus der Schrittliste und Einzelauswahl schliessen sich aus.
+    this.highlight = null;
+    this.refresh();
   }
 
   // Klick auf ein Rohr schaltet die Alu-Verstaerkung an/aus.
