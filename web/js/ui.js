@@ -2,7 +2,7 @@
 
 import { buildableTubes, buildableCurvedTubes, buildablePanels, tubeColors, geometry, allTubes, allConnectors, panels, reinforcements, slideKindName, partName } from "./catalog.js";
 import { computeBOM, compareInventory, connectorsForNode } from "./bom.js";
-import { computeBuildPlan } from "./buildplan.js";
+import { computeBuildPlan, BUILD_ORDERS } from "./buildplan.js";
 import { parseQDF } from "./qdfimport.js";
 import { QUALITY_LEVELS } from "./scene.js";
 import { RANDOM_COLOR } from "./builder.js";
@@ -152,12 +152,29 @@ export function initUI({ scene, model, builder }) {
   const SLICE_KEY = "quadro.slice.v1";
   const sliceBar = $("slice-bar");
   const sliceRange = $("slice-range");
-  const slice = { on: false, axis: "z", value: 0, flip: false };
+  // values haelt die zuletzt benutzte Lage JE ACHSE fest: Aus- und Einschalten
+  // und ein Wechsel der Achse sollen die Ebene dort wieder aufnehmen, wo man
+  // sie verlassen hat. null = fuer diese Achse noch nie gesetzt -> mittig.
+  const slice = { on: false, axis: "z", value: 0, flip: false,
+                  values: { x: null, y: null, z: null } };
   try {
     const st = JSON.parse(localStorage.getItem(SLICE_KEY));
-    if (st && ["x", "y", "z"].includes(st.axis) && typeof st.value === "number")
+    if (st && ["x", "y", "z"].includes(st.axis) && typeof st.value === "number") {
       Object.assign(slice, { on: !!st.on, axis: st.axis, value: st.value, flip: !!st.flip });
+      if (st.values) for (const a of ["x", "y", "z"])
+        if (typeof st.values[a] === "number") slice.values[a] = st.values[a];
+      // Aeltere Staende kannten nur EINEN Wert -- der gehoert zur aktiven Achse.
+      if (slice.values[slice.axis] == null) slice.values[slice.axis] = slice.value;
+    }
   } catch { /* kaputter Eintrag -> Standard */ }
+
+  /** Lage fuer die aktive Achse holen; beim ersten Mal in die Mitte legen. */
+  function sliceValueForAxis() {
+    const stored = slice.values[slice.axis];
+    if (stored != null) return stored;
+    const lim = sliceLimits();
+    return Math.round((lim.min + lim.max) / 2);
+  }
 
   function sliceLimits() {
     const b = model.bounds(geometry().connectorSize / 2);
@@ -175,6 +192,7 @@ export function initUI({ scene, model, builder }) {
     sliceRange.min = lim.min;
     sliceRange.max = lim.max;
     slice.value = Math.min(lim.max, Math.max(lim.min, slice.value));
+    slice.values[slice.axis] = slice.value;
     sliceRange.value = slice.value;
     $("slice-value").textContent = `${Math.round(slice.value)} cm`;
     for (const b of $("slice-axes").querySelectorAll("button"))
@@ -190,11 +208,9 @@ export function initUI({ scene, model, builder }) {
   if (sliceBar) {
     $("btn-slice").addEventListener("click", () => {
       slice.on = !slice.on;
-      if (slice.on) {
-        // Beim Einschalten in die Mitte der aktuellen Achse legen.
-        const lim = sliceLimits();
-        slice.value = Math.round((lim.min + lim.max) / 2);
-      }
+      // Beim Einschalten die zuletzt benutzte Lage dieser Achse wieder
+      // aufnehmen -- frueher sprang die Ebene jedes Mal in die Mitte.
+      if (slice.on) slice.value = sliceValueForAxis();
       applySlice(); saveSlice();
     });
     $("slice-close").addEventListener("click", () => { slice.on = false; applySlice(); saveSlice(); });
@@ -202,13 +218,14 @@ export function initUI({ scene, model, builder }) {
     for (const b of $("slice-axes").querySelectorAll("button")) {
       b.addEventListener("click", () => {
         slice.axis = b.dataset.axis;
-        const lim = sliceLimits();
-        slice.value = Math.round((lim.min + lim.max) / 2);
+        slice.value = sliceValueForAxis();
         applySlice(); saveSlice();
       });
     }
     sliceRange.addEventListener("input", () => {
       slice.value = parseFloat(sliceRange.value);
+      // Auch beim Ziehen mitschreiben -- applySlice() laeuft hier nicht.
+      slice.values[slice.axis] = slice.value;
       $("slice-value").textContent = `${Math.round(slice.value)} cm`;
       scene.setClip(slice.axis, slice.value, slice.flip);
     });
@@ -904,7 +921,12 @@ export function initUI({ scene, model, builder }) {
   // praktischer als die Standard-Reihenfolge von unten nach oben.
   const ORDER_KEYS = { "y+": "asm_order_yp", "x+": "asm_order_xp", "x-": "asm_order_xm",
                        "z+": "asm_order_zp", "z-": "asm_order_zm" };
+  const ORDER_KEY = "quadro.asmOrder.v1";
   const orderSel = $("asm-order");
+  // Gewaehlte Reihenfolge ueberlebt den Reload; sie gehoert zum Arbeitsstand,
+  // nicht zum Modell.
+  const storedOrder = localStorage.getItem(ORDER_KEY);
+  if (storedOrder && BUILD_ORDERS.includes(storedOrder)) builder.setAssemblyOrder(storedOrder);
   function renderOrderOptions() {
     if (!orderSel) return;
     orderSel.innerHTML = "";
@@ -919,6 +941,7 @@ export function initUI({ scene, model, builder }) {
   renderOrderOptions();
   if (orderSel) orderSel.addEventListener("change", () => {
     builder.setAssemblyOrder(orderSel.value);
+    localStorage.setItem(ORDER_KEY, orderSel.value);
     renderAssembly();
   });
 
