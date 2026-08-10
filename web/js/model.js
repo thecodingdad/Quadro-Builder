@@ -364,6 +364,151 @@ export class BuildModel {
   // aeltere Modelle koennen sie trotzdem enthalten.
   // Arm-/Link-Kanten sind keine Rohre. Boegen bleiben aussen vor: gespeichert ist
   // ihre Sehne, nicht der Bogen -- ein Test darauf meldet Falschtreffer.
+  // --- Verschieben --------------------------------------------------------
+  /**
+   * Welche Teile haengen an den Auswahl-Eintraegen? Rohre und Platten haben
+   * keine eigene Position -- sie folgen ihren Kupplungen, also werden deren
+   * Knoten verschoben. Klemmen und Rutschen sitzen frei und bewegen sich
+   * selbst.
+   * sel: Map id -> kind (wie builder.selection).
+   */
+  moveTargets(sel) {
+    const nodes = new Set(), clamps = new Set(), slides = new Set();
+    const addNodes = (list) => { for (const id of list || []) if (this.nodes.has(id)) nodes.add(id); };
+    for (const [id, kind] of sel) {
+      if (kind === "node") { if (this.nodes.has(id)) nodes.add(id); }
+      else if (kind === "tube") { const t = this.tubes.get(id); if (t) addNodes([t.a, t.b]); }
+      else if (kind === "panel") { const p = this.panels.get(id); if (p) addNodes(p.nodes); }
+      else if (kind === "textile") { const x = this.textiles.get(id); if (x) addNodes(x.nodes); }
+      else if (kind === "clamp") { if (this.clamps.has(id)) clamps.add(id); }
+      else if (kind === "slide") { if (this.slides.has(id)) slides.add(id); }
+    }
+    return { nodes, clamps, slides };
+  }
+
+  /**
+   * Haengt die Auswahl am Rest fest? Ein Rohr, von dem sich nur EIN Ende
+   * bewegt, muesste sich dehnen -- Rohre haben aber feste Katalog-Laengen.
+   * Liefert die Anzahl solcher Rohre.
+   */
+  _stretchedTubes(nodeIds) {
+    let n = 0;
+    for (const t of this.tubes.values()) {
+      if (nodeIds.has(t.a) !== nodeIds.has(t.b)) n++;
+    }
+    return n;
+  }
+
+  _applyOffset(tg, dx, dy, dz) {
+    const shift = (o) => {
+      o.x = round(o.x + dx); o.y = round(o.y + dy); o.z = round(o.z + dz);
+    };
+    for (const id of tg.nodes) shift(this.nodes.get(id));
+    for (const id of tg.clamps) shift(this.clamps.get(id));
+    for (const id of tg.slides) {
+      const s = this.slides.get(id);
+      shift(s);
+      // Der Einhaengepunkt gehoert zur Rutsche und wandert mit.
+      if (s.hook && s.hook.length === 3)
+        s.hook = [round(s.hook[0] + dx), round(s.hook[1] + dy), round(s.hook[2] + dz)];
+    }
+  }
+
+  /**
+   * Verschiebt die ausgewaehlten Teile um (dx,dy,dz).
+   *
+   * Abgelehnt wird, was physisch nicht geht: eine Auswahl, die ueber Rohre am
+   * Rest haengt (die muessten sich dehnen), und ein Ziel, an dem sich Rohre
+   * ueberlagern wuerden. Bereits vorhandene Ueberlagerungen zaehlen nicht
+   * dagegen -- sonst liesse sich ein kollidierendes Modell nie mehr bewegen.
+   *
+   * merge = false verschiebt nur (Vorschau waehrend des Ziehens): das
+   * Zusammenlegen von Kupplungen laesst sich nicht durch Zurueckziehen
+   * rueckgaengig machen und passiert deshalb erst beim Loslassen.
+   *
+   * Liefert { ok, reason, merged }.
+   */
+  moveSelection(sel, dx, dy, dz, { merge = true } = {}) {
+    if (!dx && !dy && !dz) return { ok: true, merged: 0 };
+    const tg = this.moveTargets(sel);
+    if (!tg.nodes.size && !tg.clamps.size && !tg.slides.size) return { ok: false, reason: "empty" };
+    if (this._stretchedTubes(tg.nodes)) return { ok: false, reason: "attached" };
+
+    const before = this.collisions();
+    this._applyOffset(tg, dx, dy, dz);
+    for (const id of this.collisions()) {
+      if (!before.has(id)) {
+        this._applyOffset(tg, -dx, -dy, -dz);
+        return { ok: false, reason: "collision" };
+      }
+    }
+    const merged = merge ? this._mergeMovedNodes(tg.nodes) : 0;
+    return { ok: true, merged };
+  }
+
+  /**
+   * Kupplungen anpassen: landet ein verschobener Knoten auf einem stehen
+   * gebliebenen, werden beide zu EINER Kupplung -- so waechst das verschobene
+   * Teil mit dem Rest zusammen (aus der 2-armigen wird z.B. eine 3-armige).
+   * Der stehende Knoten ueberlebt, damit Verweise ausserhalb der Auswahl gelten
+   * bleiben.
+   */
+  _mergeMovedNodes(movedIds) {
+    let merged = 0;
+    const eps2 = MERGE_EPS * MERGE_EPS;
+    for (const id of movedIds) {
+      const n = this.nodes.get(id);
+      if (!n) continue;
+      let target = null;
+      for (const o of this.nodes.values()) {
+        if (o.id === id || movedIds.has(o.id)) continue;
+        if (dist2(o, n) <= eps2) { target = o; break; }
+      }
+      if (!target) continue;
+      this._replaceNodeRefs(id, target.id);
+      this.nodes.delete(id);
+      merged++;
+    }
+    if (merged) {
+      this._dedupeTubes();
+      this._prunePanels();
+    }
+    return merged;
+  }
+
+  /**
+   * Kupplungen der Auswahl mit deckungsgleichen stehenden zusammenlegen.
+   * Wird nach einem Zieh-Vorgang aufgerufen (waehrend des Ziehens laeuft
+   * moveSelection mit merge:false, siehe dort).
+   */
+  mergeMoved(sel) {
+    const merged = this._mergeMovedNodes(this.moveTargets(sel).nodes);
+    return merged;
+  }
+
+  _replaceNodeRefs(fromId, toId) {
+    for (const t of this.tubes.values()) {
+      if (t.a === fromId) t.a = toId;
+      if (t.b === fromId) t.b = toId;
+    }
+    const swap = (ids) => ids.map((x) => (x === fromId ? toId : x));
+    for (const p of this.panels.values()) p.nodes = swap(p.nodes);
+    for (const x of this.textiles.values()) x.nodes = swap(x.nodes);
+  }
+
+  // Nach dem Zusammenlegen koennen Rohre zwischen denselben zwei Kupplungen
+  // doppelt vorliegen oder auf einen Punkt zusammenfallen.
+  _dedupeTubes() {
+    const seen = new Set();
+    for (const t of [...this.tubes.values()]) {
+      if (t.a === t.b) { this.tubes.delete(t.id); continue; }
+      const pair = t.a < t.b ? `${t.a}|${t.b}` : `${t.b}|${t.a}`;
+      const key = `${pair}|${t.arm ? "a" : t.link ? "l" : "t"}`;
+      if (seen.has(key)) this.tubes.delete(t.id);
+      else seen.add(key);
+    }
+  }
+
   collisions() {
     const out = new Set();
     const list = [];
