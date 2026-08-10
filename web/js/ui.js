@@ -880,6 +880,22 @@ export function initUI({ scene, model, builder }) {
   })();
 
   // --- Aufbaumodus (Stepper + Drucken) -----------------------------------
+  // Farben in der Aufbauliste zusammenfassen (Zustand ueberlebt den Reload).
+  const ASM_COLOR_KEY = "quadro.asmColors.v1";
+  let asmIgnoreColors = localStorage.getItem(ASM_COLOR_KEY) === "1";
+  let asmShownStep = -1;
+  const asmNoColor = $("asm-nocolor");
+  if (asmNoColor) {
+    asmNoColor.checked = asmIgnoreColors;
+    asmNoColor.addEventListener("change", () => {
+      asmIgnoreColors = asmNoColor.checked;
+      localStorage.setItem(ASM_COLOR_KEY, asmIgnoreColors ? "1" : "0");
+      // Zusammengefasste und getrennte Zeilen haben verschiedene Schluessel.
+      if (asmHighlightKey) { asmHighlightKey = null; builder.setHighlight(null); }
+      renderAssembly();
+    });
+  }
+
   $("asm-prev").addEventListener("click", () => builder.setAssemblyStep(builder.assemblyStep - 1));
   $("asm-next").addEventListener("click", () => builder.setAssemblyStep(builder.assemblyStep + 1));
   $("asm-print").addEventListener("click", () => printPlan());
@@ -906,7 +922,7 @@ export function initUI({ scene, model, builder }) {
     renderAssembly();
   });
 
-  function asmRow(container, name, colorId, count, badge) {
+  function asmRow(container, name, colorId, count, badge, sel) {
     const row = el("div", "asm-row");
     const label = el("span", "asm-name");
     if (colorId) {
@@ -917,13 +933,84 @@ export function initUI({ scene, model, builder }) {
     if (badge) label.appendChild(el("span", "asm-badge", badge));
     row.appendChild(label);
     row.appendChild(el("span", "asm-count", `${count}×`));
+    if (sel) {
+      const key = asmRowKey(sel);
+      row.dataset.asmKey = key;
+      if (key === asmHighlightKey) row.classList.add("marked");
+      // Klick hebt genau diese Teile des Schrittes im Modell hervor; ein
+      // zweiter Klick nimmt die Hervorhebung wieder zurueck.
+      row.addEventListener("click", () => {
+        setAssemblyHighlight(key === asmHighlightKey ? null : sel);
+      });
+    }
     container.appendChild(row);
+  }
+
+  // --- Hervorhebung aus der Aufbau-Liste ---------------------------------
+  // Wie in der Bestandsliste: eine Zeile anklicken faerbt die zugehoerigen
+  // Teile lila, alle uebrigen treten zurueck. Gesucht wird nur INNERHALB des
+  // aktuellen Schritts -- gleiche Teile spaeterer Lagen bleiben unberuehrt.
+  let asmHighlightKey = null;
+
+  function asmRowKey(sel) {
+    return [sel.kind, sel.type || sel.tubeId || sel.panelId || "", sel.color || ""].join(":");
+  }
+
+  function partsForAssemblyRow(step, sel) {
+    const ids = new Set();
+    if (!step) return ids;
+    if (sel.kind === "connector" || sel.kind === "openEnds") {
+      for (const id of step.nodeIds || []) {
+        const n = model.nodes.get(id);
+        if (!n) continue;
+        const types = connectorsForNode(model, n);
+        if (sel.kind === "connector" ? types.includes(sel.type)
+          : (types.length === 0 && model.degree(id) >= 1)) ids.add(id);
+      }
+    } else if (sel.kind === "tube") {
+      for (const id of step.tubeIds || []) {
+        const t = model.tubes.get(id);
+        if (t && t.tubeId === sel.tubeId && (sel.color == null || t.color === sel.color)) ids.add(id);
+      }
+    } else if (sel.kind === "panel") {
+      for (const id of step.panelIds || []) {
+        const p = model.panels.get(id);
+        if (p && p.panelId === sel.panelId && (sel.color == null || p.color === sel.color)) ids.add(id);
+      }
+    }
+    return ids;
+  }
+
+  function setAssemblyHighlight(sel) {
+    const step = builder.buildPlan.steps[builder.assemblyStep];
+    asmHighlightKey = sel ? asmRowKey(sel) : null;
+    builder.setHighlight(sel ? partsForAssemblyRow(step, sel) : null);
+    for (const r of $("asm-body").querySelectorAll(".asm-row"))
+      r.classList.toggle("marked", !!asmHighlightKey && r.dataset.asmKey === asmHighlightKey);
+  }
+
+  // Rohr-/Plattenzeilen ohne Farbe zusammenfassen. Die Zaehlung im Aufbauplan
+  // trennt nach Farbe -- beim Bauen ist oft nur wichtig, WELCHES Teil und wie
+  // viele davon.
+  function mergeByPart(rows, idKey) {
+    const map = new Map();
+    for (const r of rows) {
+      const k = r[idKey];
+      if (!map.has(k)) map.set(k, { ...r, color: null, colorName: null, count: 0 });
+      map.get(k).count += r.count;
+    }
+    return [...map.values()];
   }
 
   function renderAssembly() {
     const plan = builder.buildPlan;
     const total = plan.steps.length;
     const i = builder.assemblyStep;
+    // Die Hervorhebung gilt immer nur fuer den gezeigten Schritt.
+    if (i !== asmShownStep) {
+      asmShownStep = i;
+      if (asmHighlightKey) { asmHighlightKey = null; builder.setHighlight(null); }
+    }
     $("asm-counter").textContent = total ? t("asm_counter", i, total) : "–";
     $("asm-prev").disabled = i <= 0;
     $("asm-next").disabled = i >= total - 1;
@@ -938,18 +1025,24 @@ export function initUI({ scene, model, builder }) {
       return;
     }
     title.textContent = step.title;
+    const plain = asmIgnoreColors;
     if (step.connectors.length || step.openEnds) {
       body.appendChild(el("h4", "asm-cat", t("asm_cat_connectors")));
-      for (const c of step.connectors) asmRow(body, c.name, null, c.count, c.code);
-      if (step.openEnds) asmRow(body, t("asm_open_ends"), null, step.openEnds, "");
+      for (const c of step.connectors)
+        asmRow(body, c.name, null, c.count, c.code, { kind: "connector", type: c.type });
+      if (step.openEnds) asmRow(body, t("asm_open_ends"), null, step.openEnds, "", { kind: "openEnds" });
     }
     if (step.tubes.length) {
       body.appendChild(el("h4", "asm-cat", t("asm_cat_tubes")));
-      for (const tube of step.tubes) asmRow(body, `${tube.name} · ${tube.colorName}`, tube.color, tube.count, "");
+      for (const tube of (plain ? mergeByPart(step.tubes, "tubeId") : step.tubes))
+        asmRow(body, plain ? tube.name : `${tube.name} · ${tube.colorName}`,
+          tube.color, tube.count, "", { kind: "tube", tubeId: tube.tubeId, color: tube.color });
     }
     if (step.panels.length) {
       body.appendChild(el("h4", "asm-cat", t("asm_cat_panels")));
-      for (const p of step.panels) asmRow(body, `${p.name} · ${p.colorName}`, p.color, p.count, "");
+      for (const p of (plain ? mergeByPart(step.panels, "panelId") : step.panels))
+        asmRow(body, plain ? p.name : `${p.name} · ${p.colorName}`,
+          p.color, p.count, "", { kind: "panel", panelId: p.panelId, color: p.color });
     }
   }
 

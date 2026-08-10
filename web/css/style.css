@@ -531,6 +531,15 @@ body.sidebar-hidden #sidebar, body.sidebar-hidden #sidebar-resizer { display: no
 .asm-row:nth-child(even) { background: #f7f9fc; }
 .asm-name { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; }
 .asm-count { font-variant-numeric: tabular-nums; font-weight: 600; color: var(--ink); }
+/* Zeilen sind anklickbar: hebt die Teile des Schritts im Modell hervor.
+   Muss NACH .asm-row:nth-child(even) stehen, sonst gewinnt der Zebrastreifen. */
+.asm-row { cursor: pointer; }
+.asm-row.marked { background: #f3e8ff; box-shadow: inset 0 0 0 1px #c79bff; }
+.asm-opt {
+  display: flex; align-items: center; gap: 7px;
+  margin: 2px 0 8px; font-size: 12px; color: var(--muted); cursor: pointer;
+}
+.asm-opt input { cursor: pointer; }
 .asm-badge {
   font-size: 11px; font-weight: 700; color: #45505f;
   background: #eef2f7; border: 1px solid var(--line); border-radius: 5px;
