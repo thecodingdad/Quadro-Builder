@@ -85,6 +85,9 @@ const de = {
   help_close: 'Schließen',
   help_shortcuts: [
     ['Pfeiltasten', 'Rohr verlegen – folgt dem Blickwinkel'],
+    ['Pfeiltasten (Auswahl)', 'Auswahl im 20-cm-Raster verschieben'],
+    ['Ziehen (Auswahl)', 'Auswahl mit der Maus verschieben'],
+    ['Strg/Cmd + A', 'alles auswählen'],
     ['1 … 8', 'Rohrlänge wählen'],
     ['B / S', 'Bauen / Auswahl'],
     ['D', 'Schräge Strebe (45°) ein/aus'],
@@ -153,6 +156,10 @@ const de = {
   notice_clamp_removed: 'Doppelrohrverbinder entfernt.',
   notice_clamp_click_tube: 'Auf ein Rohr klicken, um einen Doppelrohrverbinder zu setzen.',
   notice_color_changed: 'Farbe geändert.',
+  notice_move_attached: 'Auswahl hängt über Rohre am Rest – Rohre lassen sich nicht dehnen.',
+  notice_move_collision: 'Verschieben nicht möglich: Rohre würden sich überlagern.',
+  notice_move_empty: 'Nichts Verschiebbares ausgewählt.',
+  notice_move_merged: (n) => `${n} Kupplung(en) zusammengelegt.`,
 
   // Flash-Meldungen (Funktionen für Vorlagen)
   flash_hints_n: (n) => `${n} Rohr(e) könnten ein Alu-Profil gebrauchen (orange).`,
@@ -324,6 +331,9 @@ const en = {
   help_close: 'Close',
   help_shortcuts: [
     ['Arrow keys', 'Place tube – follows the view angle'],
+    ['Arrow keys (selection)', 'Move selection on the 20 cm grid'],
+    ['Drag (selection)', 'Move selection with the mouse'],
+    ['Ctrl/Cmd + A', 'Select everything'],
     ['1 … 8', 'Select tube length'],
     ['B / S', 'Build / Select'],
     ['D', 'Toggle diagonal brace (45°)'],
@@ -392,6 +402,10 @@ const en = {
   notice_clamp_removed: 'Double-tube connector removed.',
   notice_clamp_click_tube: 'Click a tube to place a double-tube connector.',
   notice_color_changed: 'Colour changed.',
+  notice_move_attached: 'Selection is tied to the rest by tubes – tubes cannot stretch.',
+  notice_move_collision: 'Cannot move: tubes would overlap.',
+  notice_move_empty: 'Nothing movable selected.',
+  notice_move_merged: (n) => `${n} connector(s) merged.`,
 
   // Flash messages
   flash_hints_n: (n) => `${n} tube(s) could use an aluminium profile (orange).`,

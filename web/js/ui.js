@@ -1035,6 +1035,12 @@ export function initUI({ scene, model, builder }) {
     else if (k === "ArrowLeft") dir = neg(axes.right);
     if (dir) {
       e.preventDefault();
+      // Cursor-Modus mit Auswahl: die Pfeiltasten schieben sie im Raster,
+      // statt in den Bau-Modus zu springen.
+      if (builder.mode === "select" && builder.selection.size) {
+        builder.moveSelectionBy(dir);
+        return;
+      }
       if (builder.mode !== "add") setMode("add");
       builder.buildStep(dir);
       return;

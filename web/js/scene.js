@@ -327,6 +327,38 @@ export class SceneManager {
     return { forward, right };
   }
 
+  /**
+   * Die beiden Achsen, in denen sich mit der Maus schieben laesst. Sie folgen
+   * dem Blickwinkel wie die Pfeiltasten: frontal die Waagerechte quer zum Blick
+   * und die Senkrechte, aus der Aufsicht die beiden Waagerechten. Fuer die
+   * dritte Achse dreht man die Ansicht.
+   */
+  dragAxes() {
+    const ax = this.getHorizontalAxes();
+    return this.isFrontalView() ? { u: ax.right, v: [0, 1, 0] } : { u: ax.right, v: ax.forward };
+  }
+
+  /**
+   * Weltpunkt unter dem Zeiger auf der Schiebe-Ebene durch origin. Die Ebene
+   * steht senkrecht auf der Achse, in der NICHT geschoben wird (siehe
+   * dragAxes), damit die Bewegung der Maus folgt.
+   */
+  dragPlanePoint(clientX, clientY, origin) {
+    this._setMouse(clientX, clientY);
+    const ax = this.getHorizontalAxes();
+    const n = this.isFrontalView()
+      ? new THREE.Vector3(ax.forward[0], ax.forward[1], ax.forward[2])
+      : new THREE.Vector3(0, 1, 0);
+    const plane = new THREE.Plane().setFromNormalAndCoplanarPoint(n, origin);
+    const p = new THREE.Vector3();
+    return this._raycaster.ray.intersectPlane(plane, p) ? p : null;
+  }
+
+  /** Mauszeiger-Form setzen (Builder signalisiert damit "verschiebbar"). */
+  setCursor(css) {
+    this.container.style.cursor = css || "default";
+  }
+
   // Abgerundeter Wuerfel (Superellipsoid): eine Kugel wird per p-Norm zum
   // Wuerfel mit weichen Kanten gezogen -- groesseres n = kantiger, n = 2 waere
   // wieder die Kugel. Das trifft die echte QUADRO-Kupplung deutlich besser als

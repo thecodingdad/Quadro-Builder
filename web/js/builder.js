@@ -25,6 +25,11 @@ export const RANDOM_COLOR = "random";
 // Trennung wie bei den Farbschaltern der Toolbar.
 const PANEL_RANDOM_EXTRA = ["black"];
 
+// Verschieben im Cursor-Modus laeuft im 20-cm-Raster -- das ist die halbe
+// Rasterweite des 35er-Rohrs und damit das feinste Mass, in dem QUADRO-Teile
+// zueinander passen.
+const MOVE_STEP = 20;
+
 export class Builder {
   constructor(scene, model, { onChange } = {}) {
     this.scene = scene;
@@ -182,6 +187,93 @@ export class Builder {
     this.selection = this.scene.selectableParts();
     this.refresh();
     return this.selection.size;
+  }
+
+  // --- Verschieben --------------------------------------------------------
+  /**
+   * Auswahl um einen Rasterschritt in Richtung dir verschieben (Pfeiltasten).
+   * dir ist ein Einheitsvektor auf einer Achse.
+   */
+  moveSelectionBy(dir, step = MOVE_STEP) {
+    if (this.mode !== "select" || !this.selection.size) return false;
+    const before = JSON.stringify(this.model.toJSON());
+    const res = this.model.moveSelection(
+      this.selection, dir[0] * step, dir[1] * step, dir[2] * step);
+    if (!res.ok) { this.onNotice(t("notice_move_" + res.reason)); return false; }
+    this._afterMove(before, res.merged);
+    return true;
+  }
+
+  // Gemeinsamer Abschluss von Tasten- und Zieh-Verschiebung.
+  _afterMove(beforeJson, merged) {
+    // Zusammengelegte Kupplungen gibt es nicht mehr -> aus der Auswahl nehmen.
+    this._pruneSelection();
+    this._pushHistory(beforeJson);
+    if (merged) this.onNotice(t("notice_move_merged", merged));
+    this.refresh();
+  }
+
+  /** Zustand von VOR einer Aenderung in die Historie legen (siehe recordHistory). */
+  _pushHistory(beforeJson) {
+    const after = JSON.stringify(this.model.toJSON());
+    if (after === beforeJson) return;
+    this._undoStack.push(beforeJson);
+    if (this._undoStack.length > this._maxUndo) this._undoStack.shift();
+    this._redoStack = [];
+    this.onHistoryChange();
+  }
+
+  /** Laesst sich an dieser Stelle ein Ziehen der Auswahl beginnen? */
+  _isMoveHandle(id) {
+    return this.mode === "select" && this.selection.size > 0 && this.selection.has(id);
+  }
+
+  _beginMoveDrag(e, pick) {
+    const origin = pick.point.clone();
+    this._drag = {
+      origin,
+      // Zustand vor dem Ziehen: der ganze Zug wird EIN Undo-Schritt.
+      before: JSON.stringify(this.model.toJSON()),
+      applied: [0, 0, 0],
+      axes: this.scene.dragAxes(),
+    };
+    this.scene.setCursor("grabbing");
+  }
+
+  _updateMoveDrag(e) {
+    const d = this._drag;
+    const p = this.scene.dragPlanePoint(e.clientX, e.clientY, d.origin);
+    if (!p) return;
+    const off = p.sub(d.origin);
+    const { u, v } = d.axes;
+    // Zeiger-Versatz auf die beiden Schiebe-Achsen projizieren und je Achse
+    // auf das Raster runden.
+    const su = Math.round((off.x * u[0] + off.y * u[1] + off.z * u[2]) / MOVE_STEP) * MOVE_STEP;
+    const sv = Math.round((off.x * v[0] + off.y * v[1] + off.z * v[2]) / MOVE_STEP) * MOVE_STEP;
+    const want = [
+      u[0] * su + v[0] * sv,
+      u[1] * su + v[1] * sv,
+      u[2] * su + v[2] * sv,
+    ];
+    const a = d.applied;
+    const step = [want[0] - a[0], want[1] - a[1], want[2] - a[2]];
+    if (!step[0] && !step[1] && !step[2]) return;
+    // Waehrend des Ziehens ohne Zusammenlegen: das liesse sich durch
+    // Zurueckziehen nicht wieder aufheben.
+    const res = this.model.moveSelection(this.selection, step[0], step[1], step[2], { merge: false });
+    if (!res.ok) return;                // ungueltiges Ziel -> letzte gute Lage halten
+    d.applied = want;
+    this.refresh();
+  }
+
+  _endMoveDrag() {
+    const d = this._drag;
+    this._drag = null;
+    this.scene.setCursor("default");
+    if (!d) return;
+    const a = d.applied;
+    if (!a[0] && !a[1] && !a[2]) return;
+    this._afterMove(d.before, this.model.mergeMoved(this.selection));
   }
 
   /** Loescht alle ausgewaehlten Teile. Kupplungen zuletzt (nehmen Rohre mit). */
@@ -747,6 +839,18 @@ export class Builder {
       // Zeiger festhalten: sonst geht das pointerup verloren, wenn man beim
       // Aufziehen ueber den Rand des Canvas hinauszieht.
       if (el.setPointerCapture) { try { el.setPointerCapture(e.pointerId); } catch { /* egal */ } }
+      // Ziehen der Auswahl geht dem Drehen vor: setzt der Zug auf einem BEREITS
+      // ausgewaehlten Teil auf, wird verschoben statt gedreht. Auf allem
+      // anderen bleibt es beim Drehen -- so verliert man die Kamerasteuerung
+      // nicht, nur weil etwas markiert ist.
+      this._drag = null;
+      if (e.button === 0 && !this._down.box && this.mode === "select" && this.selection.size) {
+        const pick = this.scene.pickForDelete(e.clientX, e.clientY);
+        if (pick && this._isMoveHandle(pick.data.id)) {
+          this._beginMoveDrag(e, pick);
+          return;
+        }
+      }
       // Linke Taste ohne Strg: eigene Drehung um den Punkt unter dem Zeiger.
       if (e.button === 0 && !this._down.box) this.scene.beginOrbit(e.clientX, e.clientY);
     });
@@ -762,6 +866,8 @@ export class Builder {
   _onMove(e) {
     // Cursor-Modus: mit gedrueckter linker Taste ziehen zieht ein Auswahl-
     // Rechteck auf, statt zu drehen (das liegt dort auf der rechten Taste).
+    // Auswahl wird gerade geschoben.
+    if (this._drag && (e.buttons & 1)) { this._updateMoveDrag(e); return; }
     // Linke Taste gedrueckt und kein Rechteck: um den Zeigerpunkt drehen.
     if (this._down && !this._down.box && (e.buttons & 1) && this.scene.orbiting) {
       const dx = e.clientX - this._last.x, dy = e.clientY - this._last.y;
@@ -802,11 +908,19 @@ export class Builder {
       obj = build(["tube"])?.object || null;
     }
     this.scene.setHover(obj);
+    // Auf einem ausgewaehlten Teil laesst sich ziehen -- das zeigt der Cursor.
+    if (this.mode === "select" && this.selection.size) {
+      const p = this.scene.pickForDelete(x, y);
+      if (p && this._isMoveHandle(p.data.id)) this.scene.setCursor("move");
+    }
   }
 
   _onUp(e) {
     const d = this._down;
     this._down = null;
+    // Verschieben abschliessen: hier faellt der eine Undo-Schritt an und hier
+    // werden deckungsgleiche Kupplungen zusammengelegt.
+    if (this._drag) { this._endMoveDrag(); return; }
     if (!d) { this.scene.endOrbit(); return; }
     // endOrbit() fuehrt den Drehpunkt nach und ruft controls.update() -- das
     // kann die Kamera minimal versetzen. Deshalb ERST den Klick auswerten,
