@@ -438,7 +438,8 @@ export class Builder {
             node.id, dirVec, this.tubeId, this.colorFor("tube"), tube.length_cm, spacingFor(tube.length_cm)
           );
     });
-    if (res && res.collision) this.onNotice(t("notice_collision"));
+    if (res && res.ground) this.onNotice(t("notice_ground"));
+    else if (res && res.collision) this.onNotice(t("notice_collision"));
     else if (res && res.node) this.selectedNodeId = res.node.id;
     this.refresh();
   }
@@ -515,7 +516,8 @@ export class Builder {
         dt.length_cm, spacingFor(dt.length_cm), C45_SLEEVE_LEN, C45_ARM_LEN
       );
     });
-    if (res && res.collision) this.onNotice(t("notice_collision"));
+    if (res && res.ground) this.onNotice(t("notice_ground"));
+    else if (res && res.collision) this.onNotice(t("notice_collision"));
     else if (res && res.node) this.selectedNodeId = res.node.id;
     this.refresh();
   }
@@ -588,6 +590,8 @@ export class Builder {
       : (this.diagonal ? DIAGONAL_DIRECTIONS : DIRECTIONS);
     for (const d of dirs) {
       if (occupied.has(d.name)) continue;
+      // Unter dem Boden wird nicht gebaut -> dort auch keinen Ankerpunkt zeigen.
+      if (this._targetBelowGround(node, d.vec)) continue;
       // C45-Schräge nur anbieten, wenn ein freier Arm fuer die Winkelkupplung da ist.
       if (isC45 && !this._diagSleeveAxis(node, d.vec)) continue;
       const isCardDir = Math.max(Math.abs(d.vec[0]), Math.abs(d.vec[1]), Math.abs(d.vec[2])) > DIR_ALIGN_TOL;
@@ -602,6 +606,17 @@ export class Builder {
         (useDiag && !isCardDir) ? "diag" : "dir"
       );
     }
+  }
+
+  // Wuerde ein Anbau in dieser Richtung unter der Nullebene landen? Gerechnet
+  // mit dem gerade gewaehlten Rohr -- die endgueltige Pruefung sitzt im Modell.
+  _targetBelowGround(node, vec) {
+    if (vec[1] >= 0) return false;
+    const tube = getTube(this.tubeId);
+    const span = isCurvedTube(this.tubeId)
+      ? gridSpacing()
+      : spacingFor(tube ? tube.length_cm : 35);
+    return this.model.isBelowGround(node.y + vec[1] * span);
   }
 
   // Rotierte 90°-Arm-Basis eines Schräg-Konnektors: die Schräge liegt in EINER
@@ -1079,7 +1094,8 @@ export class Builder {
               );
         });
       }
-      if (res && res.collision) this.onNotice(t("notice_collision"));
+      if (res && res.ground) this.onNotice(t("notice_ground"));
+      else if (res && res.collision) this.onNotice(t("notice_collision"));
       else if (res && res.node) this.selectedNodeId = res.node.id;
       this.refresh();
       return;

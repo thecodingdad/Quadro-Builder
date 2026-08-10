@@ -12,6 +12,11 @@ const SLIDE_HOOK_LIFT = 5;                 // cm ueber der unteren Kupplung
 const SLIDE_LENGTH = Math.hypot(100, 80);          // 128 cm Bahnlaenge
 const SLIDE_SLOPE = Math.atan2(80, 100);           // fester Neigungswinkel
 
+// Boden. Unter der Nullebene wird nicht gebaut: die Kupplungen der untersten
+// Lage sitzen genau darauf (y = 0), erst ein negativer Wert liegt darunter. Die
+// Toleranz faengt Rundungsreste aus round2 ab.
+const GROUND_TOL = 0.01;
+
 function dist2(a, b) {
   const dx = a.x - b.x, dy = a.y - b.y, dz = a.z - b.z;
   return dx * dx + dy * dy + dz * dz;
@@ -40,6 +45,11 @@ export class BuildModel {
       if (dist2(n, p) <= eps2) return n;
     }
     return null;
+  }
+
+  /** Liegt diese Hoehe unter dem Boden (Nullebene)? */
+  isBelowGround(y) {
+    return y < -GROUND_TOL;
   }
 
   addNode(x, y, z) {
@@ -481,6 +491,13 @@ export class BuildModel {
     const tg = this.moveTargets(sel);
     if (!tg.nodes.size && !tg.clamps.size && !tg.slides.size) return { ok: false, reason: "empty" };
 
+    // Unter den Boden wird nicht verschoben. Frueh geprueft, damit der teure
+    // Schnappschuss bei einem offensichtlich ungueltigen Zug entfaellt.
+    if (dy < 0) {
+      for (const id of tg.nodes) if (this.isBelowGround(this.nodes.get(id).y + dy)) return { ok: false, reason: "ground" };
+      for (const id of tg.clamps) if (this.isBelowGround(this.clamps.get(id).y + dy)) return { ok: false, reason: "ground" };
+    }
+
     const snapshot = this.toJSON();
     const collidedBefore = this.collisions();
     const badBefore = validate ? validate(this) : null;
@@ -657,6 +674,7 @@ export class BuildModel {
       y: from.y + dirVec[1] * spacing,
       z: from.z + dirVec[2] * spacing,
     };
+    if (this.isBelowGround(target.y)) return { ground: true };
     // Bereits verbundener Zielknoten => reine Navigation, kein neuer Bau.
     const existing = this.findNodeNear(target.x, target.y, target.z);
     if (existing && this.tubeBetween(from.id, existing.id)) {
@@ -685,6 +703,8 @@ export class BuildModel {
     const by = from.y + c45axis[1] * sleeveLen + dir[1] * armLen;
     const bz = from.z + c45axis[2] * sleeveLen + dir[2] * armLen;
     const target = { x: bx + dir[0] * spacing, y: by + dir[1] * spacing, z: bz + dir[2] * spacing };
+    // Adapter-Koerper UND Rohrende muessen ueber dem Boden bleiben.
+    if (this.isBelowGround(by) || this.isBelowGround(target.y)) return { ground: true };
     // Am oberen Ende sitzt haeufig schon eine Kupplung. Die Winkelkupplung frisst
     // im Schraegen-Raster ein gutes Stueck Weg, deshalb landet das gerechnete
     // Rohrende ein bis zwei Zentimeter daneben -- zu weit fuer den Auto-Merge
@@ -762,6 +782,7 @@ export class BuildModel {
       const tube = this.addTube(fromId, best.id, tubeId, color, length);
       return { node: best, tube };
     }
+    // Ohne Rasterpunkt entsteht ein neuer Knoten -- extend() prueft den Boden.
     return this.extend(fromId, dir, tubeId, color, length, spacing);
   }
 
@@ -778,6 +799,9 @@ export class BuildModel {
       y: from.y + R * (dirVec[1] + normal[1]),
       z: from.z + R * (dirVec[2] + normal[2]),
     };
+    // Der Bogen haengt zwischen Start und Ziel durch: der tiefste Punkt liegt
+    // bei einem abwaerts fuehrenden Viertelkreis am Mittelpunkt der Sehne.
+    if (this.isBelowGround(target.y) || this.isBelowGround(cy)) return { ground: true };
     const existing = this.findNodeNear(target.x, target.y, target.z);
     if (existing && this.tubeBetween(from.id, existing.id)) {
       return { node: existing, tube: null, duplicate: true };
