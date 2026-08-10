@@ -387,16 +387,60 @@ export class BuildModel {
   }
 
   /**
-   * Haengt die Auswahl am Rest fest? Ein Rohr, von dem sich nur EIN Ende
-   * bewegt, muesste sich dehnen -- Rohre haben aber feste Katalog-Laengen.
-   * Liefert die Anzahl solcher Rohre.
+   * Verbindungen zum stehen bleibenden Teil trennen.
+   *
+   * Ein Rohr, von dem sich nur EIN Ende bewegt, kann nicht mitwandern -- Rohre
+   * haben feste Katalog-Laengen. Es bleibt deshalb liegen und bekommt an der
+   * frei werdenden Seite eine eigene Kupplung an der bisherigen Stelle; die
+   * abgedockte Kupplung behaelt nur noch die Arme, die mitgehen.
+   *
+   * Liefert die Anzahl getrennter Rohre.
    */
-  _stretchedTubes(nodeIds) {
-    let n = 0;
+  _detachBoundary(nodeIds) {
+    // Platten und Netze, deren Ecken auseinandergerissen wuerden, gibt es
+    // danach nicht mehr -- sie sind starre Fertigteile.
+    const torn = (ids) => ids.some((id) => nodeIds.has(id)) && ids.some((id) => !nodeIds.has(id));
+    for (const p of [...this.panels.values()]) if (torn(p.nodes)) this.panels.delete(p.id);
+    for (const x of [...this.textiles.values()]) if (torn(x.nodes)) this.textiles.delete(x.id);
+
+    const stubs = new Map();   // mitwandernde Knoten-id -> zurueckbleibende Kupplung
+    const touched = new Set();
+    let count = 0;
     for (const t of this.tubes.values()) {
-      if (nodeIds.has(t.a) !== nodeIds.has(t.b)) n++;
+      const a = nodeIds.has(t.a), b = nodeIds.has(t.b);
+      if (a === b) continue;
+      const movingId = a ? t.a : t.b;
+      let stubId = stubs.get(movingId);
+      if (!stubId) {
+        const src = this.nodes.get(movingId);
+        const stub = { id: this._id("n"), x: src.x, y: src.y, z: src.z };
+        this.nodes.set(stub.id, stub);
+        stubs.set(movingId, stub.id);
+        stubId = stub.id;
+      }
+      if (a) t.a = stubId; else t.b = stubId;
+      touched.add(movingId).add(stubId);
+      count++;
     }
-    return n;
+    for (const id of touched) this._syncC45Flag(id);
+    if (count) this._pruneOrphanedC45Bodies();
+    return count;
+  }
+
+  /**
+   * c45-Kennzeichen nachziehen: Der Knoten traegt genau dann eine 45-Grad-
+   * Winkelkupplung, wenn eine Arm-Kante zu einem Adapter-Koerper an ihm haengt.
+   * Nach dem Trennen oder Zusammenlegen kann das kippen.
+   */
+  _syncC45Flag(id) {
+    const n = this.nodes.get(id);
+    if (!n || n.c45body) return;
+    let has = false;
+    for (const t of this.tubes.values()) {
+      if (t.arm && (t.a === id || t.b === id)) { has = true; break; }
+    }
+    n.c45 = has;
+    if (!has) n.c45axis = null;
   }
 
   _applyOffset(tg, dx, dy, dz) {
@@ -417,33 +461,43 @@ export class BuildModel {
   /**
    * Verschiebt die ausgewaehlten Teile um (dx,dy,dz).
    *
-   * Abgelehnt wird, was physisch nicht geht: eine Auswahl, die ueber Rohre am
-   * Rest haengt (die muessten sich dehnen), und ein Ziel, an dem sich Rohre
-   * ueberlagern wuerden. Bereits vorhandene Ueberlagerungen zaehlen nicht
-   * dagegen -- sonst liesse sich ein kollidierendes Modell nie mehr bewegen.
+   * Haengt die Auswahl ueber Rohre am Rest, werden diese Verbindungen getrennt
+   * (siehe _detachBoundary); trifft sie am Ziel auf vorhandene Kupplungen,
+   * verschmelzen die (siehe _mergeMovedNodes).
    *
-   * merge = false verschiebt nur (Vorschau waehrend des Ziehens): das
-   * Zusammenlegen von Kupplungen laesst sich nicht durch Zurueckziehen
-   * rueckgaengig machen und passiert deshalb erst beim Loslassen.
+   * Abgelehnt wird, was es real nicht gibt: ein Ziel, an dem sich Rohre
+   * ueberlagern wuerden, und eine Kupplung, die es im Sortiment nicht gibt.
+   * Beides zaehlt nur, wenn es VORHER nicht schon so war -- sonst liesse sich
+   * ein Modell, das bereits kollidiert oder eine Sonderkupplung enthaelt, nie
+   * mehr bewegen. Die Pruefung der Kupplungen wird hereingereicht (validate),
+   * damit dieses Modul den Katalog nicht kennen muss.
    *
-   * Liefert { ok, reason, merged }.
+   * merge = false laesst deckungsgleiche Kupplungen getrennt.
+   *
+   * Liefert { ok, reason, merged, detached }.
    */
-  moveSelection(sel, dx, dy, dz, { merge = true } = {}) {
-    if (!dx && !dy && !dz) return { ok: true, merged: 0 };
+  moveSelection(sel, dx, dy, dz, { merge = true, validate = null } = {}) {
+    if (!dx && !dy && !dz) return { ok: true, merged: 0, detached: 0 };
     const tg = this.moveTargets(sel);
     if (!tg.nodes.size && !tg.clamps.size && !tg.slides.size) return { ok: false, reason: "empty" };
-    if (this._stretchedTubes(tg.nodes)) return { ok: false, reason: "attached" };
 
-    const before = this.collisions();
+    const snapshot = this.toJSON();
+    const collidedBefore = this.collisions();
+    const badBefore = validate ? validate(this) : null;
+
+    const fail = (reason) => { this.loadJSON(snapshot); return { ok: false, reason }; };
+    const detached = this._detachBoundary(tg.nodes);
     this._applyOffset(tg, dx, dy, dz);
-    for (const id of this.collisions()) {
-      if (!before.has(id)) {
-        this._applyOffset(tg, -dx, -dy, -dz);
-        return { ok: false, reason: "collision" };
-      }
-    }
+    // Ueberlagerung VOR dem Zusammenlegen pruefen: das raeumt deckungsgleiche
+    // Rohre weg und wuerde einen Zug, der ein Teil genau auf ein anderes
+    // schiebt, sonst durchgehen lassen.
+    for (const id of this.collisions()) if (!collidedBefore.has(id)) return fail("collision");
+
     const merged = merge ? this._mergeMovedNodes(tg.nodes) : 0;
-    return { ok: true, merged };
+    if (badBefore) {
+      for (const id of validate(this)) if (!badBefore.has(id)) return fail("connector");
+    }
+    return { ok: true, merged, detached };
   }
 
   /**
@@ -455,6 +509,7 @@ export class BuildModel {
    */
   _mergeMovedNodes(movedIds) {
     let merged = 0;
+    const survivors = new Set();
     const eps2 = MERGE_EPS * MERGE_EPS;
     for (const id of movedIds) {
       const n = this.nodes.get(id);
@@ -465,24 +520,21 @@ export class BuildModel {
         if (dist2(o, n) <= eps2) { target = o; break; }
       }
       if (!target) continue;
+      // Kennzeichen der verschwindenden Kupplung uebernehmen, soweit die
+      // ueberlebende noch keines hat (Schraegen-Traeger, Wuerfel-Drehung).
+      for (const key of ["c45", "c45body", "c45axis", "quat", "arms", "armDirs"]) {
+        if (!target[key] && n[key]) target[key] = n[key];
+      }
       this._replaceNodeRefs(id, target.id);
       this.nodes.delete(id);
+      survivors.add(target.id);
       merged++;
     }
     if (merged) {
       this._dedupeTubes();
       this._prunePanels();
+      for (const id of survivors) this._syncC45Flag(id);
     }
-    return merged;
-  }
-
-  /**
-   * Kupplungen der Auswahl mit deckungsgleichen stehenden zusammenlegen.
-   * Wird nach einem Zieh-Vorgang aufgerufen (waehrend des Ziehens laeuft
-   * moveSelection mit merge:false, siehe dort).
-   */
-  mergeMoved(sel) {
-    const merged = this._mergeMovedNodes(this.moveTargets(sel).nodes);
     return merged;
   }
 

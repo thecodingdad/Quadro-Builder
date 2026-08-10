@@ -156,10 +156,11 @@ const de = {
   notice_clamp_removed: 'Doppelrohrverbinder entfernt.',
   notice_clamp_click_tube: 'Auf ein Rohr klicken, um einen Doppelrohrverbinder zu setzen.',
   notice_color_changed: 'Farbe geändert.',
-  notice_move_attached: 'Auswahl hängt über Rohre am Rest – Rohre lassen sich nicht dehnen.',
   notice_move_collision: 'Verschieben nicht möglich: Rohre würden sich überlagern.',
+  notice_move_connector: 'Verschieben nicht möglich: dafür gibt es keine passende Kupplung.',
   notice_move_empty: 'Nichts Verschiebbares ausgewählt.',
   notice_move_merged: (n) => `${n} Kupplung(en) zusammengelegt.`,
+  notice_move_detached: (n) => `${n} Verbindung(en) getrennt.`,
 
   // Flash-Meldungen (Funktionen für Vorlagen)
   flash_hints_n: (n) => `${n} Rohr(e) könnten ein Alu-Profil gebrauchen (orange).`,
@@ -402,10 +403,11 @@ const en = {
   notice_clamp_removed: 'Double-tube connector removed.',
   notice_clamp_click_tube: 'Click a tube to place a double-tube connector.',
   notice_color_changed: 'Colour changed.',
-  notice_move_attached: 'Selection is tied to the rest by tubes – tubes cannot stretch.',
   notice_move_collision: 'Cannot move: tubes would overlap.',
+  notice_move_connector: 'Cannot move: there is no connector for that.',
   notice_move_empty: 'Nothing movable selected.',
   notice_move_merged: (n) => `${n} connector(s) merged.`,
+  notice_move_detached: (n) => `${n} connection(s) separated.`,
 
   // Flash messages
   flash_hints_n: (n) => `${n} tube(s) could use an aluminium profile (orange).`,

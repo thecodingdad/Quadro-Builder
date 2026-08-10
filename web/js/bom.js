@@ -58,6 +58,67 @@ function connectorTypeForDirs(dirs) {
   return "6way";
 }
 
+// Zeigt die (normierte) Richtung genau eine Achse entlang? Echte Kupplungen
+// haben ihre Stutzen nur auf den sechs Wuerfelflaechen.
+function isAxisDir(d) {
+  const a = [Math.abs(d[0]), Math.abs(d[1]), Math.abs(d[2])].sort((x, y) => y - x);
+  return a[0] > 0.95 && a[1] < 0.1;
+}
+
+// Laesst sich ein Knoten mit diesen Arm-Richtungen aus dem echten Sortiment
+// bauen? Liefert null wenn ja, sonst einen Grund.
+function armsFeasible(dirs) {
+  if (dirs.length <= 1) return null;   // freies Rohrende braucht keine Kupplung
+  const axis = [], other = [];
+  for (const d of dirs) (isAxisDir(d) ? axis : other).push(d);
+  // Schraegen laufen ueber die aufgesteckte 45-Grad-Winkelkupplung. Alles
+  // andere Schiefe (Rampen, Sparren) gibt es als Kupplung nicht.
+  for (const d of other) if (!isC45Dir(d)) return "shape";
+  // Zwei Rohre in dieselbe Richtung passen nicht in einen Stutzen.
+  for (let i = 0; i < axis.length; i++) {
+    for (let j = i + 1; j < axis.length; j++) {
+      const a = axis[i], b = axis[j];
+      if (a[0] * b[0] + a[1] * b[1] + a[2] * b[2] > 0.95) return "duplicate";
+    }
+  }
+  if (axis.length > 6) return "arms";   // mehr Stutzen als ein Wuerfel Flaechen hat
+  const type = connectorTypeForDirs(axis);
+  if (!type || type === "end") return null;
+  const def = getConnector(type);
+  return def && def.buildable ? null : "type";
+}
+
+/**
+ * Alle Knoten, fuer die es keine real erhaeltliche Kupplung gibt.
+ *
+ * Wird beim Verschieben gebraucht: fusionieren zwei Kupplungen zu einer, die es
+ * so nicht gibt (zu viele Arme, zwei Rohre in derselben Richtung, eine schiefe
+ * Lage), darf das Verschieben nicht stattfinden. Ein Durchlauf ueber die Rohre
+ * statt neighborDirs je Knoten -- die Pruefung laeuft bei jedem Zieh-Schritt.
+ */
+export function infeasibleConnectors(model) {
+  const dirsAt = new Map();
+  const push = (id, from, to) => {
+    const dx = to.x - from.x, dy = to.y - from.y, dz = to.z - from.z;
+    const len = Math.hypot(dx, dy, dz) || 1;
+    if (!dirsAt.has(id)) dirsAt.set(id, []);
+    dirsAt.get(id).push([dx / len, dy / len, dz / len]);
+  };
+  for (const t of model.tubes.values()) {
+    if (t.link) continue;   // Doppelrohr-Verbindung ist kein Arm
+    const a = model.nodes.get(t.a), b = model.nodes.get(t.b);
+    if (!a || !b) continue;
+    push(a.id, a, b);
+    push(b.id, b, a);
+  }
+  const bad = new Set();
+  for (const n of model.nodes.values()) {
+    if (n.c45body) continue;            // Adapter-Koerper ist immer einarmig
+    if (armsFeasible(dirsAt.get(n.id) || [])) bad.add(n.id);
+  }
+  return bad;
+}
+
 // Heuristik: aus Anzahl + Lage der Rohre den repraesentativen Kupplungstyp
 // ableiten (fuer Beschriftung). Eine Winkelkupplung (45 Grad) ist nur dann
 // kennzeichnend, wenn der Knoten als C45-Traeger markiert ist (node.c45, beim

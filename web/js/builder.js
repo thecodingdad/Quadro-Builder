@@ -3,6 +3,7 @@
 import { DIRECTIONS, DIAGONAL_DIRECTIONS, DIR_ALIGN_TOL, ARM_ALIGN_TOL, CLAMP_LINK_DIST } from "./config.js";
 import { geometry, getTube, spacingFor, getPanel, defaultPanel, diagonalTubeId, slideKindLabel, isCurvedTube, gridSpacing, tubeColors } from "./catalog.js";
 import { computeBuildPlan, connectorLabelInfo } from "./buildplan.js";
+import { infeasibleConnectors } from "./bom.js";
 import { t } from "./i18n.js";
 import { round2 } from "./util.js";
 
@@ -197,19 +198,28 @@ export class Builder {
   moveSelectionBy(dir, step = MOVE_STEP) {
     if (this.mode !== "select" || !this.selection.size) return false;
     const before = JSON.stringify(this.model.toJSON());
-    const res = this.model.moveSelection(
-      this.selection, dir[0] * step, dir[1] * step, dir[2] * step);
+    const res = this._move(dir[0] * step, dir[1] * step, dir[2] * step);
     if (!res.ok) { this.onNotice(t("notice_move_" + res.reason)); return false; }
-    this._afterMove(before, res.merged);
+    this._afterMove(before, res);
     return true;
   }
 
+  // Ein Verschiebe-Versuch. Die Kupplungs-Pruefung wird hereingereicht, damit
+  // model.js den Katalog nicht kennen muss.
+  _move(dx, dy, dz) {
+    return this.model.moveSelection(this.selection, dx, dy, dz,
+      { merge: true, validate: infeasibleConnectors });
+  }
+
   // Gemeinsamer Abschluss von Tasten- und Zieh-Verschiebung.
-  _afterMove(beforeJson, merged) {
+  _afterMove(beforeJson, res) {
     // Zusammengelegte Kupplungen gibt es nicht mehr -> aus der Auswahl nehmen.
     this._pruneSelection();
     this._pushHistory(beforeJson);
-    if (merged) this.onNotice(t("notice_move_merged", merged));
+    const parts = [];
+    if (res.detached) parts.push(t("notice_move_detached", res.detached));
+    if (res.merged) parts.push(t("notice_move_merged", res.merged));
+    if (parts.length) this.onNotice(parts.join(" "));
     this.refresh();
   }
 
@@ -235,6 +245,7 @@ export class Builder {
       // Zustand vor dem Ziehen: der ganze Zug wird EIN Undo-Schritt.
       before: JSON.stringify(this.model.toJSON()),
       applied: [0, 0, 0],
+      result: null,
       axes: this.scene.dragAxes(),
     };
     this.scene.setCursor("grabbing");
@@ -256,13 +267,20 @@ export class Builder {
       u[2] * su + v[2] * sv,
     ];
     const a = d.applied;
-    const step = [want[0] - a[0], want[1] - a[1], want[2] - a[2]];
-    if (!step[0] && !step[1] && !step[2]) return;
-    // Waehrend des Ziehens ohne Zusammenlegen: das liesse sich durch
-    // Zurueckziehen nicht wieder aufheben.
-    const res = this.model.moveSelection(this.selection, step[0], step[1], step[2], { merge: false });
-    if (!res.ok) return;                // ungueltiges Ziel -> letzte gute Lage halten
-    d.applied = want;
+    if (want[0] === a[0] && want[1] === a[1] && want[2] === a[2]) return;
+    // Jeder Schritt setzt auf der AUSGANGSLAGE auf, nicht auf dem vorigen
+    // Schritt. Nur so bleibt das Ziehen umkehrbar: Trennen und Zusammenlegen
+    // veraendern die Topologie und liessen sich sonst nicht zuruecknehmen.
+    this.model.loadJSON(JSON.parse(d.before));
+    const res = this._move(want[0], want[1], want[2]);
+    if (res.ok) {
+      d.applied = want;
+      d.result = res;
+    } else {
+      // Ungueltiges Ziel: bei der letzten gueltigen Lage bleiben.
+      this.model.loadJSON(JSON.parse(d.before));
+      if (a[0] || a[1] || a[2]) this._move(a[0], a[1], a[2]);
+    }
     this.refresh();
   }
 
@@ -273,7 +291,7 @@ export class Builder {
     if (!d) return;
     const a = d.applied;
     if (!a[0] && !a[1] && !a[2]) return;
-    this._afterMove(d.before, this.model.mergeMoved(this.selection));
+    this._afterMove(d.before, d.result || { merged: 0, detached: 0 });
   }
 
   /** Loescht alle ausgewaehlten Teile. Kupplungen zuletzt (nehmen Rohre mit). */
