@@ -1195,10 +1195,18 @@ export function initUI({ scene, model, builder }) {
       case "n": toggleLabels(); break;
       case "h": toggleHints(); break;
       case "c": scene.resetCamera(); break;
-      // Escape fuehrt immer zurueck in den Cursor-Modus.
+      // Escape fuehrt zurueck in den Cursor-Modus -- ausser im Aufbau-Modus:
+      // dort ist die Auswahl nur zum Nachschlagen da, Escape raeumt sie weg und
+      // laesst den Modus stehen (ihn zu verlassen waere ein Verlust an
+      // Fortschritt fuer eine Taste, die man beilaeufig drueckt).
       case "escape":
         closePopup();
-        setMode("select");
+        if (builder.mode === "assembly") {
+          builder.clearSelection();
+          builder.setHighlight(null);
+        } else {
+          setMode("select");
+        }
         break;
       case "delete":
       case "backspace":
