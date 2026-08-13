@@ -1,6 +1,6 @@
 // Bau-Interaktion: Auswahl, Anbau ueber Richtungs-Handles, Loeschen.
 
-import { DIRECTIONS, DIAGONAL_DIRECTIONS, DIR_ALIGN_TOL, ARM_ALIGN_TOL, CLAMP_LINK_DIST } from "./config.js";
+import { DIRECTIONS, DIAGONAL_DIRECTIONS, DIR_ALIGN_TOL, ARM_ALIGN_TOL, CLAMP_LINK_DIST, C45_SLEEVE_LEN, C45_ARM_LEN } from "./config.js";
 import { geometry, getTube, spacingFor, getPanel, defaultPanel, diagonalTubeId, slideKindLabel, isCurvedTube, gridSpacing, tubeColors } from "./catalog.js";
 import { computeBuildPlan, connectorLabelInfo } from "./buildplan.js";
 import { infeasibleConnectors } from "./bom.js";
@@ -9,14 +9,11 @@ import { round2 } from "./util.js";
 
 const CLICK_TOLERANCE = 9; // px: groessere Bewegung = Kamera drehen, kein Klick (Touch-tauglich)
 
-// Sitz der 45-Grad-Winkelkupplung, ausgemessen an den Dateien der Hersteller-
-// software (tmp/.../Basic II_Haus_13120.qdf, alle sechs Adapter identisch):
-// der Adapterkoerper steht 10,83 cm entlang der Kardinalachse und 3,61 cm
-// entlang der Schraege vor der Basiskupplung. Dazwischen liegt damit ein echtes
-// Rohrende, auf das die Winkelkupplung gesteckt wird. Frueher standen hier
-// 5 / 3,75 cm -- der Adapter klebte dadurch direkt am Basis-Wuerfel.
-const C45_SLEEVE_LEN = 10.83;
-const C45_ARM_LEN = 3.61;
+// C45_SLEEVE_LEN / C45_ARM_LEN stehen in config.js: der Generator baut dieselben
+// Schraegen und braucht dieselben Masse. Ausgemessen an den Dateien der
+// Herstellersoftware (tmp/.../Basic II_Haus_13120.qdf, alle sechs Adapter
+// identisch); dazwischen liegt ein echtes Rohrende, auf das die Winkelkupplung
+// gesteckt wird.
 
 // Zufallsfarbe: kein echter Farbwert, sondern ein Schalter in builder.color.
 // Jedes Teil wuerfelt beim Setzen (bzw. beim Umfaerben einer Auswahl) seine

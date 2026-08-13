@@ -41,6 +41,12 @@ export const ARM_ALIGN_TOL = 0.92;
 // (extendDiagonalSnap in model.js).
 export const DIAGONAL_SNAP_TOL = 3;
 
+// Masse der aufgesteckten 45-Grad-Winkelkupplung (C45): Laenge der kardinalen
+// Huelse (Basiskupplung -> Adapterkoerper) und des 45-Grad-Arms
+// (Adapterkoerper -> Rohranschluss). Genutzt von builder.js und generator.js.
+export const C45_SLEEVE_LEN = 10.83;
+export const C45_ARM_LEN = 3.61;
+
 // Max. Abstand (cm), bis zu dem ein Knoten beim Setzen eines zweiten Rohrs im
 // Doppelrohrverbinder noch mit seinem Nachbarn verlinkt wird (builder.js).
 export const CLAMP_LINK_DIST = 7;

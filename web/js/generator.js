@@ -13,6 +13,7 @@
 //   D  Zuschnitt -- Groesse an den Bestand anpassen, faerben, pruefen
 
 import { BuildModel } from "./model.js";
+import { C45_SLEEVE_LEN, C45_ARM_LEN, DIR_ALIGN_TOL } from "./config.js";
 import { gridSpacing, geometry, tubeColors, defaultPanel } from "./catalog.js";
 import { computeBOM, compareInventory, infeasibleConnectors } from "./bom.js";
 
@@ -98,7 +99,7 @@ const SLENDERNESS = 3;
  *
  * Liefert { cells: Map "i,k" -> { i, k, h }, levels, nx, nz }.
  */
-function makeMassing(rng, size, theme) {
+function makeMassing(rng, size, theme, ridgeWidth = 0) {
   const { nx, nz, levels } = size;
   const shape = THEME_SHAPE[theme] || THEME_SHAPE.spielhaus;
   const cells = new Map();
@@ -118,12 +119,21 @@ function makeMassing(rng, size, theme) {
     }
   };
 
+  // Ein Giebeldach braucht einen First, also einen Streifen von genau einer
+  // Zelle Breite ganz oben -- zufaellig entsteht der so gut wie nie. Ist ein
+  // Dach erwuenscht, bleibt der Kern eine Ebene tiefer und der First kommt
+  // anschliessend als eigener Block darauf.
+  const ridge = ridgeWidth > 0 && levels >= 3
+    && Math.min(nx, nz) >= ridgeWidth + 1 && rng.chance(0.45);
+
   // Kern: traegt die volle Hoehe. Bei grossen Grundrissen waechst er mit, sonst
   // deckelt die Schlankheitsregel die Hoehe eines 2x2-Kerns zu frueh.
   const grow = Math.floor(Math.min(nx, nz) / 4);
   const side = () => Math.max(1, rng.int(shape.core[0], shape.core[1]) + grow);
   const cw = Math.min(nx, side()), cd = Math.min(nz, side());
-  place(rng.int(0, nx - cw), rng.int(0, nz - cd), cw, cd, heightFor(cw, cd, true));
+  const coreH = heightFor(cw, cd, true) - (ridge ? 1 : 0);
+  const core = { i0: rng.int(0, nx - cw), k0: rng.int(0, nz - cd), w: cw, d: cd };
+  place(core.i0, core.k0, cw, cd, Math.max(1, coreH));
 
   // Anbauten: jeder greift eine vorhandene Zelle auf, damit alles zusammenhaengt.
   // Gebaut wird, bis die angestrebte Flaechendeckung erreicht ist.
@@ -137,7 +147,23 @@ function makeMassing(rng, size, theme) {
     const k0 = Math.max(0, Math.min(nz - d, anchor.k - rng.int(0, d - 1)));
     place(i0, k0, w, d, heightFor(w, d, false));
   }
-  return { cells, levels, nx, nz };
+
+  // First: ein Zelle breiter Streifen laengs des Kerns, eine Ebene ueber ALLEM
+  // anderen -- nur dann findet der Dachbau spaeter einen freien Streifen und
+  // die Sparren stossen an nichts. Er darf die Groessenstufe um eine Ebene
+  // ueberschreiten; als aufgesetzter First ist er von unten voll abgestuetzt.
+  let usedLevels = levels;
+  if (ridge) {
+    let maxH = 0;
+    for (const c of cells.values()) maxH = Math.max(maxH, c.h);
+    const alongX = core.w >= core.d;
+    const len = Math.max(2, alongX ? core.w : core.d);
+    const i0 = alongX ? core.i0 : core.i0 + Math.floor((core.w - ridgeWidth) / 2);
+    const k0 = alongX ? core.k0 + Math.floor((core.d - ridgeWidth) / 2) : core.k0;
+    usedLevels = maxH + 1;
+    place(i0, k0, alongX ? len : ridgeWidth, alongX ? ridgeWidth : len, usedLevels);
+  }
+  return { cells, levels: usedLevels, nx, nz };
 }
 
 // --- Phase B: Skelett -----------------------------------------------------
@@ -250,6 +276,8 @@ function makeCtx(model, mass, rng, allow) {
   const colors = tubeColors().map((c) => c.id);
   return {
     model, mass, rng, allow, STEP, y0, colors,
+    // Kupplungen, an denen ein Dach ansetzt -- dort darf nichts mehr hoch.
+    roofNodes: new Set(),
     panelColors: colors.concat(PANEL_EXTRA_COLOR),
     tubeColor: () => rng.pick(colors),
     node: (i, j, k) => model.addNode(i * STEP, y0 + j * STEP, k * STEP),
@@ -310,6 +338,17 @@ function addRailings(ctx) {
     for (let idx = 0; idx < rails.length; idx++) {
       if (idx === skip) continue;
       const [p, q] = edgeNodes(rails[idx]);
+      // Wo ein Dach ansetzt, gibt es kein Gelaender: Pfosten und Riegel
+      // besetzten den Stutzen, auf dem die Winkelkupplung sitzt. Geprueft
+      // werden beide Ebenen -- der Riegel liegt eine Ebene ueber der Kante,
+      // und genau dort steht oft die Kupplung eines hoeheren Nachbarn.
+      // (Das Kennzeichen c45 traegt der Adapterkoerper, nicht die Kupplung
+      // darunter -- deshalb die eigene Liste aus dem Dachbau.)
+      const carriers = [
+        ctx.find(p.i, lvl.j, p.k), ctx.find(q.i, lvl.j, q.k),
+        ctx.find(p.i, lvl.j + 1, p.k), ctx.find(q.i, lvl.j + 1, q.k),
+      ];
+      if (carriers.some((n) => n && ctx.roofNodes.has(n.id))) continue;
       // Steht hier schon etwas Hoeheres, waere das kein Gelaender, sondern ein
       // Doppelrohr -- solche Kanten ueberspringen.
       const cells = [{ i: p.i, k: p.k }, { i: p.i - 1, k: p.k }, { i: p.i, k: p.k - 1 }, { i: p.i - 1, k: p.k - 1 }];
@@ -404,6 +443,139 @@ function addMonkeyBars(ctx) {
   return 0;
 }
 
+// --- Daecher --------------------------------------------------------------
+
+/**
+ * Streifen fuer ein Dach suchen: eine Reihe von Zellen, die auf ihrer obersten
+ * Ebene liegen und quer zur Reihe genau `width` Zellen breit sind. Nur ueber so
+ * einem Streifen treffen sich die Sparren bzw. Boegen wieder in einem Punkt.
+ *
+ * Liefert { j, dir ("x"|"z"), i0, k0, len } oder null.
+ */
+function findRoofStrip(mass, width) {
+  const active = (i, k, j) => (mass.cells.get(key(i, k))?.h ?? 0) > j;
+  const best = { len: 0 };
+  for (const c of mass.cells.values()) {
+    const j = c.h - 1;
+    // quer zur Reihe genau `width` breit und beidseitig nichts daneben
+    for (const dir of ["x", "z"]) {
+      const across = dir === "x" ? { di: 1, dk: 0 } : { di: 0, dk: 1 };
+      const along = dir === "x" ? { di: 0, dk: 1 } : { di: 1, dk: 0 };
+      // Anfang der Querreihe?
+      if (active(c.i - across.di, c.k - across.dk, j)) continue;
+      let w = 0;
+      while (active(c.i + across.di * w, c.k + across.dk * w, j)
+             && (mass.cells.get(key(c.i + across.di * w, c.k + across.dk * w))?.h ?? 0) === c.h) w++;
+      if (w !== width) continue;
+      // Nebenan darf nichts HOEHER stehen: dessen Pfosten und Riegel laegen
+      // sonst genau im Weg der Sparren.
+      if (active(c.i + across.di * w, c.k + across.dk * w, j)) continue;
+      // Anfang der Laengsreihe?
+      if (active(c.i - along.di, c.k - along.dk, j)) continue;
+      let len = 0;
+      while (true) {
+        const i = c.i + along.di * len, k = c.k + along.dk * len;
+        let full = true;
+        for (let s = 0; s < width; s++) {
+          const cc = mass.cells.get(key(i + across.di * s, k + across.dk * s));
+          if (!cc || cc.h !== c.h) { full = false; break; }
+        }
+        if (!full) break;
+        len++;
+      }
+      // Ein Dach gehoert nach oben, und ein einzelnes Sparrenpaar ist kein
+      // Dach, sondern ein Dreieck: hoechster, dann laengster Streifen gewinnt.
+      if (len < 2) continue;
+      if (!best.len || j > best.j || (j === best.j && len > best.len)) {
+        Object.assign(best, { j, dir, i0: c.i, k0: c.k, len, h: c.h });
+      }
+    }
+  }
+  return best.len ? best : null;
+}
+
+/** Steckt am Knoten schon etwas in Richtung `axis`? Dann ist dort kein Platz
+ *  fuer die Huelse einer Winkelkupplung. */
+function armFree(model, node, axis) {
+  for (const t of model.tubes.values()) {
+    if (t.link) continue;
+    let nb = null;
+    if (t.a === node.id) nb = model.nodes.get(t.b);
+    else if (t.b === node.id) nb = model.nodes.get(t.a);
+    if (!nb) continue;
+    const dx = nb.x - node.x, dy = nb.y - node.y, dz = nb.z - node.z;
+    const L = Math.hypot(dx, dy, dz) || 1;
+    if ((dx / L) * axis[0] + (dy / L) * axis[1] + (dz / L) * axis[2] > DIR_ALIGN_TOL) return false;
+  }
+  return true;
+}
+
+/**
+ * Giebeldach ueber einem ein Zelle breiten Streifen: je Rasterlinie zwei
+ * Sparren ueber 45-Grad-Winkelkupplungen, die sich ueber der Mitte treffen.
+ * Breitere Streifen bekommen keins -- ein 35er-Rohr im 45-Grad-Raster reicht
+ * genau ueber eine halbe Zelle, ueber zwei Zellen traefen sich die Sparren nie.
+ */
+function addGableRoof(ctx) {
+  const { model, mass, rng, tubeColor } = ctx;
+  const strip = findRoofStrip(mass, 1);
+  if (!strip) return 0;
+  const S = Math.SQRT1_2;
+  const across = strip.dir === "x" ? [1, 0, 0] : [0, 0, 1];
+  const j = strip.j;
+  let built = 0;
+  for (let n = 0; n <= strip.len; n++) {
+    const along = strip.dir === "x" ? { di: 0, dk: n } : { di: n, dk: 0 };
+    const lo = { i: strip.i0 + along.di, k: strip.k0 + along.dk };
+    const hi = { i: lo.i + across[0], k: lo.k + across[2] };
+    const a = ctx.find(lo.i, j, lo.k), b = ctx.find(hi.i, j, hi.k);
+    if (!a || !b) continue;
+    const dirA = [across[0] * S, S, across[2] * S];
+    const dirB = [-across[0] * S, S, -across[2] * S];
+    const axisA = [-across[0], 0, -across[2]];
+    const axisB = [across[0], 0, across[2]];
+    if (!armFree(model, a, axisA) || !armFree(model, b, axisB)) continue;
+    const color = tubeColor();
+    const r1 = model.extendC45Diagonal(a.id, dirA, axisA, "T35", color, 35,
+      gridSpacing(), C45_SLEEVE_LEN, C45_ARM_LEN);
+    if (!r1 || !r1.tube) continue;
+    ctx.roofNodes.add(a.id);
+    const r2 = model.extendC45Diagonal(b.id, dirB, axisB, "T35", color, 35,
+      gridSpacing(), C45_SLEEVE_LEN, C45_ARM_LEN);
+    if (r2 && r2.tube) { ctx.roofNodes.add(b.id); built++; }
+  }
+  if (built) rng.next();  // Farbfolge bleibt unabhaengig von der Sparrenzahl
+  return built;
+}
+
+/**
+ * Rundbogendach ueber einem zwei Zellen breiten Streifen: je Rasterlinie zwei
+ * Viertelkreise, die sich ueber der Mitte treffen.
+ */
+function addBowRoof(ctx) {
+  const { model, mass, tubeColor } = ctx;
+  const strip = findRoofStrip(mass, 2);
+  if (!strip) return 0;
+  const across = strip.dir === "x" ? [1, 0, 0] : [0, 0, 1];
+  const R = gridSpacing();
+  const j = strip.j;
+  let built = 0;
+  for (let n = 0; n <= strip.len; n++) {
+    const along = strip.dir === "x" ? { di: 0, dk: n } : { di: n, dk: 0 };
+    const lo = { i: strip.i0 + along.di, k: strip.k0 + along.dk };
+    const hi = { i: lo.i + across[0] * 2, k: lo.k + across[2] * 2 };
+    const a = ctx.find(lo.i, j, lo.k), b = ctx.find(hi.i, j, hi.k);
+    if (!a || !b) continue;
+    const color = tubeColor();
+    const r1 = model.extendBow(a.id, [0, 1, 0], across, "TC1", color, R);
+    if (!r1 || !r1.tube) continue;
+    ctx.roofNodes.add(a.id);
+    const r2 = model.extendBow(b.id, [0, 1, 0], [-across[0], 0, -across[2]], "TC1", color, R);
+    if (r2 && r2.tube) { ctx.roofNodes.add(b.id); built++; }
+  }
+  return built;
+}
+
 /** Rutsche an das hoechste passende senkrechte Rohrpaar haengen. */
 function addSlide(ctx) {
   const { model, rng, colors } = ctx;
@@ -419,6 +591,14 @@ function addSlide(ctx) {
 function applyFeatures(ctx, theme) {
   const { allow, rng } = ctx;
   const feats = [];
+  // Dach zuerst: es belegt die Arme der obersten Kupplungen, an denen sonst ein
+  // Gelaender ansetzen wuerde. Sind beide Formen erlaubt, entscheidet der
+  // Wurf -- sonst gaebe es nie einen Rundbogen.
+  const roofs = rng.chance(0.5) ? ["gable", "arch"] : ["arch", "gable"];
+  for (const kind of roofs) {
+    if (kind === "gable" && allow.diagonals && addGableRoof(ctx)) { feats.push("gable"); break; }
+    if (kind === "arch" && allow.bows && addBowRoof(ctx)) { feats.push("arch"); break; }
+  }
   if (allow.panels && (theme === "hoehle" || rng.chance(0.5))) {
     if (addCaveWalls(ctx, theme === "hoehle" ? 2 : 1)) feats.push("cave");
   }
@@ -465,7 +645,10 @@ export function validate(model) {
 /** Ein Modell einer Groessenstufe bauen. */
 function buildAt(step, rng, theme, allow) {
   const model = new BuildModel();
-  const mass = makeMassing(rng, step, theme);
+  // Der First ist so breit wie das Dach, das darauf passt: eine Zelle fuer den
+  // Giebel aus Schraegen, zwei fuer den Rundbogen.
+  const ridgeWidth = allow.diagonals ? 1 : (allow.bows ? 2 : 0);
+  const mass = makeMassing(rng, step, theme, ridgeWidth);
   const ctx = buildSkeleton(model, mass, rng, allow);
   const features = applyFeatures(ctx, theme);
   return { model, mass, features };

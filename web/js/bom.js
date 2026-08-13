@@ -98,18 +98,29 @@ function armsFeasible(dirs) {
  */
 export function infeasibleConnectors(model) {
   const dirsAt = new Map();
-  const push = (id, from, to) => {
+  const push = (id, from, to, arm) => {
     const dx = to.x - from.x, dy = to.y - from.y, dz = to.z - from.z;
     const len = Math.hypot(dx, dy, dz) || 1;
+    let d = [dx / len, dy / len, dz / len];
+    // Die Huelse einer 45-Grad-Winkelkupplung steckt auf einem KARDINALEN
+    // Stutzen; ihr Adapterkoerper sitzt aber zusaetzlich um den 45-Grad-Arm
+    // versetzt, sodass die Kante gemessen leicht schief laeuft (~17 Grad).
+    // Ungerundet gaelte damit jede gebaute Schraege als nicht herstellbar.
+    if (arm) {
+      const m = [Math.abs(d[0]), Math.abs(d[1]), Math.abs(d[2])];
+      const ax = m.indexOf(Math.max(m[0], m[1], m[2]));
+      d = [0, 0, 0];
+      d[ax] = Math.sign([dx, dy, dz][ax]) || 1;
+    }
     if (!dirsAt.has(id)) dirsAt.set(id, []);
-    dirsAt.get(id).push([dx / len, dy / len, dz / len]);
+    dirsAt.get(id).push(d);
   };
   for (const t of model.tubes.values()) {
     if (t.link) continue;   // Doppelrohr-Verbindung ist kein Arm
     const a = model.nodes.get(t.a), b = model.nodes.get(t.b);
     if (!a || !b) continue;
-    push(a.id, a, b);
-    push(b.id, b, a);
+    push(a.id, a, b, t.arm);
+    push(b.id, b, a, t.arm);
   }
   const bad = new Set();
   for (const n of model.nodes.values()) {
