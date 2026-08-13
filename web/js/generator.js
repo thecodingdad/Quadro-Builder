@@ -1,0 +1,380 @@
+// Modell-Generator: baut aus dem eigenen Teile-Bestand ein vollstaendiges,
+// standfestes und bespielbares Modell.
+//
+// Bewusst ohne Three.js und DOM -- wie model.js/bom.js/buildplan.js damit in
+// Node testbar. Die Mengenrechnung wird NICHT nachgebaut: geprueft wird gegen
+// computeBOM/compareInventory, also gegen genau die Funktionen, die auch das
+// Bestandspanel benutzt.
+//
+// Ablauf in vier Phasen:
+//   A  Massing   -- Grundriss aus ueberlappenden Rechtecken + Hoehenkarte
+//   B  Skelett   -- Rahmen je Ebene, Stuetzen bis zum Boden, Podestplatten
+//   C  Features  -- (folgt) Hoehle, Terrasse, Kletterwand, Rutsche
+//   D  Zuschnitt -- Groesse an den Bestand anpassen, faerben, pruefen
+
+import { BuildModel } from "./model.js";
+import { gridSpacing, geometry, tubeColors, defaultPanel } from "./catalog.js";
+import { computeBOM, compareInventory, infeasibleConnectors } from "./bom.js";
+
+export const THEMES = ["burg", "hoehle", "turm", "spielhaus"];
+export const SIZES = ["auto", "s", "m", "l", "xl"];
+
+// Welche Bauteile darf der Generator verwenden? 35er-Rohre und Kupplungen sind
+// immer dabei -- ohne sie steht nichts.
+export const DEFAULT_ALLOW = {
+  panels: true, diagonals: true, bows: false, slide: false,
+  t15: false, t25: false, t75: false, reinforce: false,
+};
+
+// Groessenleiter: Grundriss in Zellen + Anzahl Ebenen. Kalibriert an den
+// Referenzmodellen (bis 7x10 Zellen, 6 Ebenen) und den Original-Entwuerfen
+// (Median 41 Kupplungen -- die kleinen Stufen decken den Normalfall ab).
+const SIZE_LADDER = [
+  { nx: 2, nz: 2, levels: 1 },
+  { nx: 3, nz: 2, levels: 2 },
+  { nx: 3, nz: 3, levels: 2 },
+  { nx: 4, nz: 3, levels: 3 },
+  { nx: 4, nz: 4, levels: 3 },
+  { nx: 5, nz: 4, levels: 4 },
+  { nx: 6, nz: 5, levels: 5 },
+  { nx: 7, nz: 6, levels: 6 },
+  { nx: 7, nz: 10, levels: 6 },
+];
+
+// Benannte Groessen -> Stufe auf der Leiter.
+const SIZE_INDEX = { s: 2, m: 4, l: 6, xl: 8 };
+
+const PANEL_EXTRA_COLOR = "black"; // Platten gibt es zusaetzlich in Schwarz
+
+// --- Zufall ---------------------------------------------------------------
+// Kleiner deterministischer Generator (mulberry32): gleicher Seed -> gleiches
+// Modell. Noetig fuer reproduzierbare Tests und ein spaeteres "nochmal dieses".
+function mulberry32(a) {
+  return function () {
+    a |= 0; a = (a + 0x6D2B79F5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+class Rng {
+  constructor(seed) { this._r = mulberry32(seed >>> 0); }
+  next() { return this._r(); }
+  int(lo, hi) { return lo + Math.floor(this._r() * (hi - lo + 1)); }
+  pick(arr) { return arr[Math.floor(this._r() * arr.length)]; }
+  chance(p) { return this._r() < p; }
+}
+
+// --- Phase A: Massing -----------------------------------------------------
+
+const key = (i, k) => i + "," + k;
+
+// Form je Thema: Anzahl der Bloecke und Kantenlaenge des Kerns (in Zellen).
+// Ein Turm ist ein schlanker Block, eine Burg ein Verbund aus mehreren.
+// cover = angestrebter Anteil der belegten Flaeche an der Grundriss-Flaeche.
+const THEME_SHAPE = {
+  burg:      { blocks: [2, 5], core: [2, 3], cover: 0.60 },
+  hoehle:    { blocks: [1, 3], core: [3, 4], cover: 0.75 },
+  turm:      { blocks: [1, 2], core: [2, 2], cover: 0.30 },
+  spielhaus: { blocks: [1, 4], core: [2, 3], cover: 0.50 },
+};
+
+// Ein Block darf nicht beliebig duenn und hoch sein: hoechstens seine kleinste
+// Grundkante plus drei Ebenen. Ein 2x2-Block (80x80 cm) kommt damit auf 5
+// Ebenen -- die Referenzmodelle enden mit 2x2 bis 3x3 Zellen auf 200 cm.
+const SLENDERNESS = 3;
+
+/**
+ * Grundriss + Hoehenkarte.
+ *
+ * Der Grundriss ist die Vereinigung mehrerer Bloecke, jeder mit EIGENER Hoehe;
+ * die Hoehe einer Zelle ist das Maximum der Bloecke, die sie ueberdecken. Aus
+ * dem Verbund entsteht die gestufte, verwinkelte Form der Referenzmodelle --
+ * ein Hoehenabfall nach aussen allein ergaebe nur eine Pyramide.
+ *
+ * Jeder Block ueberdeckt mindestens eine schon belegte Zelle; damit haengt der
+ * Grundriss immer zusammen.
+ *
+ * Liefert { cells: Map "i,k" -> { i, k, h }, levels, nx, nz }.
+ */
+function makeMassing(rng, size, theme) {
+  const { nx, nz, levels } = size;
+  const shape = THEME_SHAPE[theme] || THEME_SHAPE.spielhaus;
+  const cells = new Map();
+
+  const heightFor = (w, d, full) => {
+    const cap = Math.min(levels, Math.min(w, d) + SLENDERNESS);
+    return full ? cap : Math.max(1, Math.min(cap, rng.int(1, Math.max(1, levels - 1))));
+  };
+  const place = (i0, k0, w, d, h) => {
+    for (let i = i0; i < i0 + w; i++) {
+      for (let k = k0; k < k0 + d; k++) {
+        const kk = key(i, k);
+        const c = cells.get(kk);
+        if (c) c.h = Math.max(c.h, h);
+        else cells.set(kk, { i, k, h });
+      }
+    }
+  };
+
+  // Kern: traegt die volle Hoehe. Bei grossen Grundrissen waechst er mit, sonst
+  // deckelt die Schlankheitsregel die Hoehe eines 2x2-Kerns zu frueh.
+  const grow = Math.floor(Math.min(nx, nz) / 4);
+  const side = () => Math.max(1, rng.int(shape.core[0], shape.core[1]) + grow);
+  const cw = Math.min(nx, side()), cd = Math.min(nz, side());
+  place(rng.int(0, nx - cw), rng.int(0, nz - cd), cw, cd, heightFor(cw, cd, true));
+
+  // Anbauten: jeder greift eine vorhandene Zelle auf, damit alles zusammenhaengt.
+  // Gebaut wird, bis die angestrebte Flaechendeckung erreicht ist.
+  const maxBlocks = rng.int(shape.blocks[0], shape.blocks[1]);
+  const target = nx * nz * shape.cover;
+  for (let b = 1; b < maxBlocks && cells.size < target; b++) {
+    const w = Math.max(1, Math.min(nx, rng.int(1, Math.round(nx * 0.7))));
+    const d = Math.max(1, Math.min(nz, rng.int(1, Math.round(nz * 0.7))));
+    const anchor = rng.pick([...cells.values()]);
+    const i0 = Math.max(0, Math.min(nx - w, anchor.i - rng.int(0, w - 1)));
+    const k0 = Math.max(0, Math.min(nz - d, anchor.k - rng.int(0, d - 1)));
+    place(i0, k0, w, d, heightFor(w, d, false));
+  }
+  return { cells, levels, nx, nz };
+}
+
+// --- Phase B: Skelett -----------------------------------------------------
+
+// Kanten einer Zelle. "x" laeuft in i-Richtung, "z" in k-Richtung; der
+// Schluessel benennt immer den kleineren Endknoten.
+function cellEdges(i, k) {
+  return [
+    { a: "x", i, k }, { a: "x", i, k: k + 1 },
+    { a: "z", i, k }, { a: "z", i: i + 1, k },
+  ];
+}
+const edgeKey = (e) => e.a + ":" + e.i + "," + e.k;
+const edgeNodes = (e) => (e.a === "x"
+  ? [{ i: e.i, k: e.k }, { i: e.i + 1, k: e.k }]
+  : [{ i: e.i, k: e.k }, { i: e.i, k: e.k + 1 }]);
+
+/**
+ * Welche Rahmen-Kanten und welche Platten gehoeren zu welcher Ebene?
+ *
+ * Rahmen: die AUSSENKANTEN der auf dieser Ebene noch vorhandenen Zellen
+ * (Kanten, die nur zu einer Zelle gehoeren). Innenkanten bleiben frei -- so
+ * entsteht ein begehbarer Raum statt eines vollen Gitters. Die Referenzmodelle
+ * liegen genau in dieser Groessenordnung (66 waagerechte Rohre auf 63 Knoten).
+ *
+ * Platten liegen auf der obersten Ebene einer Zellsaeule: dort steht man. Die
+ * vier Randrohre dieser Zelle werden dafuer zusaetzlich gebaut.
+ */
+function planLevels(mass, allow) {
+  const levels = [];
+  for (let j = 0; j < mass.levels; j++) {
+    const active = [...mass.cells.values()].filter((c) => c.h > j);
+    if (!active.length) break;
+    const count = new Map();
+    for (const c of active) {
+      for (const e of cellEdges(c.i, c.k)) {
+        const kk = edgeKey(e);
+        count.set(kk, (count.get(kk) || 0) + 1);
+      }
+    }
+    const edges = new Map();
+    for (const c of active) {
+      for (const e of cellEdges(c.i, c.k)) {
+        if (count.get(edgeKey(e)) === 1) edges.set(edgeKey(e), e);
+      }
+    }
+    // Podeste: Zellen, deren Saeule hier endet.
+    const decks = allow.panels ? active.filter((c) => c.h === j + 1) : [];
+    for (const c of decks) {
+      for (const e of cellEdges(c.i, c.k)) edges.set(edgeKey(e), e);
+    }
+    levels.push({ j, active, edges: [...edges.values()], decks });
+  }
+  return levels;
+}
+
+/** Baut Rahmen, Stuetzen und Platten in ein leeres Modell. */
+function buildSkeleton(model, mass, rng, allow) {
+  const STEP = gridSpacing();
+  const y0 = geometry().connectorSize / 2;
+  const colors = tubeColors().map((c) => c.id);
+  const panelColors = colors.concat(PANEL_EXTRA_COLOR);
+  const tubeColor = () => rng.pick(colors);
+  const node = (i, j, k) => model.addNode(i * STEP, y0 + j * STEP, k * STEP);
+
+  const plan = planLevels(mass, allow);
+  const top = new Map(); // Knoten "i,k" -> hoechste Ebene, auf der er gebraucht wird
+
+  // Waagerechte Rahmen
+  for (const lvl of plan) {
+    for (const e of lvl.edges) {
+      const [p, q] = edgeNodes(e);
+      const a = node(p.i, lvl.j, p.k), b = node(q.i, lvl.j, q.k);
+      model.addTube(a.id, b.id, "T35", tubeColor(), 35);
+      for (const n of [p, q]) {
+        const kk = key(n.i, n.k);
+        if (!top.has(kk) || top.get(kk) < lvl.j) top.set(kk, lvl.j);
+      }
+    }
+  }
+
+  // Stuetzen: unter jedem benutzten Knoten durchgehend bis zum Boden. Damit
+  // steht jede Rahmenecke auf dem Boden -- keine Kragarme.
+  for (const [kk, jTop] of top) {
+    const [i, k] = kk.split(",").map(Number);
+    for (let j = 1; j <= jTop; j++) {
+      const a = node(i, j - 1, k), b = node(i, j, k);
+      model.addTube(a.id, b.id, "T35", tubeColor(), 35);
+    }
+  }
+
+  // Platten auf den Podest-Feldern
+  const panelId = defaultPanel();
+  for (const lvl of plan) {
+    for (const c of lvl.decks) {
+      const ids = [
+        node(c.i, lvl.j, c.k).id, node(c.i + 1, lvl.j, c.k).id,
+        node(c.i + 1, lvl.j, c.k + 1).id, node(c.i, lvl.j, c.k + 1).id,
+      ];
+      model.addPanel(ids, panelId, rng.pick(panelColors));
+    }
+  }
+  return plan;
+}
+
+// --- Phase D: Pruefung und Zuschnitt --------------------------------------
+
+/** Haengt alles zusammen? Ein Modell in zwei Teilen waere kein Modell. */
+function isConnected(model) {
+  const ids = [...model.nodes.keys()];
+  if (ids.length <= 1) return true;
+  const adj = new Map(ids.map((id) => [id, []]));
+  for (const t of model.tubes.values()) {
+    if (!adj.has(t.a) || !adj.has(t.b)) continue;
+    adj.get(t.a).push(t.b);
+    adj.get(t.b).push(t.a);
+  }
+  const seen = new Set([ids[0]]);
+  const stack = [ids[0]];
+  while (stack.length) {
+    for (const nb of adj.get(stack.pop())) {
+      if (!seen.has(nb)) { seen.add(nb); stack.push(nb); }
+    }
+  }
+  return seen.size === ids.length;
+}
+
+/** Ist das Modell baubar? Liefert null oder den Grund. */
+export function validate(model) {
+  for (const n of model.nodes.values()) {
+    if (model.isBelowGround(n.y)) return "ground";
+  }
+  if (model.collisions().size) return "collision";
+  if (infeasibleConnectors(model).size) return "connector";
+  if (!isConnected(model)) return "split";
+  return null;
+}
+
+/** Ein Modell einer Groessenstufe bauen. */
+function buildAt(step, rng, theme, allow) {
+  const model = new BuildModel();
+  const mass = makeMassing(rng, step, theme);
+  const plan = buildSkeleton(model, mass, rng, allow);
+  return { model, mass, plan };
+}
+
+function metaOf(model, mass, theme, step) {
+  let tubes = 0;
+  for (const t of model.tubes.values()) if (!t.arm && !t.link) tubes++;
+  return {
+    theme,
+    footprint: [step.nx, step.nz],
+    levels: mass.levels,
+    cells: mass.cells.size,
+    nodes: model.nodes.size,
+    tubes,
+    panels: model.panels.size,
+    price: computeBOM(model).totals.price,
+    features: [],
+  };
+}
+
+/**
+ * Erzeugt ein Modell.
+ *
+ * opts:
+ *   seed       Zahl; gleicher Seed -> gleiches Modell
+ *   theme      "random" | THEMES
+ *   size       "auto" | "s" | "m" | "l" | "xl" ("auto" = so gross wie der
+ *              Bestand es hergibt)
+ *   inventory  { tubes:{}, connectors:{}, panels:{}, reinforcements:{} } oder
+ *              null. Gesetzt = das Modell muss vollstaendig daraus baubar sein.
+ *   allow      erlaubte Bauteile (siehe DEFAULT_ALLOW)
+ *
+ * Liefert { ok, reason, json, meta, missing }.
+ */
+export function generateModel(opts = {}) {
+  const seed = opts.seed != null ? opts.seed : (Math.random() * 4294967296) >>> 0;
+  const allow = { ...DEFAULT_ALLOW, ...(opts.allow || {}) };
+  const inv = opts.inventory || null;
+  const theme = (!opts.theme || opts.theme === "random")
+    ? new Rng(seed ^ 0x9e3779b9).pick(THEMES) : opts.theme;
+
+  // Ohne Platten im Bestand hat eine Plattenoption keinen Sinn.
+  if (inv && allow.panels && !hasAny(inv.panels)) allow.panels = false;
+
+  const attempt = (idx) => {
+    const step = SIZE_LADDER[idx];
+    // Der Seed haengt an der Stufe: sonst wuerde jede Stufe dasselbe Massing
+    // mit anderer Groesse liefern und die Suche saehe immer gleich aus.
+    const { model, mass } = buildAt(step, new Rng(seed + idx * 7919), theme, allow);
+    const bad = validate(model);
+    if (bad) return { ok: false, reason: bad };
+    const cmp = inv ? compareInventory(computeBOM(model), inv) : null;
+    return {
+      ok: !cmp || cmp.feasible,
+      reason: cmp && !cmp.feasible ? "inventory" : null,
+      model, mass, step,
+      missing: cmp ? cmp.rows.filter((r) => !r.ok) : [],
+    };
+  };
+
+  let best = null;
+  if (opts.size && opts.size !== "auto" && SIZE_INDEX[opts.size] != null && !inv) {
+    best = attempt(SIZE_INDEX[opts.size]);
+    // Feste Groesse ohne Bestandsbindung: ein misslungener Wurf faellt auf die
+    // naechstkleinere Stufe zurueck statt gar nichts zu liefern.
+    for (let i = SIZE_INDEX[opts.size] - 1; i >= 0 && (!best || !best.ok); i--) {
+      best = attempt(i);
+    }
+  } else {
+    // Groesste Stufe suchen, die noch passt: binaer ueber die Leiter.
+    let lo = 0, hi = SIZE_LADDER.length - 1;
+    const cap = opts.size && SIZE_INDEX[opts.size] != null ? SIZE_INDEX[opts.size] : hi;
+    hi = Math.min(hi, cap);
+    while (lo <= hi) {
+      const mid = (lo + hi) >> 1;
+      const res = attempt(mid);
+      if (res.ok) { best = res; lo = mid + 1; }
+      else hi = mid - 1;
+    }
+    if (!best) best = attempt(0);
+  }
+
+  if (!best || !best.ok) {
+    return { ok: false, reason: (best && best.reason) || "failed", missing: (best && best.missing) || [] };
+  }
+  return {
+    ok: true,
+    json: best.model.toJSON(),
+    meta: metaOf(best.model, best.mass, theme, best.step),
+    missing: best.missing || [],
+  };
+}
+
+function hasAny(bucket) {
+  if (!bucket) return false;
+  for (const v of Object.values(bucket)) if (v > 0) return true;
+  return false;
+}
