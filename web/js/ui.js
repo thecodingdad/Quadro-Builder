@@ -837,14 +837,12 @@ export function initUI({ scene, model, builder }) {
     { id: "bows", key: "gen_part_bows" },
     { id: "slide", key: "gen_part_slide" },
     { id: "t15", key: "gen_part_t15" },
-    { id: "t25", key: "gen_part_t25" },
-    { id: "t75", key: "gen_part_t75" },
     { id: "reinforce", key: "gen_part_reinforce" },
   ];
   const GEN_DEFAULTS = {
     theme: "random", size: "auto", inventory: true,
     allow: { panels: true, diagonals: true, bows: false, slide: false,
-             t15: false, t25: false, t75: false, reinforce: false },
+             t15: false, reinforce: false },
   };
 
   let genOpts = (() => {
@@ -875,11 +873,14 @@ export function initUI({ scene, model, builder }) {
     box.innerHTML = "";
     const locked = genOpts.inventory;
     box.classList.toggle("locked", locked);
+    // Gesperrt heisst nicht nur "nicht klickbar": angezeigt wird dann, was der
+    // Bestand hergibt, nicht die zuletzt freie Auswahl.
+    const effective = locked ? allowFromInventory() : genOpts.allow;
     for (const p of GEN_PARTS) {
       const lab = el("label");
       const cb = el("input");
       cb.type = "checkbox";
-      cb.checked = p.fixed ? true : !!genOpts.allow[p.id];
+      cb.checked = p.fixed ? true : !!effective[p.id];
       cb.disabled = p.fixed || locked;
       cb.addEventListener("change", () => {
         genOpts.allow[p.id] = cb.checked;
@@ -928,6 +929,22 @@ export function initUI({ scene, model, builder }) {
     syncGenDialog();
   });
 
+  // Im Bestands-Modus entscheidet der Bestand ueber die Bauteile: was nicht da
+  // ist, kann auch nicht verbaut werden. Rutschen fuehrt der Bestand nicht --
+  // sie sind dekorativ und gehen in keine Stueckliste ein.
+  function allowFromInventory() {
+    const owns = (bucket, id) => ((inventory[bucket] || {})[id] || 0) > 0;
+    const anyPanel = Object.values(inventory.panels || {}).some((v) => v > 0);
+    return {
+      panels: anyPanel,
+      diagonals: owns("connectors", "diagonal"),
+      bows: owns("tubes", "TC1"),
+      t15: owns("tubes", "T15"),
+      reinforce: owns("reinforcements", "reinforce40"),
+      slide: true,
+    };
+  }
+
   $("gen-roll").addEventListener("click", () => {
     if (!model.isEmpty() && !confirm(t("gen_replace_confirm"))) return;
     const res = generateModel({
@@ -935,7 +952,7 @@ export function initUI({ scene, model, builder }) {
       theme: genOpts.theme,
       size: genOpts.inventory ? "auto" : genOpts.size,
       inventory: genOpts.inventory ? inventory : null,
-      allow: genOpts.allow,
+      allow: genOpts.inventory ? allowFromInventory() : genOpts.allow,
     });
     const out = $("gen-result");
     if (!res.ok) {

@@ -24,7 +24,10 @@ export const SIZES = ["auto", "s", "m", "l", "xl"];
 // immer dabei -- ohne sie steht nichts.
 export const DEFAULT_ALLOW = {
   panels: true, diagonals: true, bows: false, slide: false,
-  t15: false, t25: false, t75: false, reinforce: false,
+  t15: false, reinforce: false,
+  // Kein Schalter im Dialog: die Hoehlenwaende haengen an den Platten und
+  // fallen im Bestands-Modus als Erstes weg, wenn die Platten knapp werden.
+  cave: true,
 };
 
 // Groessenleiter: Grundriss in Zellen + Anzahl Ebenen. Kalibriert an den
@@ -46,6 +49,24 @@ const SIZE_LADDER = [
 const SIZE_INDEX = { s: 2, m: 4, l: 6, xl: 8 };
 
 const PANEL_EXTRA_COLOR = "black"; // Platten gibt es zusaetzlich in Schwarz
+
+// Sparstufen fuer den Bestands-Modus: der Reihe nach fallen die Zutaten weg,
+// die am ehesten an einzelnen Teilen scheitern -- zuerst das Dach, zuletzt die
+// Hoehlenwaende. Die Podestplatten bleiben, sie sind der Sinn des Modells.
+const ALLOW_REDUCTIONS = [
+  (a) => a,
+  (a) => ({ ...a, bows: false }),
+  (a) => ({ ...a, bows: false, diagonals: false }),
+  (a) => ({ ...a, bows: false, diagonals: false, t15: false }),
+  (a) => ({ ...a, bows: false, diagonals: false, t15: false, reinforce: false }),
+  (a) => ({ ...a, bows: false, diagonals: false, t15: false, reinforce: false, cave: false }),
+];
+
+// Letzter Ausweg: das nackte Geruest aus 35er-Rohren und Kupplungen.
+const BARE_ALLOW = {
+  panels: false, diagonals: false, bows: false, slide: false,
+  t15: false, reinforce: false, cave: false,
+};
 
 // --- Zufall ---------------------------------------------------------------
 // Kleiner deterministischer Generator (mulberry32): gleicher Seed -> gleiches
@@ -483,9 +504,10 @@ function findRoofStrip(mass, width) {
         if (!full) break;
         len++;
       }
-      // Ein Dach gehoert nach oben, und ein einzelnes Sparrenpaar ist kein
-      // Dach, sondern ein Dreieck: hoechster, dann laengster Streifen gewinnt.
-      if (len < 2) continue;
+      // Ein Dach gehoert nach oben -- auf der Bodenebene waere es ein Tor --,
+      // und ein einzelnes Sparrenpaar ist kein Dach, sondern ein Dreieck:
+      // hoechster, dann laengster Streifen gewinnt.
+      if (len < 2 || j < 1) continue;
       if (!best.len || j > best.j || (j === best.j && len > best.len)) {
         Object.assign(best, { j, dir, i0: c.i, k0: c.k, len, h: c.h });
       }
@@ -587,6 +609,20 @@ function addSlide(ctx) {
   return model.addSlide(best.hook, best.normal, "slide-new2", rng.pick(colors)) ? 1 : 0;
 }
 
+/**
+ * Verstaerkungsprofile in die Rohre schieben, die das Modell selbst als
+ * gefaehrdet meldet -- frei tragende Waagerechte ohne Stuetze darunter.
+ */
+function addReinforcements(ctx) {
+  const { model } = ctx;
+  let n = 0;
+  for (const id of model.reinforcementSuggestions()) {
+    const t = model.tubes.get(id);
+    if (t && !t.arm && !t.link && !t.bow) { t.reinforced = true; n++; }
+  }
+  return n;
+}
+
 /** Alle Features anwenden, die Thema und erlaubte Bauteile hergeben. */
 function applyFeatures(ctx, theme) {
   const { allow, rng } = ctx;
@@ -599,13 +635,14 @@ function applyFeatures(ctx, theme) {
     if (kind === "gable" && allow.diagonals && addGableRoof(ctx)) { feats.push("gable"); break; }
     if (kind === "arch" && allow.bows && addBowRoof(ctx)) { feats.push("arch"); break; }
   }
-  if (allow.panels && (theme === "hoehle" || rng.chance(0.5))) {
+  if (allow.panels && allow.cave !== false && (theme === "hoehle" || rng.chance(0.5))) {
     if (addCaveWalls(ctx, theme === "hoehle" ? 2 : 1)) feats.push("cave");
   }
   if (addRailings(ctx)) feats.push("railing");
   if (allow.t15 && addClimbingWall(ctx)) feats.push("climb");
   if (allow.panels && addMonkeyBars(ctx)) feats.push("monkeybars");
   if (allow.slide && addSlide(ctx)) feats.push("slide");
+  if (allow.reinforce && addReinforcements(ctx)) feats.push("reinforce");
   return feats;
 }
 
@@ -694,43 +731,56 @@ export function generateModel(opts = {}) {
   // Ohne Platten im Bestand hat eine Plattenoption keinen Sinn.
   if (inv && allow.panels && !hasAny(inv.panels)) allow.panels = false;
 
-  const attempt = (idx) => {
+  // Eine Groessenstufe mit dem reichsten Zutatensatz bauen, der noch passt.
+  const attempt = (idx, sets) => {
+    let last = { ok: false, reason: "failed", missing: [] };
+    for (const a of sets) {
+      const res = attemptWith(idx, a);
+      if (res.ok) return res;
+      last = res;
+    }
+    return last;
+  };
+
+  const attemptWith = (idx, a) => {
     const step = SIZE_LADDER[idx];
     // Der Seed haengt an der Stufe: sonst wuerde jede Stufe dasselbe Massing
     // mit anderer Groesse liefern und die Suche saehe immer gleich aus.
-    const { model, mass, features } = buildAt(step, new Rng(seed + idx * 7919), theme, allow);
+    const { model, mass, features } = buildAt(step, new Rng(seed + idx * 7919), theme, a);
     const bad = validate(model);
-    if (bad) return { ok: false, reason: bad };
+    if (bad) return { ok: false, reason: bad, missing: [] };
     const cmp = inv ? compareInventory(computeBOM(model), inv) : null;
+    if (!cmp || cmp.feasible) return { ok: true, model, mass, step, features, missing: [] };
     return {
-      ok: !cmp || cmp.feasible,
-      reason: cmp && !cmp.feasible ? "inventory" : null,
-      model, mass, step, features,
-      missing: cmp ? cmp.rows.filter((r) => !r.ok) : [],
+      ok: false, reason: "inventory", model, mass, step, features,
+      missing: cmp.rows.filter((r) => !r.ok),
     };
   };
 
-  let best = null;
-  if (opts.size && opts.size !== "auto" && SIZE_INDEX[opts.size] != null && !inv) {
-    best = attempt(SIZE_INDEX[opts.size]);
-    // Feste Groesse ohne Bestandsbindung: ein misslungener Wurf faellt auf die
-    // naechstkleinere Stufe zurueck statt gar nichts zu liefern.
-    for (let i = SIZE_INDEX[opts.size] - 1; i >= 0 && (!best || !best.ok); i--) {
-      best = attempt(i);
-    }
-  } else {
-    // Groesste Stufe suchen, die noch passt: binaer ueber die Leiter.
+  // Groesste Stufe suchen, die noch passt: binaer ueber die Leiter.
+  // Groesste Stufe suchen, die noch passt: binaer ueber die Leiter. Die Suche
+  // endet immer bei Stufe 0, bevor sie aufgibt -- die kleinste Stufe wird also
+  // nie uebersprungen.
+  const search = (sets) => {
+    let found = null, last = null;
     let lo = 0, hi = SIZE_LADDER.length - 1;
-    const cap = opts.size && SIZE_INDEX[opts.size] != null ? SIZE_INDEX[opts.size] : hi;
-    hi = Math.min(hi, cap);
+    if (opts.size && SIZE_INDEX[opts.size] != null) hi = Math.min(hi, SIZE_INDEX[opts.size]);
     while (lo <= hi) {
       const mid = (lo + hi) >> 1;
-      const res = attempt(mid);
-      if (res.ok) { best = res; lo = mid + 1; }
+      const res = attempt(mid, sets);
+      last = res;
+      if (res.ok) { found = res; lo = mid + 1; }
       else hi = mid - 1;
     }
-    if (!best) best = attempt(0);
-  }
+    return { found, last };
+  };
+
+  // Reicht der Bestand nicht, liegt das oft an einem einzelnen Zusatz (vier
+  // Bogenrohre fuers Dach), nicht an der Groesse: erst die Zutaten kuerzen,
+  // die Groesse nur so weit wie noetig. Das nackte Geruest kommt zuletzt.
+  const sets = inv ? ALLOW_REDUCTIONS.map((r) => r(allow)) : [allow];
+  let { found: best, last: lastFail } = search(sets);
+  if (!best && inv) ({ found: best, last: lastFail } = search([BARE_ALLOW]));
 
   if (!best || !best.ok) {
     return { ok: false, reason: (best && best.reason) || "failed", missing: (best && best.missing) || [] };
