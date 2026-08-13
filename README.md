@@ -93,6 +93,7 @@ Keine Installation, kein Account, keine Cloud – alles läuft lokal im Browser.
 ### Features
 
 - **3D-Editor** – frei im Raum bauen mit Kupplungen, Rohren und Platten
+- **Modell-Generator** – erzeugt auf Knopfdruck ein fertiges Modell (Burg, Höhle, Turm, Spielhaus) mit Höhle, Terrasse, Kletterwand, Hangelstrecke, Rutsche und Dach – auf Wunsch nur aus dem eigenen Bestand
 - **Tastatursteuerung** – Pfeiltasten, Shortcuts für alle Aktionen (sieh `⌨ Tasten` in der App)
 - **Live-Stückliste** – Kupplungstyp-Heuristik, Materialpreise, Gesamtkosten
 - **Bestand & Machbarkeit** – eintragen was man hat, sofort sehen ob's reicht
@@ -169,6 +170,7 @@ Quadro-Builder/
     │   ├── scene.js         # Three.js: Rendering, Kamera, Handles
     │   ├── builder.js       # Bau-Interaktion: Setzen, Löschen, Modi
     │   ├── bom.js           # Stückliste + Kupplungstyp-Heuristik + Machbarkeit
+    │   ├── generator.js     # Modell-Generator (Massing, Features, Bestands-Zuschnitt)
     │   ├── buildplan.js     # Aufbauplan: ebenenweise Bauschritte
     │   ├── qdfimport.js     # QDF-Import: Entwürfe aus Quadro 3D einlesen
     │   ├── storage.js       # localStorage + Datei-Export/Import
@@ -293,6 +295,7 @@ No installation, no account, no cloud – everything runs locally in the browser
 ### Features
 
 - **3D editor** – build freely in space with connectors, tubes and panels
+- **Model generator** – creates a finished model at the press of a button (castle, cave, tower, playhouse) with a cave, terrace, climbing wall, monkey bars, slide and roof – optionally only from your own inventory
 - **Keyboard control** – arrow keys, shortcuts for all actions (see `⌨ Keys` in the app)
 - **Live bill of materials** – connector type heuristics, material prices, total cost
 - **Inventory & feasibility** – enter what you own, instantly see if it's enough
@@ -369,6 +372,7 @@ Quadro-Builder/
     │   ├── scene.js         # Three.js: rendering, camera, handles
     │   ├── builder.js       # Build interactions: place, delete, modes
     │   ├── bom.js           # BOM + connector type heuristics + feasibility
+    │   ├── generator.js     # Model generator (massing, features, inventory fit)
     │   ├── buildplan.js     # Assembly plan: layer-by-layer steps
     │   ├── qdfimport.js     # QDF import: read designs from Quadro 3D
     │   ├── storage.js       # localStorage + file export/import

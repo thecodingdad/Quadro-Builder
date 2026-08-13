@@ -8,6 +8,18 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [Unreleased]
+
+### Hinzugefügt · Added
+- **Modell-Generator** (`web/js/generator.js`) – erzeugt aus überlappenden Blöcken einen gestuften Grundriss, baut daraus Rahmen, durchgehende Stützen und Podeste und ergänzt Höhlenwände, Geländer, Kletterwand, Hangelstrecke, Rutsche und Dach (Giebel aus 45°-Schrägen oder Rundbogen). Wahlweise streng aus dem eigenen Bestand: die Größe wird per binärer Suche so weit hochgezogen, wie die Teile reichen · **Model generator** (`web/js/generator.js`) – builds a stepped footprint from overlapping blocks, derives frames, posts down to the ground and decks from it, and adds cave walls, railings, a climbing wall, monkey bars, a slide and a roof (gable from 45° diagonals or a bow arch). Optionally strictly from your own inventory: a binary search grows the model as far as the parts allow
+- Generator-Dialog im Entwürfe-Menü mit Art, Größe, Bestands-Schalter und Bauteil-Auswahl; Einstellungen unter `quadro.generator.v1` gespeichert · Generator dialog in the drafts menu with kind, size, inventory switch and part selection; settings stored under `quadro.generator.v1`
+
+### Behoben · Fixed
+- `bom.js` `infeasibleConnectors()` wertete die Hülse einer 45°-Winkelkupplung als schiefen Arm (~17° gemessen) und hielt damit jede im Editor gebaute Schräge für nicht herstellbar – das blockierte das Verschieben jeder Auswahl, die eine enthielt · `infeasibleConnectors()` treated the sleeve of a 45° angle connector as a skewed arm (~17° as measured) and so considered every diagonal built in the editor impossible to build, which blocked moving any selection containing one
+- Escape schließt jetzt zuerst offene Overlays (Generator, Tastenkürzel), statt den Modus zu wechseln · Escape now closes open overlays (generator, shortcuts) first instead of switching the mode
+
+---
+
 ## [0.3.0] – 2026-06-01
 
 ### Hinzugefügt · Added
