@@ -196,12 +196,8 @@ function planLevels(mass, allow) {
 
 /** Baut Rahmen, Stuetzen und Platten in ein leeres Modell. */
 function buildSkeleton(model, mass, rng, allow) {
-  const STEP = gridSpacing();
-  const y0 = geometry().connectorSize / 2;
-  const colors = tubeColors().map((c) => c.id);
-  const panelColors = colors.concat(PANEL_EXTRA_COLOR);
-  const tubeColor = () => rng.pick(colors);
-  const node = (i, j, k) => model.addNode(i * STEP, y0 + j * STEP, k * STEP);
+  const ctx = makeCtx(model, mass, rng, allow);
+  const { node, tubeColor, panelColors } = ctx;
 
   const plan = planLevels(mass, allow);
   const top = new Map(); // Knoten "i,k" -> hoechste Ebene, auf der er gebraucht wird
@@ -240,7 +236,197 @@ function buildSkeleton(model, mass, rng, allow) {
       model.addPanel(ids, panelId, rng.pick(panelColors));
     }
   }
-  return plan;
+  ctx.plan = plan;
+  ctx.top = top;
+  return ctx;
+}
+
+// --- Phase C: Features ----------------------------------------------------
+
+/** Gemeinsamer Zustand der Bau-Helfer (Raster, Farben, Modellzugriff). */
+function makeCtx(model, mass, rng, allow) {
+  const STEP = gridSpacing();
+  const y0 = geometry().connectorSize / 2;
+  const colors = tubeColors().map((c) => c.id);
+  return {
+    model, mass, rng, allow, STEP, y0, colors,
+    panelColors: colors.concat(PANEL_EXTRA_COLOR),
+    tubeColor: () => rng.pick(colors),
+    node: (i, j, k) => model.addNode(i * STEP, y0 + j * STEP, k * STEP),
+    // Nur nachschlagen, nicht anlegen -- Features duerfen kein Raster erfinden.
+    find: (i, j, k) => model.findNodeNear(i * STEP, y0 + j * STEP, k * STEP),
+  };
+}
+
+/**
+ * Waende der Hoehle: die untersten Aussenkanten werden mit stehenden Platten
+ * geschlossen. Ein Stueck bleibt als Eingang offen -- eine rundum zugemachte
+ * Hoehle waere keine.
+ */
+function addCaveWalls(ctx, levels) {
+  const { model, plan, top, rng, panelColors } = ctx;
+  const panelId = defaultPanel();
+  let added = 0;
+  for (let j = 0; j < Math.min(levels, plan.length - 1); j++) {
+    const usable = plan[j].edges.filter((e) => edgeNodes(e)
+      .every((n) => (top.get(key(n.i, n.k)) || 0) >= j + 1));
+    if (usable.length < 4) continue;
+    // Eingang: zwei zusammenhaengende Kanten der untersten Ebene bleiben frei.
+    const skip = j === 0 ? rng.int(0, usable.length - 1) : -1;
+    for (let idx = 0; idx < usable.length; idx++) {
+      if (skip >= 0 && (idx === skip || idx === (skip + 1) % usable.length)) continue;
+      const [p, q] = edgeNodes(usable[idx]);
+      const ids = [
+        ctx.find(p.i, j, p.k), ctx.find(q.i, j, q.k),
+        ctx.find(q.i, j + 1, q.k), ctx.find(p.i, j + 1, p.k),
+      ];
+      if (ids.some((n) => !n)) continue;
+      if (model.addPanel(ids.map((n) => n.id), panelId, rng.pick(panelColors))) added++;
+    }
+  }
+  return added;
+}
+
+/**
+ * Gelaender rings um die Podeste: ueber jeder Aussenkante einer endenden
+ * Zellsaeule eine weitere Ebene aus Pfosten und Riegel. Eine Kante bleibt als
+ * Zugang frei.
+ */
+function addRailings(ctx) {
+  const { model, mass, plan, rng, node, tubeColor } = ctx;
+  let added = 0;
+  for (const lvl of plan) {
+    const deckAt = new Set(lvl.decks.map((c) => key(c.i, c.k)));
+    if (!deckAt.size) continue;
+    // Aussenkanten, an denen ein hier endendes Podest liegt.
+    const rails = lvl.edges.filter((e) => {
+      const cells = e.a === "x"
+        ? [{ i: e.i, k: e.k }, { i: e.i, k: e.k - 1 }]
+        : [{ i: e.i, k: e.k }, { i: e.i - 1, k: e.k }];
+      return cells.some((c) => deckAt.has(key(c.i, c.k)));
+    });
+    if (rails.length < 3) continue;
+    const skip = rng.int(0, rails.length - 1); // Zugang
+    for (let idx = 0; idx < rails.length; idx++) {
+      if (idx === skip) continue;
+      const [p, q] = edgeNodes(rails[idx]);
+      // Steht hier schon etwas Hoeheres, waere das kein Gelaender, sondern ein
+      // Doppelrohr -- solche Kanten ueberspringen.
+      const cells = [{ i: p.i, k: p.k }, { i: p.i - 1, k: p.k }, { i: p.i, k: p.k - 1 }, { i: p.i - 1, k: p.k - 1 }];
+      if (cells.some((c) => (mass.cells.get(key(c.i, c.k))?.h ?? 0) > lvl.j + 1)) continue;
+      const a0 = node(p.i, lvl.j, p.k), a1 = node(p.i, lvl.j + 1, p.k);
+      const b0 = node(q.i, lvl.j, q.k), b1 = node(q.i, lvl.j + 1, q.k);
+      model.addTube(a0.id, a1.id, "T35", tubeColor(), 35);
+      model.addTube(b0.id, b1.id, "T35", tubeColor(), 35);
+      if (model.addTube(a1.id, b1.id, "T35", tubeColor(), 35)) added++;
+    }
+  }
+  return added;
+}
+
+/**
+ * Kletterwand: an einer Aussenkante werden die Pfosten in zwei 15er geteilt und
+ * auf halber Hoehe Sprossen eingezogen -- so kommt man ohne Leiter hoch.
+ */
+function addClimbingWall(ctx) {
+  const { model, plan, top, rng, node, tubeColor, y0, STEP } = ctx;
+  const cand = plan[0].edges.filter((e) => {
+    const [p, q] = edgeNodes(e);
+    if (!edgeNodes(e).every((n) => (top.get(key(n.i, n.k)) || 0) >= 2)) return false;
+    // Nicht dort klettern, wo eine Wandplatte haengt: das Teilen der Pfosten
+    // nimmt ihr die Auflage.
+    const ids = [ctx.find(p.i, 0, p.k), ctx.find(q.i, 0, q.k),
+                 ctx.find(q.i, 1, q.k), ctx.find(p.i, 1, p.k)];
+    if (ids.some((n) => !n)) return false;
+    return !model.panelOnCell(ids.map((n) => n.id));
+  });
+  if (!cand.length) return 0;
+  const e = rng.pick(cand);
+  const [p, q] = edgeNodes(e);
+  const height = Math.min(
+    top.get(key(p.i, p.k)), top.get(key(q.i, q.k)), 3,
+  );
+  let rungs = 0;
+  for (let j = 0; j < height; j++) {
+    const mids = [];
+    for (const n of [p, q]) {
+      const lo = ctx.find(n.i, j, n.k), hi = ctx.find(n.i, j + 1, n.k);
+      if (!lo || !hi) return rungs;
+      const post = model.tubeBetween(lo.id, hi.id);
+      // Eine Stelle ohne durchgehenden Pfosten (z. B. schon geteilt) auslassen.
+      if (!post || post.tubeId !== "T35") return rungs;
+      model.removeTube(post.id);
+      const mid = model.addNode(n.i * STEP, y0 + j * STEP + STEP / 2, n.k * STEP);
+      model.addTube(lo.id, mid.id, "T15", post.color, 15);
+      model.addTube(mid.id, hi.id, "T15", post.color, 15);
+      mids.push(mid);
+    }
+    if (model.addTube(mids[0].id, mids[1].id, "T35", tubeColor(), 35)) rungs++;
+  }
+  return rungs;
+}
+
+/**
+ * Hangelstrecke: auf einem hoch gelegenen Podest bleibt eine Reihe von Feldern
+ * ohne Platten. Die Querrohre zwischen den Feldern sind die Sprossen, unter
+ * ihnen ist Luft.
+ */
+function addMonkeyBars(ctx) {
+  const { model, plan, rng } = ctx;
+  // Podeste weit oben, an denen mindestens zwei Felder in einer Reihe liegen.
+  for (const lvl of [...plan].reverse()) {
+    if (lvl.j < 2 || lvl.decks.length < 2) continue;
+    const at = new Set(lvl.decks.map((c) => key(c.i, c.k)));
+    for (const c of lvl.decks) {
+      for (const step of [{ di: 1, dk: 0 }, { di: 0, dk: 1 }]) {
+        const run = [c];
+        while (run.length < 3) {
+          const nxt = { i: run[run.length - 1].i + step.di, k: run[run.length - 1].k + step.dk };
+          if (!at.has(key(nxt.i, nxt.k))) break;
+          run.push(nxt);
+        }
+        if (run.length < 2) continue;
+        let removed = 0;
+        for (const cell of run) {
+          const ids = [
+            ctx.find(cell.i, lvl.j, cell.k), ctx.find(cell.i + 1, lvl.j, cell.k),
+            ctx.find(cell.i + 1, lvl.j, cell.k + 1), ctx.find(cell.i, lvl.j, cell.k + 1),
+          ];
+          if (ids.some((n) => !n)) continue;
+          const pan = model.panelOnCell(ids.map((n) => n.id));
+          if (pan) { model.removePanel(pan.id); removed++; }
+        }
+        if (removed >= 2) return removed;
+      }
+    }
+    if (rng.chance(0.5)) break; // nicht jedes Modell braucht eine Hangelstrecke
+  }
+  return 0;
+}
+
+/** Rutsche an das hoechste passende senkrechte Rohrpaar haengen. */
+function addSlide(ctx) {
+  const { model, rng, colors } = ctx;
+  const mounts = model.slideMounts(gridSpacing());
+  if (!mounts.length) return 0;
+  let best = null;
+  for (const m of mounts) if (!best || m.hook[1] > best.hook[1]) best = m;
+  if (!best) return 0;
+  return model.addSlide(best.hook, best.normal, "slide-new2", rng.pick(colors)) ? 1 : 0;
+}
+
+/** Alle Features anwenden, die Thema und erlaubte Bauteile hergeben. */
+function applyFeatures(ctx, theme) {
+  const { allow, rng } = ctx;
+  const feats = [];
+  if (allow.panels && (theme === "hoehle" || rng.chance(0.5))) {
+    if (addCaveWalls(ctx, theme === "hoehle" ? 2 : 1)) feats.push("cave");
+  }
+  if (addRailings(ctx)) feats.push("railing");
+  if (allow.t15 && addClimbingWall(ctx)) feats.push("climb");
+  if (allow.panels && addMonkeyBars(ctx)) feats.push("monkeybars");
+  if (allow.slide && addSlide(ctx)) feats.push("slide");
+  return feats;
 }
 
 // --- Phase D: Pruefung und Zuschnitt --------------------------------------
@@ -280,11 +466,12 @@ export function validate(model) {
 function buildAt(step, rng, theme, allow) {
   const model = new BuildModel();
   const mass = makeMassing(rng, step, theme);
-  const plan = buildSkeleton(model, mass, rng, allow);
-  return { model, mass, plan };
+  const ctx = buildSkeleton(model, mass, rng, allow);
+  const features = applyFeatures(ctx, theme);
+  return { model, mass, features };
 }
 
-function metaOf(model, mass, theme, step) {
+function metaOf(model, mass, theme, step, features) {
   let tubes = 0;
   for (const t of model.tubes.values()) if (!t.arm && !t.link) tubes++;
   return {
@@ -296,7 +483,7 @@ function metaOf(model, mass, theme, step) {
     tubes,
     panels: model.panels.size,
     price: computeBOM(model).totals.price,
-    features: [],
+    features: features || [],
   };
 }
 
@@ -328,14 +515,14 @@ export function generateModel(opts = {}) {
     const step = SIZE_LADDER[idx];
     // Der Seed haengt an der Stufe: sonst wuerde jede Stufe dasselbe Massing
     // mit anderer Groesse liefern und die Suche saehe immer gleich aus.
-    const { model, mass } = buildAt(step, new Rng(seed + idx * 7919), theme, allow);
+    const { model, mass, features } = buildAt(step, new Rng(seed + idx * 7919), theme, allow);
     const bad = validate(model);
     if (bad) return { ok: false, reason: bad };
     const cmp = inv ? compareInventory(computeBOM(model), inv) : null;
     return {
       ok: !cmp || cmp.feasible,
       reason: cmp && !cmp.feasible ? "inventory" : null,
-      model, mass, step,
+      model, mass, step, features,
       missing: cmp ? cmp.rows.filter((r) => !r.ok) : [],
     };
   };
@@ -368,7 +555,7 @@ export function generateModel(opts = {}) {
   return {
     ok: true,
     json: best.model.toJSON(),
-    meta: metaOf(best.model, best.mass, theme, best.step),
+    meta: metaOf(best.model, best.mass, theme, best.step, best.features),
     missing: best.missing || [],
   };
 }
