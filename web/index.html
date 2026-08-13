@@ -44,6 +44,10 @@
               </div>
               <input id="file-import" type="file" accept="application/json,.json,.qdf" hidden />
             </div>
+            <div class="menu-section">
+              <span class="menu-label" data-i18n="menu_generate">Generator</span>
+              <button id="btn-generate" class="btn ghost full" data-i18n="btn_generate" data-i18n-title="btn_generate_title">✨ Modell generieren…</button>
+            </div>
             <button id="btn-clear" class="btn ghost full danger" data-i18n="btn_clear" data-i18n-title="btn_clear_title">Modell leeren</button>
           </div>
         </div>
@@ -267,6 +271,33 @@
       </button>
 
       <div id="status" class="status"></div>
+
+      <!-- Generator: erzeugt ein fertiges Modell (optional aus dem Bestand) -->
+      <div id="gen-overlay" class="help-overlay" hidden>
+        <div class="help-card gen-card">
+          <h3 data-i18n="gen_title">Modell generieren</h3>
+          <div class="gen-row">
+            <label for="gen-theme" data-i18n="gen_theme">Art</label>
+            <select id="gen-theme" class="lang-select"></select>
+          </div>
+          <div class="gen-row">
+            <label for="gen-size" data-i18n="gen_size">Größe</label>
+            <select id="gen-size" class="lang-select"></select>
+          </div>
+          <label class="gen-check">
+            <input type="checkbox" id="gen-inventory" checked>
+            <span data-i18n="gen_only_inventory">Nur aus meinem Bestand</span>
+          </label>
+          <h4 data-i18n="gen_parts">Bauteile</h4>
+          <div id="gen-parts" class="gen-parts"></div>
+          <p class="hint" data-i18n="gen_connectors_hint">Kupplungen werden immer verwendet.</p>
+          <div class="gen-actions">
+            <button id="gen-roll" class="btn primary" data-i18n="gen_roll">🎲 Würfeln</button>
+            <button id="gen-close" class="btn" data-i18n="help_close">Schließen</button>
+          </div>
+          <p id="gen-result" class="gen-result"></p>
+        </div>
+      </div>
 
       <div id="help-overlay" class="help-overlay" hidden>
         <div class="help-card">

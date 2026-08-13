@@ -6,6 +6,7 @@ import { computeBuildPlan, BUILD_ORDERS } from "./buildplan.js";
 import { parseQDF } from "./qdfimport.js";
 import { QUALITY_LEVELS } from "./scene.js";
 import { RANDOM_COLOR } from "./builder.js";
+import { generateModel, THEMES } from "./generator.js";
 import * as storage from "./storage.js";
 import { t, getLang, setLang, applyTranslations } from "./i18n.js";
 
@@ -74,6 +75,7 @@ export function initUI({ scene, model, builder }) {
       applyViewCubeLabels();
       renderOrderOptions();
       renderPartButtons();
+      syncGenDialog();
       renderQualityOptions();
       syncProjectionButton();
       // Dynamische UI-Texte aktualisieren
@@ -822,6 +824,142 @@ export function initUI({ scene, model, builder }) {
   $("btn-help").addEventListener("click", () => { $("help-overlay").hidden = false; });
   $("help-close").addEventListener("click", () => { $("help-overlay").hidden = true; });
 
+  // --- Generator ---------------------------------------------------------
+  // Erzeugt ein fertiges Modell. Im Bestands-Modus entscheidet der Bestand,
+  // welche Bauteile vorkommen -- die Auswahlliste ist dann gesperrt.
+  const GEN_KEY = "quadro.generator.v1";
+  // Reihenfolge der Bauteil-Schalter im Dialog. 35er-Rohre stehen mit in der
+  // Liste (sie sind das Grundmaterial), lassen sich aber nicht abwaehlen.
+  const GEN_PARTS = [
+    { id: "t35", key: "gen_part_t35", fixed: true },
+    { id: "panels", key: "gen_part_panels" },
+    { id: "diagonals", key: "gen_part_diagonals" },
+    { id: "bows", key: "gen_part_bows" },
+    { id: "slide", key: "gen_part_slide" },
+    { id: "t15", key: "gen_part_t15" },
+    { id: "t25", key: "gen_part_t25" },
+    { id: "t75", key: "gen_part_t75" },
+    { id: "reinforce", key: "gen_part_reinforce" },
+  ];
+  const GEN_DEFAULTS = {
+    theme: "random", size: "auto", inventory: true,
+    allow: { panels: true, diagonals: true, bows: false, slide: false,
+             t15: false, t25: false, t75: false, reinforce: false },
+  };
+
+  let genOpts = (() => {
+    try {
+      const s = JSON.parse(localStorage.getItem(GEN_KEY));
+      if (!s) return { ...GEN_DEFAULTS, allow: { ...GEN_DEFAULTS.allow } };
+      return { ...GEN_DEFAULTS, ...s, allow: { ...GEN_DEFAULTS.allow, ...(s.allow || {}) } };
+    } catch { return { ...GEN_DEFAULTS, allow: { ...GEN_DEFAULTS.allow } }; }
+  })();
+  const saveGenOpts = () => localStorage.setItem(GEN_KEY, JSON.stringify(genOpts));
+
+  function fillGenSelects() {
+    const themeSel = $("gen-theme"), sizeSel = $("gen-size");
+    themeSel.innerHTML = "";
+    for (const id of ["random", ...THEMES]) {
+      themeSel.appendChild(el("option", null, t("gen_" + id))).value = id;
+    }
+    themeSel.value = genOpts.theme;
+    sizeSel.innerHTML = "";
+    for (const id of ["auto", "s", "m", "l", "xl"]) {
+      sizeSel.appendChild(el("option", null, t("gen_size_" + id))).value = id;
+    }
+    sizeSel.value = genOpts.size;
+  }
+
+  function renderGenParts() {
+    const box = $("gen-parts");
+    box.innerHTML = "";
+    const locked = genOpts.inventory;
+    box.classList.toggle("locked", locked);
+    for (const p of GEN_PARTS) {
+      const lab = el("label");
+      const cb = el("input");
+      cb.type = "checkbox";
+      cb.checked = p.fixed ? true : !!genOpts.allow[p.id];
+      cb.disabled = p.fixed || locked;
+      cb.addEventListener("change", () => {
+        genOpts.allow[p.id] = cb.checked;
+        saveGenOpts();
+      });
+      lab.appendChild(cb);
+      lab.appendChild(el("span", null, t(p.key)));
+      box.appendChild(lab);
+    }
+  }
+
+  // Ohne eingetragenen Bestand ergibt der Bestands-Modus nichts als eine
+  // Fehlmeldung -- der Schalter bleibt dann aus und gesperrt.
+  function inventoryEmpty() {
+    for (const bucket of Object.values(inventory)) {
+      if (bucket && Object.values(bucket).some((v) => v > 0)) return false;
+    }
+    return true;
+  }
+
+  function syncGenDialog() {
+    const noInv = inventoryEmpty();
+    if (noInv) genOpts.inventory = false;
+    fillGenSelects();
+    $("gen-inventory").checked = genOpts.inventory;
+    $("gen-inventory").disabled = noInv;
+    // Im Bestands-Modus ist die Groesse durch den Bestand bestimmt.
+    $("gen-size").disabled = genOpts.inventory;
+    renderGenParts();
+  }
+
+  function openGenerator() {
+    syncGenDialog();
+    $("gen-result").textContent = "";
+    $("gen-result").classList.remove("bad");
+    $("gen-overlay").hidden = false;
+  }
+
+  $("btn-generate").addEventListener("click", () => { toggleFileMenu(false); openGenerator(); });
+  $("gen-close").addEventListener("click", () => { $("gen-overlay").hidden = true; });
+  $("gen-theme").addEventListener("change", (e) => { genOpts.theme = e.target.value; saveGenOpts(); });
+  $("gen-size").addEventListener("change", (e) => { genOpts.size = e.target.value; saveGenOpts(); });
+  $("gen-inventory").addEventListener("change", (e) => {
+    genOpts.inventory = e.target.checked;
+    saveGenOpts();
+    syncGenDialog();
+  });
+
+  $("gen-roll").addEventListener("click", () => {
+    if (!model.isEmpty() && !confirm(t("gen_replace_confirm"))) return;
+    const res = generateModel({
+      seed: (Math.random() * 4294967296) >>> 0,
+      theme: genOpts.theme,
+      size: genOpts.inventory ? "auto" : genOpts.size,
+      inventory: genOpts.inventory ? inventory : null,
+      allow: genOpts.allow,
+    });
+    const out = $("gen-result");
+    if (!res.ok) {
+      out.textContent = t(res.reason === "inventory" ? "gen_fail_inventory" : "gen_fail");
+      out.classList.add("bad");
+      return;
+    }
+    let loadRes;
+    builder.modelReplaced();
+    builder.recordHistory(() => { loadRes = model.loadJSON(res.json); });
+    if (!loadRes.ok) {
+      out.textContent = t(loadRes.reason === "format" ? "load_error_format" : "load_error_data");
+      out.classList.add("bad");
+      return;
+    }
+    builder.selectedNodeId = null;
+    builder.refresh();
+    scene.resetCamera();
+    const msg = t("gen_result", t("gen_" + res.meta.theme), res.meta.levels, res.meta.tubes);
+    out.classList.remove("bad");
+    out.textContent = msg;
+    flash(msg);
+  });
+
   // --- Seitenleiste: EIN Panel auf Abruf (Stückliste / Bestand) ----------
   // Die Leiste ist standardmäßig zu (body.sidebar-hidden im HTML). Die
   // Menüband-Buttons "Stückliste" und "Bestand" öffnen je genau ihr Panel;
@@ -1207,6 +1345,9 @@ export function initUI({ scene, model, builder }) {
       // Fortschritt fuer eine Taste, die man beilaeufig drueckt).
       case "escape":
         closePopup();
+        // Offene Overlays zuerst: Escape schliesst sie, statt den Modus zu wechseln.
+        if (!$("gen-overlay").hidden) { $("gen-overlay").hidden = true; break; }
+        if (!$("help-overlay").hidden) { $("help-overlay").hidden = true; break; }
         if (builder.mode === "assembly") {
           builder.clearSelection();
           builder.setHighlight(null);
