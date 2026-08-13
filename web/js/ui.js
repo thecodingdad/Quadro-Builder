@@ -150,6 +150,11 @@ export function initUI({ scene, model, builder }) {
   // weiter innen bauen kann. Kein eigener Modus: laeuft parallel zu Bauen,
   // Platten setzen usw. weiter.
   const SLICE_KEY = "quadro.slice.v1";
+  // Die Schalter folgen der CAD-Konvention (Z zeigt nach oben), das Modell der
+  // Three.js-Konvention (Y zeigt nach oben). Der Schalter "Z" schneidet
+  // deshalb entlang der internen Y-Achse und legt die Ebene in X/Y -- so, wie
+  // man es aus Fusion & Co. kennt.
+  const SLICE_AXIS = { x: "x", y: "z", z: "y" };
   const sliceBar = $("slice-bar");
   const sliceRange = $("slice-range");
   // values haelt die zuletzt benutzte Lage JE ACHSE fest: Aus- und Einschalten
@@ -179,7 +184,8 @@ export function initUI({ scene, model, builder }) {
   function sliceLimits() {
     const b = model.bounds(geometry().connectorSize / 2);
     if (!b) return { min: -100, max: 100 };
-    const i = slice.axis === "x" ? 0 : slice.axis === "y" ? 1 : 2;
+    const ax = SLICE_AXIS[slice.axis];
+    const i = ax === "x" ? 0 : ax === "y" ? 1 : 2;
     return { min: Math.floor(b.min[i]), max: Math.ceil(b.max[i]) };
   }
 
@@ -197,7 +203,7 @@ export function initUI({ scene, model, builder }) {
     $("slice-value").textContent = `${Math.round(slice.value)} cm`;
     for (const b of $("slice-axes").querySelectorAll("button"))
       b.classList.toggle("active", b.dataset.axis === slice.axis);
-    scene.setClip(slice.axis, slice.value, slice.flip);
+    scene.setClip(SLICE_AXIS[slice.axis], slice.value, slice.flip);
     builder.refresh();   // Handles neu: verdeckte sind nicht mehr anklickbar
   }
 
@@ -227,7 +233,7 @@ export function initUI({ scene, model, builder }) {
       // Auch beim Ziehen mitschreiben -- applySlice() laeuft hier nicht.
       slice.values[slice.axis] = slice.value;
       $("slice-value").textContent = `${Math.round(slice.value)} cm`;
-      scene.setClip(slice.axis, slice.value, slice.flip);
+      scene.setClip(SLICE_AXIS[slice.axis], slice.value, slice.flip);
     });
     // Erst beim Loslassen neu aufbauen -- waehrend des Ziehens waere das zaeh.
     sliceRange.addEventListener("change", () => { builder.refresh(); saveSlice(); });
