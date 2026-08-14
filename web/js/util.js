@@ -53,6 +53,35 @@ export function quatFromXAxis(dir) {
   return [r4(q[0]), r4(q[1]), r4(q[2]), r4(q[3])];
 }
 
+/**
+ * Quaternion (Three-Reihenfolge x,y,z,w) aus einem rechtshaendigen Dreibein.
+ * ex/ey/ez sind die Bilder der lokalen Achsen in Weltkoordinaten.
+ * Umrechnung ueber die Rotationsmatrix (Shepperd-Verfahren, Spurfall + drei
+ * Achsenfaelle -- der stabilste Weg, wenn die Spur nahe -1 liegt).
+ */
+export function quatFromBasis(ex, ey, ez) {
+  const m = [ex, ey, ez];                       // Spalten der Rotationsmatrix
+  const at = (r, c) => m[c][r];
+  const tr = at(0, 0) + at(1, 1) + at(2, 2);
+  let q;
+  if (tr > 0) {
+    const s = Math.sqrt(tr + 1) * 2;
+    q = [(at(2, 1) - at(1, 2)) / s, (at(0, 2) - at(2, 0)) / s, (at(1, 0) - at(0, 1)) / s, 0.25 * s];
+  } else if (at(0, 0) > at(1, 1) && at(0, 0) > at(2, 2)) {
+    const s = Math.sqrt(1 + at(0, 0) - at(1, 1) - at(2, 2)) * 2;
+    q = [0.25 * s, (at(0, 1) + at(1, 0)) / s, (at(0, 2) + at(2, 0)) / s, (at(2, 1) - at(1, 2)) / s];
+  } else if (at(1, 1) > at(2, 2)) {
+    const s = Math.sqrt(1 + at(1, 1) - at(0, 0) - at(2, 2)) * 2;
+    q = [(at(0, 1) + at(1, 0)) / s, 0.25 * s, (at(1, 2) + at(2, 1)) / s, (at(0, 2) - at(2, 0)) / s];
+  } else {
+    const s = Math.sqrt(1 + at(2, 2) - at(0, 0) - at(1, 1)) * 2;
+    q = [(at(0, 2) + at(2, 0)) / s, (at(1, 2) + at(2, 1)) / s, 0.25 * s, (at(1, 0) - at(0, 1)) / s];
+  }
+  const n = Math.hypot(q[0], q[1], q[2], q[3]) || 1;
+  const r4 = (v) => Math.round((v / n) * 1e4) / 1e4;
+  return [r4(q[0]), r4(q[1]), r4(q[2]), r4(q[3])];
+}
+
 /** Mittelpunkt aller Kupplungen -- Bezugspunkt fuer panelNormal. */
 export function modelMiddle(nodes) {
   const m = [0, 0, 0];

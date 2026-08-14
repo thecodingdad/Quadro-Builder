@@ -32,63 +32,6 @@ Keine Installation, kein Account, keine Cloud – alles läuft lokal im Browser.
 
 ### Vorschau
 
-**Beispiel-Projekte**
-
-<table>
-<tr>
-<td><img src="docs/screenshots/c0161-grosses-projekt.png" alt="3D-Editor mit großem Gerüst" width="430"/></td>
-<td><img src="docs/screenshots/a0152-platten-diagonalen.png" alt="Platten und Diagonalstreben" width="430"/></td>
-</tr>
-<tr>
-<td align="center"><sub>Großes Gerüst mit Live-Stückliste</sub></td>
-<td align="center"><sub>Platten und schräge Streben kombiniert</sub></td>
-</tr>
-<tr>
-<td><img src="docs/screenshots/b0051-viele-platten.png" alt="Viele Platten verschiedener Typen" width="430"/></td>
-<td><img src="docs/screenshots/a0134-rampen-diagonalen.png" alt="Rampen und Diagonalstreben" width="430"/></td>
-</tr>
-<tr>
-<td align="center"><sub>Platten (40×40, 40×20, 80×40, 80×80)</sub></td>
-<td align="center"><sub>Rampen und schräge Streben (45°)</sub></td>
-</tr>
-<tr>
-<td><img src="docs/screenshots/a0001-kleines-haus.png" alt="Kleines Haus als Einstiegsbeispiel" width="430"/></td>
-<td></td>
-</tr>
-<tr>
-<td align="center"><sub>Einfaches Haus als Einstieg</sub></td>
-<td></td>
-</tr>
-</table>
-
-**Modi**
-
-<table>
-<tr>
-<td><img src="docs/screenshots/modus-bauen-gruene-punkte.png" alt="Bauen-Modus mit grünen Erweiterungspunkten" width="430"/></td>
-<td><img src="docs/screenshots/modus-platten-blau-hover.png" alt="Platten-Modus mit blauer Hover-Markierung" width="430"/></td>
-</tr>
-<tr>
-<td align="center"><sub>Bauen-Modus – grüne Punkte zeigen freie Richtungen</sub></td>
-<td align="center"><sub>Platten-Modus – freie Felder blau markiert</sub></td>
-</tr>
-<tr>
-<td><img src="docs/screenshots/modus-aufbau-schritt1.png" alt="Aufbaumodus Schritt 1" width="430"/></td>
-<td><img src="docs/screenshots/modus-aufbau-schritt3.png" alt="Aufbaumodus Schritt 3" width="430"/></td>
-</tr>
-<tr>
-<td align="center"><sub>Aufbaumodus – Bodenebene (Schritt 1)</sub></td>
-<td align="center"><sub>Aufbaumodus – Ebene 2 mit Platte (Schritt 3)</sub></td>
-</tr>
-<tr>
-<td><img src="docs/screenshots/modus-namen-labels.png" alt="Namen-Modus mit Kupplungs-Labels" width="430"/></td>
-<td></td>
-</tr>
-<tr>
-<td align="center"><sub>Namen-Modus – Kupplungstypen direkt im 3D-Modell beschriftet</sub></td>
-<td></td>
-</tr>
-</table>
 
 ### Features
 
@@ -109,27 +52,9 @@ Keine Installation, kein Account, keine Cloud – alles läuft lokal im Browser.
 
 ### Schnellstart
 
-#### Option A: GitHub Pages (kein Setup nötig)
-
-Die App ist direkt unter der GitHub-Pages-URL erreichbar – einfach den Link aufrufen, fertig. Keine Installation, kein Python, kein Terminal.
+Die App ist direkt unter der GitHub-Pages-URL erreichbar – einfach den Link aufrufen, fertig. Keine Installation, kein Python, kein Terminal. Alternativ kann sie auch selbst gehostet werden.
 
 > Für eigene Änderungen: Fork erstellen → Pages aktivieren (Settings → Pages → Branch `main`, Ordner `/`) → fertig.
-
-#### Option B: Lokal mit Python
-
-Voraussetzung: **Python 3** (auf macOS vorinstalliert).
-
-```bash
-git clone https://github.com/k3mpaxl/Quadro-Builder.git
-cd Quadro-Builder
-python serve.py
-```
-
-Der Browser öffnet automatisch `http://127.0.0.1:8000/web/index.html`.
-
-> **Hinweis:** Bitte immer über `serve.py` öffnen, nicht per Doppelklick auf `index.html`. Browser blockieren ES-Module und `fetch()` unter dem `file://`-Protokoll.
-
-Three.js liegt lokal unter `web/vendor/` – **keine Internetverbindung nötig**.
 
 ### Bedienung
 

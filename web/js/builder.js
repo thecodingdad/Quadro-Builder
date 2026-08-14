@@ -159,7 +159,11 @@ export class Builder {
   }
   setTube(tubeId) { this.tubeId = tubeId; }
   setPanel(panelId) { this.panelId = panelId; if (this.mode === "panel") this.refresh(); }
-  setFitting(kind) { this.fittingKind = kind; if (this.mode === "fitting") this.refresh(); }
+  setFitting(kind) {
+    this.fittingKind = kind;
+    this._clearPanelRail();          // Rohr-Auswahl gilt nur fuer das Gitter
+    if (this.mode === "fitting") this.refresh();
+  }
 
   /**
    * Auf welche Seite der Rohre gehoert eine neu gesetzte Platte?
@@ -784,6 +788,7 @@ export class Builder {
   // Anbauteile: an jeder Montagestelle des gewaehlten Teils ein Ankerpunkt.
   // Wo dasselbe Teil schon steckt, wird keiner gezeigt -- gestapelt wird nicht.
   _buildFittingHandles() {
+    if (this.fittingKind === "lattice2") return;   // Gitter laeuft ueber zwei Rohre
     for (const m of this.model.fittingMounts(this.fittingKind)) {
       let taken = false;
       for (const f of this.model.fittings.values()) {
@@ -1019,6 +1024,16 @@ export class Builder {
       }
     } else if (this.mode === "slide") {
       obj = handle();                            // nur die Feld-Handles
+    } else if (this.mode === "fitting" && this.fittingKind === "lattice2") {
+      // Gitter: Rohre waehlen wie im Platten-Modus, gesetzte Gitter entfernen.
+      const p = (this.panelRail && this.highlight && this.scene.pickAmong(x, y, this.highlight))
+        || this.scene.pickForDelete(x, y);
+      const kind = p && p.data.kind;
+      if (kind === "fitting") obj = this.model.fittings.get(p.data.id)?.kind === "lattice2" ? p.object : null;
+      else if (kind === "tube") {
+        const tb = this.model.tubes.get(p.data.id);
+        obj = tb && !tb.arm && !tb.link && !tb.bow ? p.object : null;
+      }
     } else if (this.mode === "fitting") {
       // Ankerpunkte setzen, ein Klick auf ein gesetztes Anbauteil entfernt es.
       const h = this.scene.pickHandle(x, y);
@@ -1145,6 +1160,7 @@ export class Builder {
    * sonst laege ein Ankerpunkt hinter einem Teil und man kaeme nicht daran.
    */
   _clickFitting(e) {
+    if (this.fittingKind === "lattice2") { this._clickLattice(e); return; }
     const h = this.scene.pickHandle(e.clientX, e.clientY);
     const p = this.scene.pickForDelete(e.clientX, e.clientY);
     if (h && h.data && h.data.fittingMount && (!p || h.distance <= p.distance)) {
@@ -1160,6 +1176,51 @@ export class Builder {
       this.recordHistory(() => this.model.removeFitting(p.data.id));
       this.refresh();
     }
+  }
+
+  /**
+   * Gitter: haengt wie eine Platte an ZWEI parallelen Rohren und wird genauso
+   * gesetzt -- erst ein Tragrohr anklicken, dann eines der hervorgehobenen
+   * Gegenrohre. Ein Klick auf ein gesetztes Gitter nimmt es weg.
+   */
+  _clickLattice(e) {
+    const pick = (this.panelRail && this.highlight
+      && this.scene.pickAmong(e.clientX, e.clientY, this.highlight))
+      || this.scene.pickForDelete(e.clientX, e.clientY);
+    if (!pick) { this._clearPanelRail(); return; }
+    if (pick.data.kind === "fitting" && !this.panelRail) {
+      const f = this.model.fittings.get(pick.data.id);
+      if (f && f.kind === "lattice2") {
+        this.recordHistory(() => this.model.removeFitting(f.id));
+        this.refresh();
+        return;
+      }
+    }
+    if (pick.data.kind !== "tube") { this._clearPanelRail(); return; }
+    const tube = this.model.tubes.get(pick.data.id);
+    if (!tube || tube.arm || tube.link || tube.bow) { this._clearPanelRail(); return; }
+
+    if (this.panelRail) {
+      if (pick.data.id === this.panelRail.id) { this._clearPanelRail(); return; }
+      const partner = this.model.latticePartners(this.panelRail.id)
+        .find((c) => c.id === pick.data.id);
+      if (!partner) { this.onNotice(t("notice_panel_no_fit")); return; }
+      const sec = this.model.panelSection(partner, this.panelRail.at);
+      let added = null;
+      this.recordHistory(() => {
+        added = this.model.addLattice(this.panelRail.id, partner.id, sec.t0, sec.len,
+          this.colorFor("panel"));
+      });
+      this.onNotice(t(added ? "notice_panel_placed" : "notice_fitting_exists"));
+      this._clearPanelRail();
+      return;
+    }
+    const partners = this.model.latticePartners(pick.data.id);
+    if (!partners.length) { this.onNotice(t("notice_panel_no_partner")); return; }
+    this.panelRail = { id: pick.data.id, at: this._alongTube(pick.data.id, pick.point) };
+    this.highlight = new Set(partners.map((c) => c.id));
+    this.onNotice(t("notice_panel_pick_second", partners.length));
+    this.refresh();
   }
 
   _clickSlide(e) {

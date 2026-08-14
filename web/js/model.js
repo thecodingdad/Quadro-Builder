@@ -2,7 +2,7 @@
 // Bewusst ohne Three.js-Abhaengigkeit, damit es testbar und Backend-tauglich bleibt.
 
 import { MERGE_EPS, FORMAT_VERSION, DIAGONAL_SNAP_TOL } from "./config.js";
-import { round2 as round, quatFromXAxis } from "./util.js";
+import { round2 as round, quatFromXAxis, quatFromBasis } from "./util.js";
 
 // Wohin ein Anbauteil gehoert, gemessen an den 799 Vorkommen in den Dateien des
 // Herstellers: `at` ist der Anker (Kupplung oder Rohr), `offset` der Abstand in
@@ -20,9 +20,18 @@ const FITTING_MOUNTS = {
   "bag2":            { at: "tube", offset: 20 },  // 200 mm vom Rohrende
 };
 
-// Welche Anbauteile sich setzen lassen (die uebrigen -- Gitter, Rundabdeckung,
-// grosses Dach -- haengen an Flaechen und kommen ueber eigene Ablaeufe).
-export const PLACEABLE_FITTINGS = Object.keys(FITTING_MOUNTS);
+// Welche Anbauteile sich setzen lassen. Die meisten haengen an einer Kupplung
+// oder einem Rohr (FITTING_MOUNTS); das Gitter spannt wie eine Platte zwischen
+// zwei Rohren und hat deshalb einen eigenen Ablauf.
+export const PLACEABLE_FITTINGS = [...Object.keys(FITTING_MOUNTS), "lattice2"];
+
+// Gitter: im Ball Cage spannt es 160 x 80 cm von Rohrmitte zu Rohrmitte. Da die
+// Datei die Masse mitfuehrt, ist es nicht auf dieses eine Format festgelegt:
+// erlaubt sind alle Rasterabstaende bis 160 cm, die Laenge ergibt sich aus der
+// Ueberdeckung der beiden Rohre.
+const LATTICE_GAPS = [40, 80, 120, 160];
+const LATTICE_STEP = 40;
+const LATTICE_MAX = 160;
 
 const CARDINALS = [[1, 0, 0], [-1, 0, 0], [0, 1, 0], [0, -1, 0], [0, 0, 1], [0, 0, -1]];
 
@@ -488,6 +497,77 @@ export class BuildModel {
       }
     }
     return out;
+  }
+
+  /**
+   * Gegenrohre fuer ein Gitter. Anders als eine Platte hat das Gitter keine
+   * feste Groesse -- die Datei speichert seine Masse -- deshalb passt jeder
+   * Rohrabstand des Rasters. Die Laenge ist die Ueberdeckung der beiden Rohre,
+   * auf volle Felder abgerundet und bei vier Feldern gedeckelt (so gross ist
+   * das Netz im Ball Cage).
+   */
+  latticePartners(railId, tol = 1.5) {
+    const ra = this._rail(railId);
+    if (!ra) return [];
+    const out = [];
+    for (const t of this.tubes.values()) {
+      if (t.id === railId || t.arm || t.link || t.bow) continue;
+      const rb = this._rail(t.id);
+      if (!rb) continue;
+      const dot = rb.dir[0] * ra.dir[0] + rb.dir[1] * ra.dir[1] + rb.dir[2] * ra.dir[2];
+      if (Math.abs(dot) < 0.999) continue;
+      const off = [rb.p0[0] - ra.p0[0], rb.p0[1] - ra.p0[1], rb.p0[2] - ra.p0[2]];
+      const along = off[0] * ra.dir[0] + off[1] * ra.dir[1] + off[2] * ra.dir[2];
+      const perp = [off[0] - ra.dir[0] * along, off[1] - ra.dir[1] * along, off[2] - ra.dir[2] * along];
+      const gap = Math.hypot(perp[0], perp[1], perp[2]);
+      if (!LATTICE_GAPS.some((g) => Math.abs(g - gap) <= tol)) continue;
+      const e = along + rb.len * dot;
+      const lo = Math.max(0, Math.min(along, e));
+      const hi = Math.min(ra.len, Math.max(along, e));
+      const span = hi - lo;
+      if (span < LATTICE_STEP - tol) continue;
+      const len = Math.min(LATTICE_MAX, Math.floor((span + tol) / LATTICE_STEP) * LATTICE_STEP);
+      out.push({ id: t.id, gap: round(gap), len, lo: round(lo), hi: round(hi) });
+    }
+    return out;
+  }
+
+  /**
+   * Gitter auf zwei parallele Rohre setzen -- derselbe Ablauf wie bei einer
+   * Platte, nur entsteht ein Anbauteil mit eigenen Massen. Die Masse sind an
+   * den Ball-Cage-Entwuerfen gemessen: laengs der Rohre das Rastermass minus
+   * eine Kupplung (1600 -> 1550), quer dazu minus eine halbe (800 -> 775), und
+   * das Netz schliesst oben buendig mit dem Rohr ab, unten bleiben 25 mm Luft.
+   */
+  addLattice(aId, bId, t0, len, color) {
+    const ra = this._rail(aId), rb = this._rail(bId);
+    if (!ra || !rb) return null;
+    const A = [ra.p0[0] + ra.dir[0] * t0, ra.p0[1] + ra.dir[1] * t0, ra.p0[2] + ra.dir[2] * t0];
+    // Lot vom ersten auf das zweite Rohr
+    const off = [rb.p0[0] - ra.p0[0], rb.p0[1] - ra.p0[1], rb.p0[2] - ra.p0[2]];
+    const along = off[0] * ra.dir[0] + off[1] * ra.dir[1] + off[2] * ra.dir[2];
+    const perp = [off[0] - ra.dir[0] * along, off[1] - ra.dir[1] * along, off[2] - ra.dir[2] * along];
+    const gap = Math.hypot(perp[0], perp[1], perp[2]);
+    if (gap < 1) return null;
+    const u = [perp[0] / gap, perp[1] / gap, perp[2] / gap];   // erstes -> zweites Rohr
+    // Lokales X zeigt zum OBEREN Rohr, lokales Y laeuft laengs, Z ist die Normale.
+    const up = u[1] < 0 ? [-u[0], -u[1], -u[2]] : u;
+    const sign = up === u ? 1 : -1;
+    const w = round(len - 5), h = round(gap - 2.5);
+    // Mitte: Feldmitte, dann 1,25 cm zum oberen Rohr -- so sitzt die Oberkante
+    // auf der Rohrachse und unten bleibt der gemessene Spalt.
+    const c = [
+      A[0] + ra.dir[0] * (len / 2) + perp[0] / 2 + up[0] * 1.25,
+      A[1] + ra.dir[1] * (len / 2) + perp[1] / 2 + up[1] * 1.25,
+      A[2] + ra.dir[2] * (len / 2) + perp[2] / 2 + up[2] * 1.25,
+    ];
+    const ey = [ra.dir[0] * sign, ra.dir[1] * sign, ra.dir[2] * sign];
+    const ez = [up[1] * ey[2] - up[2] * ey[1], up[2] * ey[0] - up[0] * ey[2], up[0] * ey[1] - up[1] * ey[0]];
+    for (const f of this.fittings.values()) {
+      if (f.kind === "lattice2" && Math.hypot(f.x - c[0], f.y - c[1], f.z - c[2]) < 2) return null;
+    }
+    return this.addFitting("lattice2", c[0], c[1], c[2],
+      { quat: quatFromBasis(up, ey, ez), color: color || null, w, h });
   }
 
   /**
