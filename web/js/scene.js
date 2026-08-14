@@ -1724,11 +1724,15 @@ export class SceneManager {
 
             if (ad.armLen > 0.5) {
               // Zweiter Schenkel: gleicher Durchmesser wie die Huelse, das
-              // Diagonalrohr steckt darin (Knierohr, kein duenner Stift).
+              // Diagonalrohr steckt darin (Knierohr, kein duenner Stift). Er
+              // reicht eine halbe Kupplungslaenge UEBER den Fusspunkt hinaus --
+              // genau so weit ist das Diagonalrohr an seinem Ende gekuerzt,
+              // sonst klafft dort eine Luecke zwischen Kupplung und Rohr.
+              const armLen = ad.armLen + cs / 2;
               const arm = new THREE.Mesh(
-                new THREE.CylinderGeometry(sockR, sockR, ad.armLen, 14),
+                new THREE.CylinderGeometry(sockR, sockR, armLen, 14),
                 c45mat);
-              arm.position.copy(ad.armMid);
+              arm.position.copy(ad.bodyPos).addScaledVector(ad.armDir, armLen / 2);
               arm.quaternion.setFromUnitVectors(UP, ad.armDir);
               arm.userData = { kind: "node", id: n.id };
               this.buildGroup.add(arm);
