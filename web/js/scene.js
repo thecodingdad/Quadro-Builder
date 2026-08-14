@@ -633,6 +633,23 @@ export class SceneManager {
     return geo;
   }
 
+  /**
+   * Vorschlags-Variante eines beliebigen Bauteil-Materials: orange, sonst
+   * unveraendert. Geklont statt ersetzt -- das feste Vorschlags-Material ist
+   * einseitig, und eine Rutsche (U-Rinne, DoubleSide) verlor damit ihre
+   * Innenflaechen und sah aus wie ein Balken.
+   */
+  _suggestMaterial(base) {
+    const key = "sug:" + base.uuid;
+    if (!this._materials[key]) {
+      const m = base.clone();
+      m.color = new THREE.Color(0xff8c1a);
+      if (m.emissive) m.emissive = new THREE.Color(0x5a3000);
+      this._materials[key] = m;
+    }
+    return this._materials[key];
+  }
+
   // Hervorhebungs-Variante eines beliebigen Bauteil-Materials: durchgehend lila.
   // Geklont statt neu gebaut, damit Eigenschaften wie DoubleSide oder
   // Transparenz (Platten, Netze) erhalten bleiben. Pro Basis-Material einmal
@@ -1769,10 +1786,10 @@ export class SceneManager {
       if (hideFlat) continue;
       const st = stateOf(sl.id);
       if (st === "future") continue;
-      const mat = matFor(sl.id, (suggest && suggest.has(sl.id)) ? this._tubeSuggest()
-        : (asm && st === "done")
-          ? this._fadedMaterial(sl.color ? colorHex(sl.color) : 0xd23b3b)
-          : this._slideMatFor(sl.kind, st === "current", sl.color));
+      const base = (asm && st === "done")
+        ? this._fadedMaterial(sl.color ? colorHex(sl.color) : 0xd23b3b)
+        : this._slideMatFor(sl.kind, st === "current", sl.color);
+      const mat = matFor(sl.id, (suggest && suggest.has(sl.id)) ? this._suggestMaterial(base) : base);
 
       // Beschriftung: Name des Rutschenenteils/Dachs wenn Labels aktiv.
       if (slideNameFor && wantsLabel(sl.id) && st !== "future") {
