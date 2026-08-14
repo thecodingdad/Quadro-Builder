@@ -9,11 +9,9 @@ import { round2 } from "./util.js";
 
 const CLICK_TOLERANCE = 9; // px: groessere Bewegung = Kamera drehen, kein Klick (Touch-tauglich)
 
-// C45_SLEEVE_LEN / C45_ARM_LEN stehen in config.js: der Generator baut dieselben
-// Schraegen und braucht dieselben Masse. Ausgemessen an den Dateien der
-// Herstellersoftware (tmp/.../Basic II_Haus_13120.qdf, alle sechs Adapter
-// identisch); dazwischen liegt ein echtes Rohrende, auf das die Winkelkupplung
-// gesteckt wird.
+// C45_SLEEVE_LEN / C45_ARM_LEN stehen in config.js. Ausgemessen an den Dateien
+// der Herstellersoftware (alle sechs Adapter identisch): dazwischen liegt ein
+// echtes Rohrende, auf das die Winkelkupplung gesteckt wird.
 
 // Zufallsfarbe: kein echter Farbwert, sondern ein Schalter in builder.color.
 // Jedes Teil wuerfelt beim Setzen (bzw. beim Umfaerben einer Auswahl) seine
