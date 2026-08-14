@@ -14,3 +14,6 @@ __pycache__/
 node_modules/
 quadro-entwurf*.json
 tmp/
+# Eigene Referenz-Modelle und QDF-Sammlungen (lokal, nicht Teil der App)
+model*.json
+*.qdf
