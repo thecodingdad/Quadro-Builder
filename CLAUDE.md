@@ -78,7 +78,7 @@ Django-Backend (Roadmap) darf ausschließlich diese beiden Module ersetzen.
 
 Koordinaten in **cm**, Three.js-Konvention **y = oben**, Boden bei y = 0.
 
-`BuildModel` hält sechs Maps: `nodes`, `tubes`, `panels`, `clamps`, `textiles`, `slides`.
+`BuildModel` hält sieben Maps: `nodes`, `tubes`, `panels`, `clamps`, `textiles`, `slides`, `fittings`.
 
 - Knoten `{id,x,y,z}` = Kupplung. Optionale Flags: `c45` (trägt 45°-Winkelkupplung),
   `c45body` (Adapter-Körper), `c45axis`, `armDirs`/`arms` (rotierte Kupplung aus QDF), `quat`.
@@ -95,6 +95,11 @@ Koordinaten in **cm**, Three.js-Konvention **y = oben**, Boden bei y = 0.
   also nicht darauf; Bezugsrichtung ist `util.panelNormal()` (waagerecht → oben,
   senkrecht → vom Modellmittelpunkt weg). Beim Setzen entscheidet der Blickwinkel, ein Klick auf
   eine liegende Platte legt sie um.
+- Anbauteil `{id,kind,x,y,z,quat,color,w?,h?,mask?}` = Rad, Rolle, Lager, Gitter, Rundabdeckung …
+  `kind` ist die QDF-Elementart, `quat` die volle Ausrichtung (Three-Reihenfolge x,y,z,w); die lokale
+  +X-Achse ist die Bezugsrichtung (Radachse, Rollenachse). Wo ein Teil sitzen darf, steht in
+  `FITTING_MOUNTS` (Kupplung oder Rohr, Abstand in cm) bzw. in eigenen Abläufen für Gitter
+  (zwei parallele Rohre), Rundabdeckung (zwei Bogenrohre) und großes Dach (First-Rohr).
 - **Auto-Merge:** `addNode` liefert einen vorhandenen Knoten zurück, wenn einer < `MERGE_EPS`
   (0,5 cm) existiert – so entstehen geschlossene Rahmen ohne Doppelteile.
 - **Abstand Mitte–Mitte** = Rohrlänge + `geometry.connectorSize` (5 cm) → `spacingFor()`.

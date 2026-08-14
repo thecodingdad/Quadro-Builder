@@ -40,7 +40,8 @@ Keine Installation, kein Account, keine Cloud – alles läuft lokal im Browser.
 - **Live-Stückliste** – Kupplungstyp-Heuristik, Materialpreise, Gesamtkosten
 - **Bestand & Machbarkeit** – eintragen was man hat, sofort sehen ob's reicht
 - **Aufbaumodus** – Lage für Lage durch den Bauplan navigieren, drucken
-- **Platten** – 40×40 und 40×20 auf erkannte Felder einsetzen
+- **Platten** – an zwei parallelen Rohren einsetzen, alle Katalogformate von 30×30 bis 80×80
+- **Rutschen, Bögen und Anbauteile** – Rutsche einhängen, Bogenrohre drehen, Räder, Rollen, Lager, Gitter, Rundabdeckung und großes Dach setzen
 - **Schräge Streben** – 45°-Elemente für Rampen und Verstrebungen
 - **Alu-Verstärkungen** – Profile in Rohre einsetzen, kollineare Läufe zusammenfassen
 - **Modell-Bibliothek** – die eigene QDF-Sammlung einlesen, durchsuchen und filtern: „nur mit meinem Bestand baubar"
