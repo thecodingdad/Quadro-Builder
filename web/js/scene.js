@@ -32,6 +32,9 @@ const PANEL_GAP = 1.5;
 // (Rad sitzt 5 cm neben der Kupplung, Rundwand 40 cm von Kupplung und Rohr).
 const WHEEL_R = 19;
 const ROUND_WALL_R = 40;
+// Laenge der Rundabdeckung entlang ihrer Achse: die Bogenpaare stehen in allen
+// Entwuerfen 800 mm auseinander.
+const ROUND_COVER_LEN = 80;
 // Flaechige Anbauteile verschwinden im Verstaerken- und Kollisions-Modus, wie
 // Platten und Netze auch.
 const FLAT_FITTINGS = new Set(["lattice2", "textil-round2", "roof-large2"]);
@@ -715,22 +718,51 @@ export class SceneManager {
         mat = this._fittingMaterial(f.kind === "steering-lock2" ? 0xd42e2e : 0x2b2b2b, false);
         break;
       }
-      case "lattice2": {                // Gitter: Rechteck, halbdurchsichtig
+      case "lattice2": {                // Gitter: Rechteck in der lokalen XY-Ebene
+        // Gemessen an den Ball-Cage-Entwuerfen: das erste Mass (f.w) liegt auf
+        // der lokalen Y-, das zweite (f.h) auf der lokalen X-Achse, die Flaeche
+        // steht senkrecht auf der lokalen Z-Achse -- dieselbe Regel wie bei den
+        // Platten. Ein 1550 x 775 grosses Gitter spannt damit genau zwischen den
+        // beiden Rohrebenen, statt flach in der Gegend zu liegen.
         const w = f.w || 40, h = f.h || 40;
-        geo = this._cachedGeo(`lattice${w}x${h}`, () => new THREE.BoxGeometry(0.8, h, w));
+        geo = this._cachedGeo(`lattice${w}x${h}`, () => new THREE.BoxGeometry(h, w, 0.8));
         mat = this._fittingMaterial(hex, true);
         break;
       }
-      case "textil-round2": {           // Viertelzylinder, Radius 40 cm
-        geo = this._cachedGeo("roundwall", () =>
-          new THREE.CylinderGeometry(ROUND_WALL_R, ROUND_WALL_R, ROUND_WALL_R, 20, 1, true, 0, Math.PI / 2));
+      case "textil-round2": {           // Rundabdeckung: Viertelzylinder ueber einem Bogen
+        // Der Punkt im Entwurf ist der KRUEMMUNGSMITTELPUNKT des Bogens (an
+        // allen 52 Vorkommen liegen die Kupplungen des Bogens genau 400 mm
+        // entfernt, bei den lokalen Winkeln +Y und -X). Das Tuch laeuft vom
+        // Punkt aus 800 mm entlang der lokalen +Z-Achse.
+        geo = this._cachedGeo("roundwall", () => {
+          const g = new THREE.CylinderGeometry(ROUND_WALL_R, ROUND_WALL_R, ROUND_COVER_LEN,
+            Math.max(12, this._q().tube * 2), 1, true, Math.PI, Math.PI / 2);
+          g.rotateX(Math.PI / 2);            // Achse von +Y auf +Z drehen
+          g.translate(0, 0, ROUND_COVER_LEN / 2);
+          return g;
+        });
         mat = this._fittingMaterial(hex, true);
         break;
       }
-      case "roof-large2": {             // grosse Dachplatte
-        geo = this._cachedGeo("rooflarge", () => new THREE.BoxGeometry(80, 3, 160));
-        mat = this._fittingMaterial(hex, false);
-        break;
+      case "roof-large2": {             // grosses Dach: Giebel ueber dem First
+        // Der Punkt liegt auf dem First, die lokale X-Achse laeuft am First
+        // entlang. Von dort faellt eine Flaeche entlang +Z, die andere entlang
+        // -Y ab (beide 45 Grad, deshalb stehen die Achsen senkrecht aufeinander).
+        // Masse aus den neun Cover-Entwuerfen: First von -40 bis +120 cm, Traufe
+        // 60 cm tiefer und 60 cm seitlich -> Schraege 60*sqrt(2).
+        const slope = Math.SQRT2 * 60;
+        return [
+          this._cachedGeo("roofSlopeA", () => {
+            const g = new THREE.BoxGeometry(160, 1.2, slope);
+            g.translate(40, 0, slope / 2);
+            return g;
+          }),
+          this._cachedGeo("roofSlopeB", () => {
+            const g = new THREE.BoxGeometry(160, slope, 1.2);
+            g.translate(40, -slope / 2, 0);
+            return g;
+          }),
+        ].map((g) => this._placeFitting(new THREE.Mesh(g, this._fittingMaterial(hex, false)), f, q));
       }
       case "bag2": {
         geo = this._cachedGeo("bag", () => new THREE.SphereGeometry(12, 12, 8));
@@ -826,26 +858,30 @@ export class SceneManager {
     return this._materials["clamp"];
   }
 
-  // Geometrie fuer den 45-Grad-Adapter-Koerper: kleiner Wuerfel,
-  // der in einen Arm der Basiskupplung gesteckt wird.
+  // Aussenradius der beiden Schenkel der 45-Grad-Winkelkupplung. Das Teil ist
+  // ein KNIEROHR: es schiebt sich ueber das gerade Rohr, und das Diagonalrohr
+  // steckt im zweiten Schenkel -- beide Schenkel also etwas weiter als ein Rohr.
+  _c45SocketR() {
+    return geometry().tubeRadius * 1.18;
+  }
+
+  // Der Knick des Kniestuecks: Kugel im Schenkelradius. Zusammen mit den beiden
+  // Zylindern ergibt das den runden Bogen des echten Teils (statt eines Wuerfels,
+  // der aus dem Rohr herausstand).
   _c45Geometry() {
     if (!this._c45Geo) {
-      const s = geometry().connectorSize * 0.82;
-      const seg = this._q().conn;
-      this._c45Geo = seg ? this._roundedBoxGeometry(s, CONNECTOR_ROUNDNESS, seg[0], seg[1])
-        : new THREE.BoxGeometry(s, s, s);
+      const seg = Math.max(10, this._q().tube);
+      this._c45Geo = new THREE.SphereGeometry(this._c45SocketR(), seg, Math.max(6, seg / 2));
     }
     return this._c45Geo;
   }
 
-  // Geometrie fuer den Diagonal-Stutzen des Adapters (Arm, der ins Rohr greift).
-  // Echtes Mass: Arm ~42 mm Durchmesser (armRadius) -> duenner als das Rohr
-  // (49 mm), damit er sichtbar IN die Tube einsteckt.
+  // Diagonal-Schenkel des Kniestuecks (nimmt das Diagonalrohr auf).
   _c45StubGeometry() {
     if (!this._c45StubGeo) {
-      const ar = geometry().armRadius;
+      const r = this._c45SocketR();
       const cs = geometry().connectorSize;
-      this._c45StubGeo = new THREE.CylinderGeometry(ar, ar, cs * 0.75, 14);
+      this._c45StubGeo = new THREE.CylinderGeometry(r, r, cs * 0.9, 14);
     }
     return this._c45StubGeo;
   }
@@ -1646,8 +1682,9 @@ export class SceneManager {
               this.buildGroup.add(baseArm);
             }
             // C45-Huelse: etwas breiter als das Rohr, der Basis-Arm steckt darin.
+            const sockR = this._c45SocketR();
             const sleeve = new THREE.Mesh(
-              new THREE.CylinderGeometry(tubeRadius * 1.18, tubeRadius * 1.18, ad.sleeveLen, 14),
+              new THREE.CylinderGeometry(sockR, sockR, ad.sleeveLen, 14),
               c45mat);
             sleeve.position.copy(ad.sleeveMid);
             sleeve.quaternion.setFromUnitVectors(UP, ad.sleeveDir);
@@ -1661,8 +1698,10 @@ export class SceneManager {
             this.buildGroup.add(body);
 
             if (ad.armLen > 0.5) {
+              // Zweiter Schenkel: gleicher Durchmesser wie die Huelse, das
+              // Diagonalrohr steckt darin (Knierohr, kein duenner Stift).
               const arm = new THREE.Mesh(
-                new THREE.CylinderGeometry(armRadius, armRadius, ad.armLen, 14),
+                new THREE.CylinderGeometry(sockR, sockR, ad.armLen, 14),
                 c45mat);
               arm.position.copy(ad.armMid);
               arm.quaternion.setFromUnitVectors(UP, ad.armDir);
@@ -1677,6 +1716,16 @@ export class SceneManager {
             const dv = new THREE.Vector3(d[0], d[1], d[2]).normalize();
             const cv = this._c45ArmDirAt(model, n, d);
             const bx = n.x + cv.x * cs, by = n.y + cv.y * cs, bz = n.z + cv.z * cs;
+            // Huelse: schiebt sich vom Kupplungswuerfel bis zum Knick ueber den
+            // Arm -- dieselbe Form wie bei den importierten C45.
+            const sockR = this._c45SocketR();
+            const sleeveLen = cs / 2;
+            const sleeve = new THREE.Mesh(
+              new THREE.CylinderGeometry(sockR, sockR, sleeveLen, 14), c45mat);
+            sleeve.position.set(n.x + cv.x * cs * 0.75, n.y + cv.y * cs * 0.75, n.z + cv.z * cs * 0.75);
+            sleeve.quaternion.setFromUnitVectors(UP, cv);
+            sleeve.userData = { kind: "node", id: n.id };
+            this.buildGroup.add(sleeve);
             const body = new THREE.Mesh(this._c45Geometry(), c45mat);
             body.position.set(bx, by, bz);
             body.userData = { kind: "node", id: n.id };

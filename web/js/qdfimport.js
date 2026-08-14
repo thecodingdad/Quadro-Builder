@@ -432,11 +432,13 @@ export function parseQDF(text, opts = {}) {
         quat: [r4(q[1] / qn), r4(q[2] / qn), r4(q[3] / qn), r4(q[0] / qn)],
         color: materials.get(mat) || null,
       };
-      // Das Gitter bringt seine Masse mit (wie eine Platte: Teilemass, das
-      // Kupplungsmass kommt dazu).
+      // Das Gitter bringt seine Masse mit. Anders als bei Rohren und Platten
+      // ist es das ECHTE Mass der Flaeche, nicht das Teilemass ohne Kupplung:
+      // 1550 x 775 spannt gemessen genau von -775 bis +775 um den Mittelpunkt.
+      // Erstes Feld = lokales Y, zweites = lokales X (wie bei den Platten).
       if (spec.sized && typeof p.rest[3] === "number" && typeof p.rest[5] === "number") {
-        f.w = round(p.rest[3] / 10 + conn);
-        f.h = round(p.rest[5] / 10 + conn);
+        f.w = round(p.rest[3] / 10);
+        f.h = round(p.rest[5] / 10);
       }
       // Lochzapfenkupplung: Arm-Maske entscheidet ueber ein- oder dreiarmig.
       if (spec.masked && typeof p.rest[4] === "number") f.mask = p.rest[4];

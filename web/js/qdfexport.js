@@ -338,7 +338,7 @@ export function buildQDF(model) {
       : IDENTITY;
     const mat = f.color ? tubeMat(f.color) : CONNECTOR_MAT;
     if (f.kind === "lattice2" && f.w != null && f.h != null) {
-      lines.push(`lattice2{${mat}, ${tuple(q, f.x, f.y, f.z)}, 1, ${mm(f.w - conn)}, 0., ${mm(f.h - conn)}, 0., 0}`);
+      lines.push(`lattice2{${mat}, ${tuple(q, f.x, f.y, f.z)}, 1, ${mm(f.w)}, 0., ${mm(f.h)}, 0., 0}`);
     } else if (f.kind === "hole-connector4") {
       const mask = f.mask || 0;
       lines.push(`hole-connector4{${CONNECTOR_MAT}, ${tuple(q, f.x, f.y, f.z)}, 0, 0, ${mask}, ${mask - 3}, 3840, 0, 0}`);
