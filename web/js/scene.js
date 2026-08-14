@@ -571,29 +571,40 @@ export class SceneManager {
     const hit = this._panelGeos.get(key);
     if (hit) return hit;
 
-    let geo;
+    // Die Ecken sind ausgespart: dort sitzt die Kupplung. Der Wuerfel misst
+    // connectorSize und steht mit seiner halben Kantenlaenge um den Knoten --
+    // genau so gross ist die quadratische Aussparung. Bei sehr kleinen Platten
+    // gedeckelt, damit nicht mehr Ecke fehlt als Platte bleibt.
+    const notch = Math.min((geometry().connectorSize || 5) / 2, Math.min(w, d) / 4);
+    const x0 = -w / 2, x1 = w / 2, y0 = -d / 2, y1 = d / 2;
+    const shape = new THREE.Shape();
+    shape.moveTo(x0 + notch, y0);
+    shape.lineTo(x1 - notch, y0);
+    shape.lineTo(x1 - notch, y0 + notch);
+    shape.lineTo(x1, y0 + notch);
+    shape.lineTo(x1, y1 - notch);
+    shape.lineTo(x1 - notch, y1 - notch);
+    shape.lineTo(x1 - notch, y1);
+    shape.lineTo(x0 + notch, y1);
+    shape.lineTo(x0 + notch, y1 - notch);
+    shape.lineTo(x0, y1 - notch);
+    shape.lineTo(x0, y0 + notch);
+    shape.lineTo(x0 + notch, y0 + notch);
+    shape.closePath();
     if (holes === 9) {
-      const shape = new THREE.Shape();
-      shape.moveTo(-w / 2, -d / 2);
-      shape.lineTo(w / 2, -d / 2);
-      shape.lineTo(w / 2, d / 2);
-      shape.lineTo(-w / 2, d / 2);
-      shape.closePath();
       const r = Math.min(w, d) * 0.105;   // Lochradius ~4 cm im 40er-Feld
       const off = Math.min(w, d) * 0.29;  // Mitte der aeusseren Lochreihen
       for (const gx of [-off, 0, off])
         for (const gy of [-off, 0, off])
           shape.holes.push(new THREE.Path().absarc(gx, gy, r, 0, Math.PI * 2, true));
-      geo = new THREE.ExtrudeGeometry(shape, { depth: thickness, bevelEnabled: false, curveSegments: 14 });
-      // Shape liegt in XY und wird nach +Z extrudiert. Die Drehung um -90 Grad
-      // um X bringt das in die Box-Orientierung (x = u, y = Dicke, z = w);
-      // danach mittig um die Plattenebene zentrieren.
-      geo.rotateX(-Math.PI / 2);
-      geo.translate(0, -thickness / 2, 0);
-      geo.computeVertexNormals();
-    } else {
-      geo = new THREE.BoxGeometry(w, thickness, d);
     }
+    const geo = new THREE.ExtrudeGeometry(shape, { depth: thickness, bevelEnabled: false, curveSegments: 14 });
+    // Shape liegt in XY und wird nach +Z extrudiert. Die Drehung um -90 Grad
+    // um X bringt das in die Box-Orientierung (x = u, y = Dicke, z = w);
+    // danach mittig um die Plattenebene zentrieren.
+    geo.rotateX(-Math.PI / 2);
+    geo.translate(0, -thickness / 2, 0);
+    geo.computeVertexNormals();
     this._panelGeos.set(key, geo);
     this._keepGeos.add(geo);
     return geo;
