@@ -688,6 +688,10 @@ export function parseQDF(text, opts = {}) {
     const referenced = new Set();
     for (const t of tubes) { referenced.add(t.a); referenced.add(t.b); }
     for (const pa of panels) for (const id of pa.nodes) referenced.add(id);
+    // Netze/Stoffe haengen genauso an Eck-Kupplungen wie Platten. Fehlten sie
+    // hier, wurden deren Ecken als "frei schwebend" geloescht und das Netz zeigte
+    // danach auf Knoten, die es nicht mehr gibt.
+    for (const tx of textiles) for (const id of tx.nodes) referenced.add(id);
     for (let i = nodes.length - 1; i >= 0; i--) if (!referenced.has(nodes[i].id)) nodes.splice(i, 1);
   }
 

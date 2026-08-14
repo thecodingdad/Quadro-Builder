@@ -8,6 +8,7 @@ import { QUALITY_LEVELS } from "./scene.js";
 import { RANDOM_COLOR } from "./builder.js";
 import * as storage from "./storage.js";
 import { designEntry, parseDesign, checkAgainstInventory, missingCount } from "./library.js";
+import { buildQDF } from "./qdfexport.js";
 import { t, getLang, setLang, applyTranslations } from "./i18n.js";
 
 const INV_KEY = "quadro.inventory.v1";
@@ -715,6 +716,14 @@ export function initUI({ scene, model, builder }) {
   $("btn-export").addEventListener("click", () => {
     storage.exportFile(model.toJSON(), "quadro-entwurf.json");
     flash(t("flash_exported"));
+    toggleFileMenu(false);
+  });
+
+  $("btn-export-qdf").addEventListener("click", () => {
+    const { text, stats } = buildQDF(model);
+    storage.exportText(text, "quadro-entwurf.qdf");
+    const parts = `${stats.connectors} + ${stats.tubes + stats.bows} + ${stats.panels}`;
+    flash(t("flash_exported_qdf", parts));
     toggleFileMenu(false);
   });
 

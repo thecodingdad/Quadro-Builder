@@ -44,7 +44,8 @@ python -m json.tool data/parts.json > /dev/null && echo OK
 node --check web/js/model.js && node --check web/js/bom.js && node --check web/js/buildplan.js
 ```
 
-`model.js`, `bom.js`, `buildplan.js` und `qdfimport.js` sind bewusst frei von Three.js und DOM
+`model.js`, `bom.js`, `buildplan.js`, `qdfimport.js`, `qdfexport.js` und `library.js` sind bewusst
+frei von Three.js und DOM
 und dadurch in Node isoliert testbar/ausführbar. **Diese Trennung beim Erweitern halten** –
 Three.js ausschließlich in `scene.js`, DOM ausschließlich in `ui.js`/`scene.js`/`storage.js`.
 
@@ -64,6 +65,7 @@ Three.js ausschließlich in `scene.js`, DOM ausschließlich in `ui.js`/`scene.js
 | `web/js/storage.js` | `localStorage` (Autosave + benannte Entwürfe) + Datei-Export/Import |
 | `web/js/ui.js` | Toolbar, Panels (Stückliste/Bestand/Aufbau), Tastatur, Entwurfs-Menü |
 | `web/js/qdfimport.js` | Parser für QDF-Dateien der Original-QUADRO-3D-Software |
+| `web/js/qdfexport.js` | Schreibt ein Modell als QDF (Gegenstück zu `qdfimport.js`) |
 | `web/js/library.js` | Modell-Bibliothek: QDF-Sammlung einlesen, Kennzahlen, Bestandsabgleich |
 
 **Datenfluss:** Jede Modelländerung → `builder.refresh()` → `scene.renderModel()` + Handles neu →

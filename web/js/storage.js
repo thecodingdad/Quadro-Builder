@@ -146,6 +146,19 @@ export function exportFile(data, filename) {
   URL.revokeObjectURL(url);
 }
 
+/** Beliebigen Text als Datei anbieten (QDF-Export). */
+export function exportText(text, filename, mime = "text/plain") {
+  const blob = new Blob([text], { type: mime });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
 export function importFile(file) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();

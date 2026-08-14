@@ -101,7 +101,7 @@ Keine Installation, kein Account, keine Cloud – alles läuft lokal im Browser.
 - **Schräge Streben** – 45°-Elemente für Rampen und Verstrebungen
 - **Alu-Verstärkungen** – Profile in Rohre einsetzen, kollineare Läufe zusammenfassen
 - **Modell-Bibliothek** – die eigene QDF-Sammlung einlesen, durchsuchen und filtern: „nur mit meinem Bestand baubar"
-- **QDF-Import** – Entwürfe aus der Original-QUADRO-Software laden
+- **QDF-Import und -Export** – Entwürfe mit der Original-QUADRO-Software austauschen
 - **Autosave + benannte Entwürfe** – Daten bleiben im Browser erhalten
 - **JSON-Export/Import** – echte Offline-Sicherung als Datei
 - **Zweisprachig** – Deutsch und Englisch (Sprache wechseln mit dem DE/EN-Button)
@@ -172,6 +172,7 @@ Quadro-Builder/
     │   ├── bom.js           # Stückliste + Kupplungstyp-Heuristik + Machbarkeit
     │   ├── buildplan.js     # Aufbauplan: ebenenweise Bauschritte
     │   ├── qdfimport.js     # QDF-Import: Entwürfe aus Quadro 3D einlesen
+    │   ├── qdfexport.js     # QDF-Export: Modell im Format der Originalsoftware
     │   ├── library.js       # Modell-Bibliothek: QDF-Sammlung + Bestandsabgleich
     │   ├── storage.js       # localStorage + Datei-Export/Import
     │   └── ui.js            # Toolbar, Panels, Tastatur-Handler
@@ -303,7 +304,7 @@ No installation, no account, no cloud – everything runs locally in the browser
 - **Diagonal braces** – 45° elements for ramps and cross-bracing
 - **Aluminium reinforcements** – insert profiles into tubes, collinear runs merged
 - **Model library** – read in your own QDF collection, search and filter it: “only buildable with my inventory”
-- **QDF import** – load designs from the original QUADRO software
+- **QDF import and export** – exchange designs with the original QUADRO software
 - **Autosave + named designs** – data persists in the browser
 - **JSON export/import** – true offline backup as a file
 - **Bilingual** – German and English (switch with the DE/EN button)
@@ -374,6 +375,7 @@ Quadro-Builder/
     │   ├── bom.js           # BOM + connector type heuristics + feasibility
     │   ├── buildplan.js     # Assembly plan: layer-by-layer steps
     │   ├── qdfimport.js     # QDF import: read designs from Quadro 3D
+    │   ├── qdfexport.js     # QDF export: model in the original software's format
     │   ├── library.js       # Model library: QDF collection + inventory match
     │   ├── storage.js       # localStorage + file export/import
     │   └── ui.js            # Toolbar, panels, keyboard handler

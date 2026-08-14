@@ -11,10 +11,12 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ## [Unreleased]
 
 ### Hinzugefügt · Added
+- **QDF-Export** (`web/js/qdfexport.js`, „Export QDF" im Entwürfe-Menü) – Modelle im Format der Original-QUADRO-Software sichern. Rundlauf über alle 235 Beispieldateien des Herstellers geprüft: 193 kommen Teil für Teil identisch zurück, der Rest verliert nur die synthetischen Bällebad-Seitenwände · **QDF export** (`web/js/qdfexport.js`, “Export QDF” in the drafts menu) – save models in the original QUADRO software's format. Round-trip checked against all 235 sample files: 193 come back part for part identical, the rest lose only the synthesised ball-pit side walls
 - **Modell-Bibliothek** (`web/js/library.js`, Panel „Modelle") – eigene QDF-Sammlung ordnerweise einlesen, durchsuchen und nach „mit meinem Bestand baubar" filtern; je Eintrag Kupplungen/Rohre/Platten, Außenmaße und die Zahl der fehlenden Teile. Ablage in IndexedDB (`quadro.library.v1`), nichts wird hochgeladen · **Model library** (`web/js/library.js`, “Models” panel) – read in your own QDF collection folder by folder, search it and filter by “buildable with my inventory”; each entry shows connectors/tubes/panels, outer dimensions and the number of missing parts. Stored in IndexedDB, nothing is uploaded
 - `applyTranslations()` übersetzt jetzt auch `data-i18n-placeholder` · `applyTranslations()` now also translates `data-i18n-placeholder`
 
 ### Behoben · Fixed
+- `qdfimport.js` zählte beim Aufräumen freistehender Knoten nur Rohre und Platten als Referenz – die Eckpunkte von Netzen wurden gelöscht, das Netz zeigte danach auf Knoten, die es nicht mehr gab · `qdfimport.js` only counted tubes and panels when pruning free-standing nodes, so the corners of nets were deleted and the net then referenced nodes that no longer existed
 - `bom.js` `infeasibleConnectors()` wertete die Hülse einer 45°-Winkelkupplung als schiefen Arm (~17° gemessen) und hielt damit jede im Editor gebaute Schräge für nicht herstellbar – das blockierte das Verschieben jeder Auswahl, die eine enthielt · `infeasibleConnectors()` treated the sleeve of a 45° angle connector as a skewed arm (~17° as measured) and so considered every diagonal built in the editor impossible to build, which blocked moving any selection containing one
 - Escape schließt jetzt zuerst ein offenes Overlay (Tastenkürzel), statt den Modus zu wechseln · Escape now closes an open overlay (shortcuts) first instead of switching the mode
 
