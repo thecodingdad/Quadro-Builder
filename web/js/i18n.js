@@ -28,6 +28,11 @@ const de = {
   label_color: 'Farbe',
   color_random: 'Zufallsfarbe',
   notice_panel_above: 'Platte liegt oben auf.',
+  notice_panel_pick_second: (n) => `Rohr gewählt – jetzt eines der ${n} hervorgehobenen Gegenrohre anklicken.`,
+  notice_panel_no_partner: 'Zu diesem Rohr passt kein Gegenrohr für die gewählte Platte.',
+  notice_panel_no_fit: 'Diese beiden Rohre tragen die gewählte Platte nicht.',
+  notice_panel_exists: 'Dort liegt schon eine Platte.',
+  notice_panel_placed: 'Platte eingesetzt.',
   notice_bow_blocked: 'Gedreht passt der Bogen hier nicht.',
   notice_panel_below: 'Platte hängt unter den Rohren.',
   btn_diagonal: 'Schräg',
@@ -175,7 +180,7 @@ const de = {
 
   // Statuszeile
   status_add: 'Bauen: Kupplung wählen, dann grünen Punkt klicken. Oder Pfeiltasten. Ziehen = drehen.',
-  status_panel: 'Platte: blau markiertes Feld anklicken, um die gewählte Platte einzusetzen.',
+  status_panel: 'Platte: erst ein Tragrohr anklicken, dann eines der hervorgehobenen Gegenrohre. Klick auf eine Platte legt sie um.',
   status_reinforce: 'Verstärken: Rohr anklicken, um ein Alu-Profil ein-/auszuschieben (metallisch = verstärkt, orange = empfohlen).',
   status_collision: 'Kollision: rot markierte Rohre überlagern sich (gleiche Achse oder Kreuzung im Rohrinneren).',
   status_clamp: 'Doppelrohr: auf ein Rohr klicken, um einen Doppelrohrverbinder zu setzen (bestehenden anklicken = entfernen).',
@@ -321,6 +326,11 @@ const en = {
   label_color: 'Color',
   color_random: 'Random colour',
   notice_panel_above: 'Panel rests on top.',
+  notice_panel_pick_second: (n) => `Tube selected – now click one of the ${n} highlighted counterparts.`,
+  notice_panel_no_partner: 'No counterpart fits this tube for the selected panel.',
+  notice_panel_no_fit: 'These two tubes do not carry the selected panel.',
+  notice_panel_exists: 'There is already a panel there.',
+  notice_panel_placed: 'Panel placed.',
   notice_bow_blocked: 'Turned that way the bow does not fit here.',
   notice_panel_below: 'Panel hangs below the tubes.',
   btn_diagonal: 'Diagonal',
@@ -467,7 +477,7 @@ const en = {
 
   // Status bar
   status_add: 'Build: select a connector, then click the green dot. Or use arrow keys. Drag = rotate.',
-  status_panel: 'Panel: click the blue highlighted field to place the selected panel.',
+  status_panel: 'Panel: click one rail tube, then one of the highlighted counterparts. Clicking a panel flips it.',
   status_reinforce: 'Reinforce: click a tube to insert/remove an aluminium profile (metallic = reinforced, orange = recommended).',
   status_collision: 'Collision: tubes marked red overlap (same axis or crossing inside a tube).',
   status_clamp: 'Double tube: click a tube to place a double-tube connector (click existing = remove).',

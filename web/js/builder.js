@@ -39,6 +39,8 @@ export class Builder {
     this.mode = "select";
     this.tubeId = geometry().defaultTube;
     this.panelId = defaultPanel();
+    // Platten-Modus: erstes angeklicktes Tragrohr + Stelle entlang davon.
+    this.panelRail = null;
     this.color = "blue";
     this.selectedNodeId = null;
     // Cursor-Modus: id -> kind ("tube"/"panel"/"node"/...). Die ids sind ueber
@@ -126,6 +128,7 @@ export class Builder {
   // --- oeffentliche Steuerung --------------------------------------------
   setMode(mode) {
     this.mode = mode;
+    if (this.panelRail) { this.panelRail = null; this.highlight = null; }
     // Im Cursor-Modus gibt es keine Bau-Kupplung: sonst blieben Ankerpunkte
     // stehen. Umgekehrt gilt die Cursor-Auswahl nur dort.
     if (mode === "select") this.selectedNodeId = null;
@@ -146,13 +149,12 @@ export class Builder {
    * sich die Platte oben auf, schaut man von unten dagegen, haengt sie darunter.
    * Umlegen laesst sie sich danach mit einem Klick auf die Platte selbst.
    */
-  _panelSideFromView(nodeIds) {
-    const ns = nodeIds.map((id) => this.model.nodes.get(id));
-    if (ns.some((n) => !n)) return 1;
-    const [A, B, , D] = ns;
-    const e1 = [B.x - A.x, B.y - A.y, B.z - A.z];
-    const e2 = [D.x - A.x, D.y - A.y, D.z - A.z];
-    const c = [0, 1, 2].map((i) => ns.reduce((s, n) => s + [n.x, n.y, n.z][i], 0) / 4);
+  _panelSideFromCorners(cor) {
+    if (!cor) return 1;
+    const [A, B, , D] = cor;
+    const e1 = [B[0] - A[0], B[1] - A[1], B[2] - A[2]];
+    const e2 = [D[0] - A[0], D[1] - A[1], D[2] - A[2]];
+    const c = [0, 1, 2].map((i) => cor.reduce((s, q) => s + q[i], 0) / 4);
     const n = panelNormal(e1, e2, c, modelMiddle(this.model.nodes.values()));
     const cam = this.scene.cameraPosition();
     const toCam = [cam[0] - c[0], cam[1] - c[1], cam[2] - c[2]];
@@ -574,7 +576,8 @@ export class Builder {
   // --- Handles ------------------------------------------------------------
   _buildHandles() {
     this.scene.clearHandles();
-    if (this.mode === "panel") { this._buildPanelHandles(); return; }
+    // Im Platten-Modus gibt es keine Handles: dort klickt man zwei Rohre an.
+    if (this.mode === "panel") return;
     if (this.mode === "slide") { this._buildSlideHandles(); return; }
     if (this.mode === "clamp") { this._buildClampHandles(); return; }
     if (this.mode !== "add") return;
@@ -753,25 +756,6 @@ export class Builder {
       for (const d of DIAGONAL_DIRECTIONS) if (ux * d.vec[0] + uy * d.vec[1] + uz * d.vec[2] > DIR_ALIGN_TOL) occ.add(d.name);
     }
     return occ;
-  }
-
-  // Kandidaten-Felder fuer die aktuell gewaehlte Plattengroesse anzeigen.
-  _buildPanelHandles() {
-    const def = getPanel(this.panelId);
-    if (!def) return;
-    const tol = 1.5;
-    const eq = (a, b) => Math.abs(a - b) <= tol;
-    const fits = (d) =>
-      (eq(d[0], def.w) && eq(d[1], def.h)) || (eq(d[0], def.h) && eq(d[1], def.w));
-    for (const rect of this.model.findRectangles()) {
-      if (!fits(rect.dims)) continue;
-      if (this.model.panelOnCell(rect.nodes)) continue;
-      const corners = rect.nodes.map((id) => {
-        const n = this.model.nodes.get(id);
-        return [n.x, n.y, n.z];
-      });
-      this.scene.addPanelHandle(corners, { rectNodes: rect.nodes });
-    }
   }
 
   // --- Doppelrohrverbinder ------------------------------------------------
@@ -990,12 +974,14 @@ export class Builder {
       else if (h) obj = h.object;
       else obj = p && p.data.kind === "node" && this._isBuildable(p.data.id) ? p.object : null;
     } else if (this.mode === "panel") {
-      // Feld-Handles zum Setzen, liegende Platten zum Umlegen.
-      const h = this.scene.pickHandle(x, y);
+      // Anklickbar sind Rohre (Tragrohr waehlen) und liegende Platten (umlegen).
       const p = this.scene.pickForDelete(x, y);
-      const panel = p && p.data.kind === "panel" ? p : null;
-      if (h && (!panel || h.distance <= panel.distance)) obj = h.object;
-      else obj = panel ? panel.object : null;
+      const kind = p && p.data.kind;
+      if (kind === "panel") obj = p.object;
+      else if (kind === "tube") {
+        const tb = this.model.tubes.get(p.data.id);
+        obj = tb && !tb.arm && !tb.link && !tb.bow ? p.object : null;
+      }
     } else if (this.mode === "slide") {
       obj = handle();                            // nur die Feld-Handles
     } else if (this.mode === "clamp") {
@@ -1131,28 +1117,81 @@ export class Builder {
     this.refresh();
   }
 
+  /**
+   * Platten-Modus: erst ein Tragrohr anklicken, dann das Gegenrohr.
+   *
+   * Nach dem ersten Klick sind alle Rohre hervorgehoben, die zusammen mit ihm
+   * die gewaehlte Platte tragen koennen (parallel, richtiger Abstand, genug
+   * Ueberdeckung). Wo entlang die Platte sitzt, entscheidet die Stelle, an der
+   * das erste Rohr angeklickt wurde. Ein Klick auf eine liegende Platte legt
+   * sie stattdessen auf die andere Seite der Rohre.
+   */
   _clickPanel(e) {
-    // Umfaerben passiert ausschliesslich im Cursor-Modus -- hier wird nur gebaut.
-    const h = this.scene.pickHandle(e.clientX, e.clientY);
     const pick = this.scene.pickForDelete(e.clientX, e.clientY);
-    const panelHit = pick && pick.data.kind === "panel" ? pick : null;
-    const cell = h && h.data.panelCell ? h : null;
-    // Was naeher an der Kamera liegt, gewinnt. Sonst wuerde ein freies Feld
-    // IRGENDWO hinter der angeklickten Platte gewinnen und dort eine neue
-    // Platte setzen, statt die sichtbare umzulegen.
-    if (cell && (!panelHit || cell.distance <= panelHit.distance)) {
-      const side = this._panelSideFromView(cell.data.rectNodes);
-      this.recordHistory(() => this.model.addPanel(cell.data.rectNodes, this.panelId, this.colorFor("panel"), side));
+    if (!pick) { this._clearPanelRail(); return; }
+
+    if (pick.data.kind === "panel" && !this.panelRail) {
+      let side = null;
+      this.recordHistory(() => { side = this.model.flipPanelSide(pick.data.id); });
+      if (side != null) this.onNotice(t(side < 0 ? "notice_panel_below" : "notice_panel_above"));
       this.refresh();
       return;
     }
-    // Klick auf eine liegende Platte legt sie auf die andere Seite der Rohre.
-    if (panelHit) {
-      let side = null;
-      this.recordHistory(() => { side = this.model.flipPanelSide(panelHit.data.id); });
-      if (side != null) this.onNotice(t(side < 0 ? "notice_panel_below" : "notice_panel_above"));
-      this.refresh();
+    if (pick.data.kind !== "tube") { this._clearPanelRail(); return; }
+    const tube = this.model.tubes.get(pick.data.id);
+    if (!tube || tube.arm || tube.link || tube.bow) { this._clearPanelRail(); return; }
+
+    const dims = this._panelDims();
+    if (!dims) return;
+
+    // Zweiter Klick: passt das angeklickte Rohr als Gegenstueck?
+    if (this.panelRail) {
+      if (pick.data.id === this.panelRail.id) { this._clearPanelRail(); return; }
+      const partner = this.model.panelPartners(this.panelRail.id, dims)
+        .find((c) => c.id === pick.data.id);
+      if (!partner) { this.onNotice(t("notice_panel_no_fit")); return; }
+      const sec = this.model.panelSection(partner, this.panelRail.at);
+      let added = null;
+      this.recordHistory(() => {
+        added = this.model.addPanel(this.panelRail.id, partner.id, sec.t0, sec.len,
+          this.panelId, this.colorFor("panel"), 1);
+        if (added) added.side = this._panelSideFromCorners(this.model.panelCorners(added));
+      });
+      this.onNotice(t(added ? "notice_panel_placed" : "notice_panel_exists"));
+      this._clearPanelRail();
+      return;
     }
+
+    // Erster Klick: Rohr merken, Stelle entlang davon aus dem Trefferpunkt.
+    const partners = this.model.panelPartners(pick.data.id, dims);
+    if (!partners.length) { this.onNotice(t("notice_panel_no_partner")); return; }
+    this.panelRail = { id: pick.data.id, at: this._alongTube(pick.data.id, pick.point) };
+    this.highlight = new Set(partners.map((c) => c.id));
+    this.onNotice(t("notice_panel_pick_second", partners.length));
+    this.refresh();
+  }
+
+  /** Masse der gewaehlten Platte. */
+  _panelDims() {
+    const def = getPanel(this.panelId);
+    return def && def.w && def.h ? [def.w, def.h] : null;
+  }
+
+  /** Wo entlang des Rohrs liegt dieser Punkt (cm ab Rohranfang)? */
+  _alongTube(tubeId, point) {
+    const t = this.model.tubes.get(tubeId);
+    const a = t && this.model.nodes.get(t.a), b = t && this.model.nodes.get(t.b);
+    if (!a || !b || !point) return 0;
+    const d = [b.x - a.x, b.y - a.y, b.z - a.z];
+    const L = Math.hypot(d[0], d[1], d[2]) || 1;
+    return ((point.x - a.x) * d[0] + (point.y - a.y) * d[1] + (point.z - a.z) * d[2]) / L;
+  }
+
+  _clearPanelRail() {
+    if (!this.panelRail && !this.highlight) return;
+    this.panelRail = null;
+    this.highlight = null;
+    this.refresh();
   }
 
   _clickAdd(e) {

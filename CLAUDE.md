@@ -86,8 +86,11 @@ Koordinaten in **cm**, Three.js-Konvention **y = oben**, Boden bei y = 0.
   und zählen nicht in der Stückliste:
   - `arm: true` – kurze Hülse zwischen Eck-Kupplung und C45-Adapterkörper
   - `link: true` – Verbindung zweier paralleler Rohre im Doppelrohrverbinder
-- Platte `{id,nodes:[4],panelId,color,side}` – wird automatisch entfernt (`_prunePanels`), wenn eines
-  der vier Randrohre verschwindet. `side` = +1 oben bzw. außen (Standard), −1 unten bzw.
+- Platte `{id,a,b,t0,len,panelId,color,side}` – hängt an **zwei parallelen Rohren** (`a`,`b`), `t0`
+  ist der Versatz entlang Rohr `a`, `len` die Länge in Rohrrichtung. `model.panelCorners(p)` liefert
+  daraus die vier Ecken; sie müssen nicht auf Kupplungen liegen. `_prunePanels` entfernt die Platte,
+  sobald eines der Tragrohre fehlt. Ältere Stände mit `nodes:[4]` werden in `loadJSON` umgerechnet
+  (`_panelRecord`). `side` = +1 oben bzw. außen (Standard), −1 unten bzw.
   innen. Die Platte schließt **bündig** mit dem Rohr ab (Oberfläche auf Rohrscheitel), sie liegt
   also nicht darauf; Bezugsrichtung ist `util.panelNormal()` (waagerecht → oben,
   senkrecht → vom Modellmittelpunkt weg). Beim Setzen entscheidet der Blickwinkel, ein Klick auf

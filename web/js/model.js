@@ -251,6 +251,55 @@ export class BuildModel {
   }
 
   /**
+   * Welche Rohre koennen mit `railId` zusammen eine Platte tragen?
+   *
+   * Voraussetzung: parallel, im Abstand einer Plattenkante, und die beiden
+   * Rohre ueberdecken sich laengs weit genug fuer die andere Kante. Geliefert
+   * wird je Kandidat der Ueberdeckungsbereich in der Achse des ERSTEN Rohrs --
+   * daraus ergeben sich die moeglichen Abschnitte.
+   */
+  panelPartners(railId, dims, tol = 1.5) {
+    const ra = this._rail(railId);
+    if (!ra) return [];
+    const out = [];
+    for (const t of this.tubes.values()) {
+      if (t.id === railId) continue;
+      const rb = this._rail(t.id);
+      if (!rb) continue;
+      const dot = rb.dir[0] * ra.dir[0] + rb.dir[1] * ra.dir[1] + rb.dir[2] * ra.dir[2];
+      if (Math.abs(dot) < 0.999) continue;                    // nicht parallel
+      const off = [rb.p0[0] - ra.p0[0], rb.p0[1] - ra.p0[1], rb.p0[2] - ra.p0[2]];
+      const along = off[0] * ra.dir[0] + off[1] * ra.dir[1] + off[2] * ra.dir[2];
+      const perp = [off[0] - ra.dir[0] * along, off[1] - ra.dir[1] * along, off[2] - ra.dir[2] * along];
+      const gap = Math.hypot(perp[0], perp[1], perp[2]);
+      if (gap < 1) continue;                                  // dasselbe Rohr, doppelt
+      // Welche Plattenkante passt auf den Abstand? Die andere laeuft laengs.
+      let len = null;
+      for (let i = 0; i < dims.length; i++) {
+        if (Math.abs(dims[i] - gap) <= tol) { len = dims[1 - i] ?? dims[i]; break; }
+      }
+      if (len == null) continue;
+      // Ueberdeckung in der Achse des ersten Rohrs
+      const e = along + rb.len * dot;
+      const lo = Math.max(0, Math.min(along, e));
+      const hi = Math.min(ra.len, Math.max(along, e));
+      if (hi - lo < len - tol) continue;
+      out.push({ id: t.id, gap: round(gap), len: round(len), lo: round(lo), hi: round(hi) });
+    }
+    return out;
+  }
+
+  /**
+   * Abschnitt waehlen: An welcher Stelle liegt die Platte, wenn man das erste
+   * Rohr bei `at` angeklickt hat? Das Raster ist die Plattenlaenge selbst.
+   */
+  panelSection(partner, at) {
+    const count = Math.max(1, Math.floor((partner.hi - partner.lo + 0.5) / partner.len));
+    const k = Math.max(0, Math.min(count - 1, Math.floor((at - partner.lo) / partner.len)));
+    return { t0: round(partner.lo + k * partner.len), len: partner.len, index: k, count };
+  }
+
+  /**
    * Platte auf zwei parallele Rohre setzen.
    * side: +1 = liegt oben auf den Rohren (bzw. aussen), -1 = haengt darunter.
    */
@@ -768,59 +817,6 @@ export class BuildModel {
           Math.abs(nb.x - node.x) < 0.5 && Math.abs(nb.z - node.z) < 0.5) return true;
     }
     return false;
-  }
-
-  // Findet rechteckige Felder fuer Platten. Es genuegen ZWEI GEGENUEBERLIEGENDE
-  // Rohre -- eine Platte liegt beim Bauen auf zwei parallelen Rohren auf, die
-  // beiden Querseiten muessen nicht geschlossen sein. Gesucht wird deshalb ueber
-  // Paare paralleler, gleich langer Rohre, deren Endknoten ein Rechteck bilden
-  // (frueher lief die Suche ueber die Rohr-Nachbarn eines Knotens und verlangte
-  // alle vier Randrohre; ein Feld mit offenen Querseiten wurde so nie gefunden).
-  // Liefert je Feld { nodes:[A,B,C,D], dims:[l1,l2], center, normal, u, v }.
-  findRectangles() {
-    const rects = [];
-    const seen = new Set();
-    // Arm-/Link-Kanten sind keine Rohre; Boegen sind gekruemmt und tragen keine Platte.
-    const tubes = [...this.tubes.values()].filter((t) => !t.arm && !t.link && !t.bow);
-    for (let i = 0; i < tubes.length; i++) {
-      const A = this.nodes.get(tubes[i].a), B = this.nodes.get(tubes[i].b);
-      if (!A || !B) continue;
-      const v1 = [B.x - A.x, B.y - A.y, B.z - A.z];
-      const L1 = Math.hypot(v1[0], v1[1], v1[2]);
-      if (L1 < 1e-6) continue;
-      for (let j = i + 1; j < tubes.length; j++) {
-        let D = this.nodes.get(tubes[j].a), C = this.nodes.get(tubes[j].b);
-        if (!D || !C) continue;
-        let v2 = [C.x - D.x, C.y - D.y, C.z - D.z];
-        const L2 = Math.hypot(v2[0], v2[1], v2[2]);
-        if (Math.abs(L1 - L2) > 0.5) continue;                     // ungleich lang
-        const dot = (v1[0] * v2[0] + v1[1] * v2[1] + v1[2] * v2[2]) / (L1 * L2);
-        if (Math.abs(Math.abs(dot) - 1) > 1e-3) continue;          // nicht parallel
-        if (dot < 0) { const tmp = D; D = C; C = tmp; }            // gleichsinnig ausrichten
-        // Versatz A->D: senkrecht zum Rohr und identisch zu B->C (echtes Rechteck).
-        const w = [D.x - A.x, D.y - A.y, D.z - A.z];
-        const wl = Math.hypot(w[0], w[1], w[2]);
-        if (wl < 0.5) continue;
-        if (Math.abs(w[0] * v1[0] + w[1] * v1[1] + w[2] * v1[2]) > 1e-3) continue;
-        if (Math.abs(C.x - B.x - w[0]) > 0.5 ||
-            Math.abs(C.y - B.y - w[1]) > 0.5 ||
-            Math.abs(C.z - B.z - w[2]) > 0.5) continue;
-        const key = [A.id, B.id, C.id, D.id].slice().sort().join("|");
-        if (seen.has(key)) continue;
-        seen.add(key);
-        const n = cross(v1, w);
-        const nl = Math.hypot(n[0], n[1], n[2]) || 1;
-        rects.push({
-          nodes: [A.id, B.id, C.id, D.id],
-          dims: [L1, wl],
-          center: [(A.x + B.x + C.x + D.x) / 4, (A.y + B.y + C.y + D.y) / 4, (A.z + B.z + C.z + D.z) / 4],
-          normal: [n[0] / nl, n[1] / nl, n[2] / nl],
-          u: unit(v1),
-          v: unit(w),
-        });
-      }
-    }
-    return rects;
   }
 
   // Baut von einem bestehenden Knoten in eine Richtung ein Rohr an und legt
