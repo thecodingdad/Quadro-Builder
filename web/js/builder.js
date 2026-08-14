@@ -979,10 +979,23 @@ export class Builder {
       // Cursor-Modus: alles Platzierte ist waehlbar, Rutschen eingeschlossen.
       obj = this.scene.pickForDelete(x, y)?.object || null;
     } else if (this.mode === "add") {
-      // Handles + anbaubare Kupplungen (Winkelkupplungen sind es nicht).
-      const n = build(["node"]);
-      obj = handle() || (n && this._isBuildable(n.data.id) ? n.object : null);
-    } else if (this.mode === "panel" || this.mode === "slide") {
+      // Handles + anbaubare Kupplungen (Winkelkupplungen sind es nicht) und
+      // Bogenrohre: die lassen sich per Klick weiterdrehen. Wie beim Klick
+      // entscheidet die Entfernung, welches von beiden gemeint ist.
+      const h = this.scene.pickHandle(x, y);
+      const p = this.scene.pickBuild(x, y);
+      const bow = p && p.data.kind === "tube" && this.model.tubes.get(p.data.id)?.bow ? p : null;
+      if (bow && (!h || p.distance < h.distance)) obj = bow.object;
+      else if (h) obj = h.object;
+      else obj = p && p.data.kind === "node" && this._isBuildable(p.data.id) ? p.object : null;
+    } else if (this.mode === "panel") {
+      // Feld-Handles zum Setzen, liegende Platten zum Umlegen.
+      const h = this.scene.pickHandle(x, y);
+      const p = this.scene.pickForDelete(x, y);
+      const panel = p && p.data.kind === "panel" ? p : null;
+      if (h && (!panel || h.distance <= panel.distance)) obj = h.object;
+      else obj = panel ? panel.object : null;
+    } else if (this.mode === "slide") {
       obj = handle();                            // nur die Feld-Handles
     } else if (this.mode === "clamp") {
       obj = handle() || build(["tube", "clamp"])?.object || null;
