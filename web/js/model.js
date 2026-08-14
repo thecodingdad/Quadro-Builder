@@ -23,7 +23,13 @@ const FITTING_MOUNTS = {
 // Welche Anbauteile sich setzen lassen. Die meisten haengen an einer Kupplung
 // oder einem Rohr (FITTING_MOUNTS); das Gitter spannt wie eine Platte zwischen
 // zwei Rohren und hat deshalb einen eigenen Ablauf.
-export const PLACEABLE_FITTINGS = [...Object.keys(FITTING_MOUNTS), "lattice2"];
+export const PLACEABLE_FITTINGS = [
+  ...Object.keys(FITTING_MOUNTS), "lattice2", "textil-round2", "roof-large2",
+];
+
+// Abstand der beiden Bogenrohre, ueber die eine Rundabdeckung gespannt wird:
+// in allen 52 Vorkommen 800 mm.
+const ROUND_COVER_SPAN = 80;
 
 // Gitter: im Ball Cage spannt es 160 x 80 cm von Rohrmitte zu Rohrmitte. Da die
 // Datei die Masse mitfuehrt, ist es nicht auf dieses eine Format festgelegt:
@@ -34,6 +40,10 @@ const LATTICE_STEP = 40;
 const LATTICE_MAX = 160;
 
 const CARDINALS = [[1, 0, 0], [-1, 0, 0], [0, 1, 0], [0, -1, 0], [0, 0, 1], [0, 0, -1]];
+
+const norm3 = (v) => { const L = Math.hypot(v[0], v[1], v[2]) || 1; return [v[0] / L, v[1] / L, v[2] / L]; };
+const dot3 = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+const cross3 = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
 
 // Name der naechsten Achsrichtung -- reicht, um belegte Arme zu erkennen.
 function cardinalName(v) {
@@ -448,9 +458,81 @@ export class BuildModel {
    * Liefert je Stelle { pos:[x,y,z], dir:[x,y,z], nodeId?, tubeId? }.
    */
   fittingMounts(kind) {
+    if (kind === "textil-round2") return this._roundCoverMounts();
+    if (kind === "roof-large2") return this._roofMounts();
     const spec = FITTING_MOUNTS[kind];
     if (!spec) return [];
     return spec.at === "tube" ? this._fittingTubeMounts(spec) : this._fittingNodeMounts(spec);
+  }
+
+  /**
+   * Rundabdeckung: braucht ZWEI gleich liegende Bogenrohre im Abstand von 80 cm
+   * -- das Tuch spannt sich ueber den Tonnenbogen dazwischen. Der Ankerpunkt ist
+   * die Ecke gegenueber dem Kruemmungsmittelpunkt, die lokale +Z-Achse zeigt zum
+   * zweiten Bogen (so steht es in den Dateien des Herstellers).
+   */
+  _roundCoverMounts() {
+    const bows = [];
+    for (const t of this.tubes.values()) {
+      if (!t.bow || !t.bowCenter) continue;
+      const a = this.nodes.get(t.a), b = this.nodes.get(t.b);
+      if (!a || !b) continue;
+      const C = t.bowCenter;
+      // Ecke gegenueber dem Mittelpunkt: dort sitzt der Bezugspunkt des Tuchs.
+      bows.push({
+        O: [a.x + b.x - C[0], a.y + b.y - C[1], a.z + b.z - C[2]],
+        u: norm3([a.x - (a.x + b.x - C[0]), a.y - (a.y + b.y - C[1]), a.z - (a.z + b.z - C[2])]),
+        v: norm3([b.x - (a.x + b.x - C[0]), b.y - (a.y + b.y - C[1]), b.z - (a.z + b.z - C[2])]),
+      });
+    }
+    const out = [];
+    for (const p of bows) {
+      for (const s of bows) {
+        if (s === p) continue;
+        const d = [s.O[0] - p.O[0], s.O[1] - p.O[1], s.O[2] - p.O[2]];
+        const dist = Math.hypot(d[0], d[1], d[2]);
+        if (Math.abs(dist - ROUND_COVER_SPAN) > 1.5) continue;
+        const ez = [d[0] / dist, d[1] / dist, d[2] / dist];
+        // Jedes Bogenpaar nur EINMAL anbieten: sonst gaebe es zu jeder Stelle
+        // zwei Ankerpunkte (einen je Bogen) und das Tuch liesse sich doppelt
+        // setzen. Genommen wird die Richtung mit positiver Hauptkomponente.
+        const domi = ez.map(Math.abs).indexOf(Math.max(...ez.map(Math.abs)));
+        if (ez[domi] < 0) continue;
+        // Nur wenn der zweite Bogen wirklich daneben liegt (gleiche Schenkel).
+        if (Math.abs(dot3(p.u, ez)) > 0.02 || Math.abs(dot3(p.v, ez)) > 0.02) continue;
+        // Lokales +Y und -X sind die beiden Schenkel; welcher welcher ist,
+        // entscheidet die Rechtshaendigkeit gegen die Achse zum zweiten Bogen.
+        let ey = p.u, ex = [-p.v[0], -p.v[1], -p.v[2]];
+        if (dot3(cross3(ex, ey), ez) < 0) { ey = p.v; ex = [-p.u[0], -p.u[1], -p.u[2]]; }
+        out.push({ pos: p.O, dir: ex, quat: quatFromBasis(ex, ey, ez) });
+      }
+    }
+    return out;
+  }
+
+  /**
+   * Grosses Dach: sitzt als Giebel auf einem waagerechten Rohr. Die lokale
+   * X-Achse laeuft am First entlang, die beiden Schraegen fallen zu beiden
+   * Seiten um 45 Grad ab. Der Bezugspunkt liegt 40 cm vor der Firstmitte --
+   * so weit steht das Dach in den Cover-Entwuerfen nach hinten ueber.
+   */
+  _roofMounts() {
+    const out = [];
+    for (const t of this.tubes.values()) {
+      if (t.arm || t.link || t.bow) continue;
+      const a = this.nodes.get(t.a), b = this.nodes.get(t.b);
+      if (!a || !b || Math.abs(a.y - b.y) > 0.5) continue;      // nur waagerechte Rohre
+      const ex = norm3([b.x - a.x, b.y - a.y, b.z - a.z]);
+      const s = cross3(ex, [0, 1, 0]);                          // waagerecht, quer zum First
+      const ey = norm3([s[0], 1 + s[1], s[2]]);                 // Normale der einen Schraege
+      const ez = cross3(ex, ey);
+      const mid = [(a.x + b.x) / 2, (a.y + b.y) / 2, (a.z + b.z) / 2];
+      out.push({
+        pos: [mid[0] - ex[0] * 40, mid[1] - ex[1] * 40, mid[2] - ex[2] * 40],
+        dir: ex, quat: quatFromBasis(ex, ey, ez), tubeId: t.id,
+      });
+    }
+    return out;
   }
 
   // An der Kupplung: jede kardinale Richtung ohne Rohr, nicht unter den Boden.
@@ -577,13 +659,13 @@ export class BuildModel {
    * nichts (kein Stapeln).
    */
   addFittingAt(kind, mount, color) {
-    if (!FITTING_MOUNTS[kind]) return null;
+    if (!PLACEABLE_FITTINGS.includes(kind)) return null;
     for (const f of this.fittings.values()) {
       if (f.kind !== kind) continue;
       if (Math.hypot(f.x - mount.pos[0], f.y - mount.pos[1], f.z - mount.pos[2]) < 2) return null;
     }
     return this.addFitting(kind, mount.pos[0], mount.pos[1], mount.pos[2],
-      { quat: quatFromXAxis(mount.dir), color: color || null });
+      { quat: mount.quat || quatFromXAxis(mount.dir), color: color || null });
   }
 
   // Montagestellen fuer eine Rutsche: zwei parallele SENKRECHTE Rohre. Die
