@@ -44,6 +44,11 @@ export class BuildModel {
     this.clamps = new Map(); // id -> { id, x, y, z, connectorId } (Doppelrohrverbinder/Klemme)
     this.textiles = new Map(); // id -> { id, nodes:[4 ids], w, h, color } (Netz/Stoff, textil2)
     this.slides = new Map();   // id -> { id, x, y, z, dir, kind } (Rutsche, slide*/roof2, dekorativ)
+    // Anbauteile: alles, was mit Punkt und Ausrichtung am Geruest haengt --
+    // Raeder, Radkappen, Lenkrollen, Lager, Lochzapfen- und offene Kupplungen,
+    // Rundwaende, grosse Daecher, Gitter, Saecke.
+    // id -> { id, kind, x, y, z, quat, color, w?, h?, mask? }
+    this.fittings = new Map();
     this._seq = 1;
   }
 
@@ -373,6 +378,30 @@ export class BuildModel {
     this.slides.delete(id);
   }
 
+  // --- Anbauteile ---------------------------------------------------------
+  /**
+   * Anbauteil setzen. `kind` ist die QDF-Elementart (z. B. "multi-wheel2"),
+   * damit Import, Darstellung und Export dieselbe Sprache sprechen.
+   * quat in Three-Reihenfolge (x,y,z,w); w/h nur bei Flaechenteilen (Gitter).
+   */
+  addFitting(kind, x, y, z, opts = {}) {
+    const f = {
+      id: this._id("f"), kind,
+      x: round(x), y: round(y), z: round(z),
+      quat: opts.quat || null,
+      color: opts.color || null,
+    };
+    if (opts.w != null) f.w = round(opts.w);
+    if (opts.h != null) f.h = round(opts.h);
+    if (opts.mask != null) f.mask = opts.mask;
+    this.fittings.set(f.id, f);
+    return f;
+  }
+
+  removeFitting(id) {
+    this.fittings.delete(id);
+  }
+
   // Montagestellen fuer eine Rutsche: zwei parallele SENKRECHTE Rohre. Die
   // Rutsche wird dort eingehaengt und sitzt knapp ueber den unteren Kupplungen.
   // Liefert je Stelle { nodes, hook:[x,y,z], normal:[..] } -- hook ist der
@@ -620,7 +649,7 @@ export class BuildModel {
    * sel: Map id -> kind (wie builder.selection).
    */
   moveTargets(sel) {
-    const nodes = new Set(), clamps = new Set(), slides = new Set();
+    const nodes = new Set(), clamps = new Set(), slides = new Set(), fittings = new Set();
     const addNodes = (list) => { for (const id of list || []) if (this.nodes.has(id)) nodes.add(id); };
     for (const [id, kind] of sel) {
       if (kind === "node") { if (this.nodes.has(id)) nodes.add(id); }
@@ -635,8 +664,9 @@ export class BuildModel {
       }
       else if (kind === "clamp") { if (this.clamps.has(id)) clamps.add(id); }
       else if (kind === "slide") { if (this.slides.has(id)) slides.add(id); }
+      else if (kind === "fitting") { if (this.fittings.has(id)) fittings.add(id); }
     }
-    return { nodes, clamps, slides };
+    return { nodes, clamps, slides, fittings };
   }
 
   /**
@@ -712,6 +742,7 @@ export class BuildModel {
     };
     for (const id of tg.nodes) shift(this.nodes.get(id));
     for (const id of tg.clamps) shift(this.clamps.get(id));
+    for (const id of tg.fittings || []) shift(this.fittings.get(id));
     for (const id of tg.slides) {
       const s = this.slides.get(id);
       shift(s);
@@ -742,7 +773,7 @@ export class BuildModel {
   moveSelection(sel, dx, dy, dz, { merge = true, validate = null } = {}) {
     if (!dx && !dy && !dz) return { ok: true, merged: 0, detached: 0 };
     const tg = this.moveTargets(sel);
-    if (!tg.nodes.size && !tg.clamps.size && !tg.slides.size) return { ok: false, reason: "empty" };
+    if (!tg.nodes.size && !tg.clamps.size && !tg.slides.size && !tg.fittings.size) return { ok: false, reason: "empty" };
 
     // Unter den Boden wird nicht verschoben. Frueh geprueft, damit der teure
     // Schnappschuss bei einem offensichtlich ungueltigen Zug entfaellt.
@@ -936,6 +967,7 @@ export class BuildModel {
       hi = [Math.max(hi[0], x), Math.max(hi[1], y), Math.max(hi[2], z)];
     };
     for (const n of this.nodes.values()) push(n.x, n.y, n.z);
+    for (const f of (this.fittings ? this.fittings.values() : [])) push(f.x, f.y, f.z);
     for (const s of (this.slides ? this.slides.values() : [])) {
       push(s.x, s.y, s.z);
       if (s.hook && s.hook.length === 3) push(s.hook[0], s.hook[1], s.hook[2]);
@@ -1139,6 +1171,7 @@ export class BuildModel {
     this.clamps.clear();
     this.textiles.clear();
     this.slides.clear();
+    this.fittings.clear();
     this._seq = 1;
   }
 
@@ -1178,6 +1211,15 @@ export class BuildModel {
       textiles: [...this.textiles.values()].map((t) => {
         const o = { id: t.id, a: t.a, b: t.b, t0: round(t.t0), len: round(t.len), w: t.w, h: t.h, color: t.color };
         if ((t.side || 1) < 0) o.side = -1;
+        return o;
+      }),
+      fittings: [...this.fittings.values()].map((f) => {
+        const o = { id: f.id, kind: f.kind, x: round(f.x), y: round(f.y), z: round(f.z) };
+        if (f.quat) o.quat = f.quat;
+        if (f.color) o.color = f.color;
+        if (f.w != null) o.w = f.w;
+        if (f.h != null) o.h = f.h;
+        if (f.mask != null) o.mask = f.mask;
         return o;
       }),
       slides: [...this.slides.values()].map((s) => {
@@ -1244,6 +1286,14 @@ export class BuildModel {
       rec.w = t.w; rec.h = t.h;
       this.textiles.set(t.id, rec);
       maxSeq = Math.max(maxSeq, parseSeq(t.id));
+    }
+    for (const f of data.fittings || []) {
+      this.fittings.set(f.id, {
+        id: f.id, kind: f.kind, x: f.x, y: f.y, z: f.z,
+        quat: f.quat || null, color: f.color || null,
+        w: f.w, h: f.h, mask: f.mask,
+      });
+      maxSeq = Math.max(maxSeq, parseSeq(f.id));
     }
     for (const s of data.slides || []) {
       this.slides.set(s.id, { id: s.id, x: s.x, y: s.y, z: s.z, quat: s.quat || null, hook: s.hook || null, color: s.color || null, kind: s.kind });

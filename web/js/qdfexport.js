@@ -189,7 +189,9 @@ function panelMat(color) { return PANEL_MAT[color] || PANEL_MAT.blue; }
 export function buildQDF(model) {
   const conn = geometry().connectorSize;
   const lines = ["0, 0;", ...MATERIALS, ...CAMERAS];
-  const stats = { connectors: 0, tubes: 0, bows: 0, panels: 0, textiles: 0, clamps: 0, slides: 0, alu: 0 };
+  const stats = { connectors: 0, tubes: 0, bows: 0, panels: 0, textiles: 0, clamps: 0, slides: 0, alu: 0, fittings: 0 };
+  // Das Lager fuehrt eine feste Laenge (50 mm in allen Herstellerdateien).
+  const cs50 = 5;
 
   const node = (id) => model.nodes.get(id);
   const dirOf = (a, b) => norm([b.x - a.x, b.y - a.y, b.z - a.z]);
@@ -327,6 +329,25 @@ export function buildQDF(model) {
   for (const c of (model.clamps ? model.clamps.values() : [])) {
     lines.push(`clamp2{${CONNECTOR_MAT}, ${tuple(IDENTITY, c.x, c.y, c.z)}, 1, 0, 0}`);
     stats.clamps++;
+  }
+  // Anbauteile: Punkt + Ausrichtung, beim Gitter zusaetzlich die Masse. Die
+  // Feldzahl je Art richtet sich nach dem, was die Herstellerdateien fuehren.
+  for (const f of (model.fittings ? model.fittings.values() : [])) {
+    const q = f.quat && f.quat.length === 4
+      ? encodeQuat([f.quat[3], f.quat[0], f.quat[1], f.quat[2]])
+      : IDENTITY;
+    const mat = f.color ? tubeMat(f.color) : CONNECTOR_MAT;
+    if (f.kind === "lattice2" && f.w != null && f.h != null) {
+      lines.push(`lattice2{${mat}, ${tuple(q, f.x, f.y, f.z)}, 1, ${mm(f.w - conn)}, 0., ${mm(f.h - conn)}, 0., 0}`);
+    } else if (f.kind === "hole-connector4") {
+      const mask = f.mask || 0;
+      lines.push(`hole-connector4{${CONNECTOR_MAT}, ${tuple(q, f.x, f.y, f.z)}, 0, 0, ${mask}, ${mask - 3}, 3840, 0, 0}`);
+    } else if (f.kind === "bearing2") {
+      lines.push(`bearing2{${CONNECTOR_MAT}, ${tuple(q, f.x, f.y, f.z)}, 1, ${mm(cs50)}, 0., 0}`);
+    } else {
+      lines.push(`${f.kind}{${mat}, ${tuple(q, f.x, f.y, f.z)}, 1, 0}`);
+    }
+    stats.fittings++;
   }
   for (const s of (model.slides ? model.slides.values() : [])) {
     // s.quat steht in Three-Reihenfolge (x,y,z,w), die Datei will (w,x,y,z).

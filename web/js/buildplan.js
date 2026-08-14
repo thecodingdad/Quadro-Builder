@@ -203,6 +203,12 @@ export function computeBuildPlan(model, order = "y+") {
     for (const id of railNodeIds(tx)) maxLi = Math.max(maxLi, nodeLevel.get(id) ?? 0);
     textilesByLevel[maxLi].push(tx);
   }
+  // Anbauteile haengen an einem Punkt -- sie kommen in die Ebene, auf der sie
+  // sitzen.
+  const fittingsByLevel = levels.map(() => []);
+  for (const f of (model.fittings ? model.fittings.values() : [])) {
+    fittingsByLevel[levelIndex(levels, coord(f))].push(f);
+  }
   const slidesByLevel = levels.map(() => []);
   for (const sl of (model.slides ? model.slides.values() : [])) {
     // Eine Rutsche wird eingebaut, sobald ihr OBERER Anschluss steht -- nicht
@@ -219,9 +225,10 @@ export function computeBuildPlan(model, order = "y+") {
     const pans = panelsByLevel[i];
     const txs = textilesByLevel[i];
     const sls = slidesByLevel[i];
+    const fts = fittingsByLevel[i];
 
     // Rahmen-Schritt (nur, wenn er etwas Neues bringt)
-    if (nodes.length || horiz.length || pans.length || txs.length || sls.length) {
+    if (nodes.length || horiz.length || pans.length || txs.length || sls.length || fts.length) {
       const conn = countConnectors(model, nodes);
       const title = i === 0
         ? t("buildplan_ground_frame", round1(levels[i]))
@@ -235,6 +242,7 @@ export function computeBuildPlan(model, order = "y+") {
         panelIds: pans.map((p) => p.id),
         textileIds: txs.map((tx) => tx.id),
         slideIds: sls.map((sl) => sl.id),
+        fittingIds: fts.map((f) => f.id),
       });
     }
 
@@ -252,6 +260,7 @@ export function computeBuildPlan(model, order = "y+") {
         panelIds: [],
         textileIds: [],
         slideIds: [],
+        fittingIds: [],
       });
     }
   }

@@ -49,6 +49,27 @@ function nearestNamedDir(v) {
   return { name: best.name, vec: best.vec };
 }
 
+// Anbauteile: QDF-Elementart -> wie sie zu lesen ist.
+//   sized      = bringt Kantenmasse mit (rest[3]/rest[5], wie panel2)
+//   masked     = fuehrt eine Arm-Maske (rest[4], wie connector3)
+//   renderBase = Feldzahl ohne renderRange; damit fallen die Alternativ-Pass-
+//                Duplikate weg (siehe hasRenderRange)
+const FITTING_KINDS = {
+  "bearing2":        { renderBase: 6 },   // Lagerkupplung, traegt die Radachse
+  "multi-wheel2":    { renderBase: 4 },   // Speichenrad
+  "floating-wheel2": { renderBase: 4 },   // schwarzes Laufrad
+  "hub-cap2":        { renderBase: 4 },   // Nabenkappe
+  "casters2":        { renderBase: 4 },   // Lenkrolle
+  "steering-lock2":  { renderBase: 4 },   // Lenkarretierung
+  "adapter2":        { renderBase: 4 },
+  "textil-round2":   { renderBase: 5 },   // gebogene Wand (Viertelzylinder)
+  "roof-large2":     { renderBase: 4 },   // grosses Dach
+  "lattice2":        { renderBase: 8, sized: true },  // Gitter
+  "bag2":            { renderBase: 4 },   // Spielsack
+  "hole-connector4": { renderBase: 9, masked: true }, // Lochzapfenkupplung
+  "open-connector2": { renderBase: 4 },   // offener Anschluss
+};
+
 // Farbnamen aus material3 auf unsere Farb-IDs abbilden.
 const COLOR_BY_NAME = {
   red: "red", green: "green", blue: "blue", yellow: "yellow",
@@ -174,6 +195,7 @@ export function parseQDF(text, opts = {}) {
   const clamps = [];           // { id, x, y, z, connectorId } (clamp2 = Doppelrohrverbinder)
   const textiles = [];         // { id, nodes:[4 ids], w, h, color } (textil2 = Netz/Stoff)
   const slides = [];           // { id, x, y, z, dir, kind } (slide*/roof2, dekorativ)
+  const fittings = [];         // { id, kind, x, y, z, quat, color, w?, h?, mask? }
   const skipped = {};
   let seq = 1;
 
@@ -391,6 +413,34 @@ export function parseQDF(text, opts = {}) {
       const mat = typeof p.rest[0] === "number" ? p.rest[0] : null;
       const color = materials.get(mat) || FALLBACK_COLOR;
       tubes.push({ id: "t" + seq++, a: a.id, b: b.id, tubeId: def.id, color, length: def.length_cm });
+    } else if (FITTING_KINDS[p.name]) {
+      // Anbauteile: Raeder, Radkappen, Lenkrollen, Lager, Lochzapfen- und
+      // offene Kupplungen, Rundwaende, grosse Daecher, Gitter, Saecke. Alle
+      // tragen Punkt + Ausrichtung; einige zusaetzlich Masse oder eine
+      // Arm-Maske. Sie haengen am Geruest, greifen aber nicht in Knoten und
+      // Rohre ein -- deshalb eine eigene Sammlung.
+      if (!p.tuple || p.tuple.length < 7) { skipped[p.name] = (skipped[p.name] || 0) + 1; continue; }
+      const spec = FITTING_KINDS[p.name];
+      if (spec.renderBase != null && hasRenderRange(p.rest, spec.renderBase)) continue;
+      const q = decodeQuat([p.tuple[0], p.tuple[1], p.tuple[2], p.tuple[3]]);
+      const qn = Math.hypot(q[0], q[1], q[2], q[3]) || 1;
+      const r4 = (v) => Math.round(v * 1e4) / 1e4;
+      const mat = typeof p.rest[0] === "number" ? p.rest[0] : null;
+      const f = {
+        id: "f" + seq++, kind: p.name,
+        x: round(p.tuple[4] / 10), y: round(p.tuple[5] / 10), z: round(p.tuple[6] / 10),
+        quat: [r4(q[1] / qn), r4(q[2] / qn), r4(q[3] / qn), r4(q[0] / qn)],
+        color: materials.get(mat) || null,
+      };
+      // Das Gitter bringt seine Masse mit (wie eine Platte: Teilemass, das
+      // Kupplungsmass kommt dazu).
+      if (spec.sized && typeof p.rest[3] === "number" && typeof p.rest[5] === "number") {
+        f.w = round(p.rest[3] / 10 + conn);
+        f.h = round(p.rest[5] / 10 + conn);
+      }
+      // Lochzapfenkupplung: Arm-Maske entscheidet ueber ein- oder dreiarmig.
+      if (spec.masked && typeof p.rest[4] === "number") f.mask = p.rest[4];
+      fittings.push(f);
     } else if (
       p.name === "slide2" || p.name === "slide-new2" || p.name === "slide-end2" ||
       p.name === "curved-slide2" || p.name === "roof2"
@@ -726,9 +776,11 @@ export function parseQDF(text, opts = {}) {
     clamps,
     textiles,
     slides,
+    fittings,
     stats: {
       nodes: nodes.length, tubes: tubes.length, panels: panels.length,
       clamps: clamps.length, textiles: textiles.length, slides: slides.length,
+      fittings: fittings.length,
       reinforced, skipped,
     },
   };

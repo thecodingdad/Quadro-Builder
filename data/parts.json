@@ -196,7 +196,8 @@
       "kind": "special",
       "price": 6.49,
       "buildable": false,
-      "note": ""
+      "note": "",
+      "qdf": "hole-connector4"
     },
     {
       "id": "hole_1",
@@ -218,7 +219,8 @@
       "kind": "special",
       "price": 6.49,
       "buildable": false,
-      "note": "drehbar (Rad/Achse)"
+      "note": "drehbar (Rad/Achse)",
+      "qdf": "bearing2"
     },
     {
       "id": "double_tube",
@@ -568,6 +570,105 @@
       "name": "Rohrklammer",
       "price": 2.49,
       "note": ""
+    },
+    {
+      "id": "open_connector",
+      "code": "",
+      "name": "Offener Anschluss",
+      "name_en": "Open connector",
+      "price": 0,
+      "qdf": "open-connector2",
+      "note": "Sitzt zusaetzlich an einer vorhandenen Kupplung; Bezeichnung und Preis noch offen"
+    },
+    {
+      "id": "wheel",
+      "code": "",
+      "name": "Rad",
+      "name_en": "Wheel",
+      "price": 0,
+      "qdf": "multi-wheel2",
+      "note": "Speichenrad, farbig · Preis noch offen"
+    },
+    {
+      "id": "wheel_floating",
+      "code": "",
+      "name": "Laufrad",
+      "name_en": "Floating wheel",
+      "price": 0,
+      "qdf": "floating-wheel2",
+      "note": "schwarzes Vollrad · Preis noch offen"
+    },
+    {
+      "id": "hub_cap",
+      "code": "",
+      "name": "Nabenkappe",
+      "name_en": "Hub cap",
+      "price": 0,
+      "qdf": "hub-cap2",
+      "note": "rote Kappe in der Radmitte · Preis noch offen"
+    },
+    {
+      "id": "caster",
+      "code": "",
+      "name": "Lenkrolle",
+      "name_en": "Caster",
+      "price": 0,
+      "qdf": "casters2",
+      "note": "haengt unter einer Kupplung · Preis noch offen"
+    },
+    {
+      "id": "steering_lock",
+      "code": "",
+      "name": "Lenkarretierung",
+      "name_en": "Steering lock",
+      "price": 0,
+      "qdf": "steering-lock2",
+      "note": "Preis noch offen"
+    },
+    {
+      "id": "wheel_adapter",
+      "code": "",
+      "name": "Radadapter",
+      "name_en": "Wheel adapter",
+      "price": 0,
+      "qdf": "adapter2",
+      "note": "Preis noch offen"
+    },
+    {
+      "id": "textile_round",
+      "code": "",
+      "name": "Rundwand (Textil)",
+      "name_en": "Curved textile wall",
+      "price": 0,
+      "qdf": "textil-round2",
+      "note": "Viertelzylinder, Radius 40 cm · Preis noch offen"
+    },
+    {
+      "id": "roof_large",
+      "code": "",
+      "name": "Grosses Dach",
+      "name_en": "Large roof",
+      "price": 0,
+      "qdf": "roof-large2",
+      "note": "Preis noch offen"
+    },
+    {
+      "id": "lattice",
+      "code": "",
+      "name": "Gitter",
+      "name_en": "Lattice",
+      "price": 0,
+      "qdf": "lattice2",
+      "note": "Masse stehen im Entwurf · Preis noch offen"
+    },
+    {
+      "id": "bag",
+      "code": "",
+      "name": "Spielsack",
+      "name_en": "Play bag",
+      "price": 0,
+      "qdf": "bag2",
+      "note": "Preis noch offen"
     }
   ]
 }

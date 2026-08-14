@@ -66,6 +66,28 @@ export function getPanel(id) {
   return panels().find((p) => p.id === id) || null;
 }
 
+// Zubehoer (Raeder, Rollen, Kappen, Gitter ...) -- alles, was als Anbauteil
+// am Geruest haengt und keine Kupplung, kein Rohr und keine Platte ist.
+export function accessories() {
+  return catalog().accessories || [];
+}
+
+/**
+ * Katalogteil zu einer QDF-Elementart ("multi-wheel2" ...). Die Zuordnung steht
+ * als Feld `qdf` am Teil, damit Import, Stueckliste und Export dieselbe Quelle
+ * nutzen. Die Lochzapfenkupplung gibt es ein- und dreiarmig -- welche, sagt die
+ * Arm-Maske aus dem Entwurf.
+ */
+export function partForFitting(kind, mask) {
+  if (kind === "hole-connector4") {
+    let arms = 0;
+    for (let b = 0; b < 6; b++) if ((mask || 0) & (1 << b)) arms++;
+    return getConnector(arms > 1 ? "hole_t" : "hole_1");
+  }
+  const all = [...allConnectors(), ...accessories(), ...allTubes(), ...panels()];
+  return all.find((x) => x.qdf === kind) || null;
+}
+
 // Verstaerkungen (Alu-Profile), die in Rohre geschoben werden.
 export function reinforcements() {
   return catalog().reinforcements || [];

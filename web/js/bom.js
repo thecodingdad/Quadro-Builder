@@ -1,6 +1,6 @@
 // Stueckliste (BOM) + Kupplungstyp-Heuristik + Bestands-/Machbarkeitscheck.
 
-import { getTube, getConnector, getPanel, colorName, partName, reinforcementPart, reinforcementRunName } from "./catalog.js";
+import { getTube, getConnector, getPanel, colorName, partName, reinforcementPart, reinforcementRunName, partForFitting } from "./catalog.js";
 import { round2 } from "./util.js";
 
 // Einheitsvektoren der Nachbarn eines Knotens. Doppelrohr-Verbindungen (link)
@@ -321,6 +321,26 @@ export function computeBOM(model) {
   })).sort((a, b) => b.count - a.count);
   const textileCount = textiles.reduce((s, r) => s + r.count, 0);
 
+  // --- Anbauteile (Raeder, Rollen, Gitter, Sonderkupplungen) --------------
+  // Gezaehlt wird nach Katalogteil, nicht nach QDF-Art: ein- und dreiarmige
+  // Lochzapfenkupplung sind dieselbe Elementart, aber zwei Teile.
+  const fitMap = new Map();
+  for (const f of (model.fittings ? model.fittings.values() : [])) {
+    const def = partForFitting(f.kind, f.mask);
+    const key = def ? def.id : f.kind;
+    if (!fitMap.has(key)) fitMap.set(key, { def, kind: f.kind, count: 0 });
+    fitMap.get(key).count++;
+  }
+  const fittings = [...fitMap.entries()].map(([key, r]) => ({
+    key, id: key, kind: r.kind,
+    name: r.def ? partName(r.def) : r.kind,
+    code: (r.def && r.def.code) || "",
+    count: r.count,
+    price: (r.def && r.def.price) || 0,
+    subtotal: round2(((r.def && r.def.price) || 0) * r.count),
+  })).sort((a, b) => b.count - a.count);
+  const fittingCount = fittings.reduce((s, r) => s + r.count, 0);
+
   // --- Rutschen/Daecher (slide*/roof2) nach Art (dekorativ, ohne Preis) ---
   const slideMap = new Map();
   for (const sl of (model.slides ? model.slides.values() : [])) {
@@ -372,14 +392,16 @@ export function computeBOM(model) {
     tubes.reduce((s, r) => s + r.subtotal, 0) +
     connectors.reduce((s, r) => s + r.subtotal, 0) +
     panels.reduce((s, r) => s + r.subtotal, 0) +
-    reinforcements.reduce((s, r) => s + r.subtotal, 0)
+    reinforcements.reduce((s, r) => s + r.subtotal, 0) +
+    fittings.reduce((s, r) => s + r.subtotal, 0)
   );
 
   return {
-    tubes, connectors, panels, reinforcements, openEnds, textiles, slides,
+    tubes, connectors, panels, reinforcements, openEnds, textiles, slides, fittings,
     totals: {
       tubes: tubeCount, connectors: connCount, panels: panelCount,
-      reinforcements: reinfCount, textiles: textileCount, slides: slideCount, price,
+      reinforcements: reinfCount, textiles: textileCount, slides: slideCount,
+      fittings: fittingCount, price,
     },
   };
 }
@@ -392,10 +414,12 @@ export function neededParts(bom) {
   for (const r of bom.connectors) connectors.set(r.type, r.count);
   const panels = new Map();  // panelId -> count
   for (const r of bom.panels || []) panels.set(r.panelId, (panels.get(r.panelId) || 0) + r.count);
+  const fittings = new Map();   // Katalog-id -> Stueckzahl
+  for (const r of bom.fittings || []) fittings.set(r.id, (fittings.get(r.id) || 0) + r.count);
   const reinforcements = new Map(); // id -> physische Stueckzahl (40-cm-Profile)
   for (const r of bom.reinforcements || [])
     reinforcements.set(r.id, (reinforcements.get(r.id) || 0) + (r.pieces ?? r.count));
-  return { tubes, connectors, panels, reinforcements };
+  return { tubes, connectors, panels, reinforcements, fittings };
 }
 
 // Vergleicht Bedarf mit Bestand. inv = { tubes:{id:n}, connectors:{type:n}, panels:{id:n} }.
