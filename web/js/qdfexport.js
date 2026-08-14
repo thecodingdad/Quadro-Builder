@@ -108,6 +108,17 @@ function conjugate(q) { return [q[0], -q[1], -q[2], -q[3]]; }
 function cross(a, b) {
   return [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
 }
+
+/**
+ * Richtung des Kupplungs-Stutzens, in dem ein Bogenrohr steckt.
+ *
+ * Der Bogen ist ein Viertelkreis um `center`; am Knoten `from` verlaesst er die
+ * Kupplung entlang der Tangente. Fuer 90 Grad ist die Tangente am einen Ende
+ * genau der Radiusvektor des anderen Endes -- das spart jede Winkelrechnung.
+ */
+function bowStubDir(from, other, center) {
+  return norm([other.x - center[0], other.y - center[1], other.z - center[2]]);
+}
 function dot(a, b) { return a[0] * b[0] + a[1] * b[1] + a[2] * b[2]; }
 
 /** Kuerzeste Drehung, die die lokale +X-Achse auf dir legt. */
@@ -204,7 +215,12 @@ export function buildQDF(model) {
       // c45 am Knoten fuehrt nur das Modell selbst nach, importierte Ecken
       // haben es nicht -- deshalb zaehlt die Kante, nicht das Flag.
       if (t.arm) carriesAdapter = true;
-      const l = toLocal(dirOf(n, other));
+      // Am Bogenrohr steckt der Stutzen in der TANGENTE, nicht in der Sehne --
+      // die laeuft 45 Grad daneben und traf gar keine Wuerfelachse, weshalb der
+      // Kupplung in der Originalsoftware der Fortsatz zum Bogen fehlte.
+      // Fuer den Viertelkreis gilt: Tangente am Anfang = Richtung vom
+      // Mittelpunkt zum ANDEREN Ende, und umgekehrt.
+      const l = toLocal(t.bow && t.bowCenter ? bowStubDir(n, other, t.bowCenter) : dirOf(n, other));
       for (const [bit, v] of ARM_BITS) if (dot(l, v) > 0.9) mask |= bit;
     }
     const kind = (n.c45 || carriesAdapter) ? "connector45_2" : "connector3";

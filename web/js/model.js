@@ -5,12 +5,19 @@ import { MERGE_EPS, FORMAT_VERSION, DIAGONAL_SNAP_TOL } from "./config.js";
 import { round2 as round } from "./util.js";
 
 // Rutsche: Einhaengepunkt sitzt knapp ueber den unteren Kupplungen des
-// senkrechten Rohrpaars; SLIDE_SLOPE ist die rutschentypische Neigung.
+// senkrechten Rohrpaars.
 const SLIDE_HOOK_LIFT = 5;                 // cm ueber der unteren Kupplung
-// Rutsche = starres Fertigteil. Masse abgemessen an QuadroTobezimmer.qdf: dort
-// haengt sie 80 cm hoch ein und laeuft 100 cm weit aus -> Bahn 128 cm bei 38,7 Grad.
-const SLIDE_LENGTH = Math.hypot(100, 80);          // 128 cm Bahnlaenge
-const SLIDE_SLOPE = Math.atan2(80, 100);           // fester Neigungswinkel
+// Die Rutsche ist KEIN starres Fertigteil fester Laenge: fest ist die Neigung,
+// Auslauf und Bahnlaenge ergeben sich aus der Einhaenghoehe -- sie endet immer
+// am Boden. Gemessen an den 235 Beispieldateien des Herstellers; dort treten
+// genau zwei Groessen auf, beide mit derselben Neigung:
+//   Fall 45 cm -> Auslauf 63,2 cm (35,43 Grad)   30 Faelle
+//   Fall 85 cm -> Auslauf 120,0 cm (35,31 Grad)   9 Faelle
+// (Der Fall wird vom Einhaengepunkt aus gemessen, der 5 cm ueber der Kupplung
+// liegt -- 40 bzw. 80 cm sind also genau ein bzw. zwei Rasterebenen.)
+const SLIDE_SLOPE = 35.4 * Math.PI / 180;
+// Mindesthoehe ueber dem Boden, sonst liegt die Rutsche flach.
+const SLIDE_MIN_DROP = 40;
 
 // Boden. Unter der Nullebene wird nicht gebaut: die Kupplungen der untersten
 // Lage sitzen genau darauf (y = 0), erst ein negativer Wert liegt darunter. Die
@@ -45,6 +52,17 @@ export class BuildModel {
       if (dist2(n, p) <= eps2) return n;
     }
     return null;
+  }
+
+  /**
+   * Hoehe der untersten Kupplungslage. Im Editor gebaute Modelle sitzen auf
+   * y = connectorSize/2, importierte auf y = 0 -- die Rutsche endet auf der
+   * Ebene, die das jeweilige Modell als Boden benutzt.
+   */
+  _groundLevel() {
+    let min = Infinity;
+    for (const n of this.nodes.values()) if (n.y < min) min = n.y;
+    return Number.isFinite(min) ? min : 0;
   }
 
   /** Liegt diese Hoehe unter dem Boden (Nullebene)? */
@@ -219,7 +237,7 @@ export class BuildModel {
   slideMounts(width = 40, tol = 2) {
     const out = [];
     const seen = new Set();
-    const drop = SLIDE_LENGTH * Math.sin(SLIDE_SLOPE);
+    const groundY = this._groundLevel();
     // Alle SENKRECHTEN Rohre samt ihrem unteren Endknoten. Die Rohrlaenge ist
     // egal -- entscheidend ist nur, dass beide Rohre senkrecht stehen, ihre
     // unteren Kupplungen gleich hoch liegen und der Abstand der Rutschenbreite
@@ -242,8 +260,8 @@ export class BuildModel {
         const d = Math.hypot(dx, dz);
         if (Math.abs(d - width) > tol) continue;              // falscher Abstand
         const hook = [(p.x + q.x) / 2, p.low + SLIDE_HOOK_LIFT, (p.z + q.z) / 2];
-        // Starres Teil: zu tief eingehaengt landet der Auslauf unter dem Boden.
-        if (hook[1] < drop - 1) continue;
+        // Zu tief eingehaengt gibt es keine Rutsche, sondern eine Rampe.
+        if (hook[1] - groundY < SLIDE_MIN_DROP) continue;
         const key = [Math.round(hook[0]), Math.round(hook[1]), Math.round(hook[2])].join("|");
         if (seen.has(key)) continue;
         seen.add(key);
@@ -275,12 +293,11 @@ export class BuildModel {
   // Rutsche an einer Montagestelle einhaengen. Der Fuss liegt am Boden, um die
   // rutschentypische Neigung vom Einhaengepunkt entfernt.
   addSlide(hook, normal, kind = "slide-new2", color = null) {
-    // Die Rutsche ist ein starres Fertigteil: feste Bahnlaenge UND fester
-    // Neigungswinkel. Hoehenunterschied und waagerechter Auslauf stehen damit
-    // fest; der Fuss liegt so tief unter dem Einhaengepunkt, wie das Teil es
-    // vorgibt (bei der ueblichen Einhaenghoehe von 80 cm genau auf dem Boden).
-    const run = SLIDE_LENGTH * Math.cos(SLIDE_SLOPE);
-    const drop = SLIDE_LENGTH * Math.sin(SLIDE_SLOPE);
+    // Fest ist nur die Neigung. Der Fuss liegt auf dem Boden, der Fall ergibt
+    // sich aus der Einhaenghoehe und daraus der waagerechte Auslauf -- so haelt
+    // es die Originalsoftware (35,4 Grad, Fall 45 bzw. 85 cm).
+    const drop = Math.max(0, hook[1] - this._groundLevel());
+    const run = drop / Math.tan(SLIDE_SLOPE);
     const slide = {
       id: this._id("s"),
       x: round(hook[0] + normal[0] * run),
