@@ -7,17 +7,15 @@ import { round2 as round } from "./util.js";
 // Rutsche: Einhaengepunkt sitzt knapp ueber den unteren Kupplungen des
 // senkrechten Rohrpaars.
 const SLIDE_HOOK_LIFT = 5;                 // cm ueber der unteren Kupplung
-// Die Rutsche ist KEIN starres Fertigteil fester Laenge: fest ist die Neigung,
-// Auslauf und Bahnlaenge ergeben sich aus der Einhaenghoehe -- sie endet immer
-// am Boden. Gemessen an den 235 Beispieldateien des Herstellers; dort treten
-// genau zwei Groessen auf, beide mit derselben Neigung:
-//   Fall 45 cm -> Auslauf 63,2 cm (35,43 Grad)   30 Faelle
-//   Fall 85 cm -> Auslauf 120,0 cm (35,31 Grad)   9 Faelle
-// (Der Fall wird vom Einhaengepunkt aus gemessen, der 5 cm ueber der Kupplung
-// liegt -- 40 bzw. 80 cm sind also genau ein bzw. zwei Rasterebenen.)
-const SLIDE_SLOPE = 35.4 * Math.PI / 180;
-// Mindesthoehe ueber dem Boden, sonst liegt die Rutsche flach.
-const SLIDE_MIN_DROP = 40;
+// Die Rutsche ist ein Fertigteil fester Groesse: im 40-cm-Raster zwei Ebenen
+// hoch und drei Felder lang. Sie haengt also an Kupplungen 80 cm ueber dem
+// Boden und laeuft 120 cm weit aus. In den Herstellerdateien steht genau das:
+// Fall 85 cm ab Einhaengepunkt (= 80 cm ab Kupplung, der Haken sitzt 5 cm
+// hoeher), Auslauf 120 cm, Neigung 35,3 Grad.
+const SLIDE_DROP = 80;                     // cm, von der Kupplung bis zum Boden
+const SLIDE_RUN = 120;                     // cm waagerechter Auslauf
+// Freiraum, den die Bahn braucht: naeher als das darf keine Kupplung stehen.
+const SLIDE_CLEARANCE = 18;
 
 // Boden. Unter der Nullebene wird nicht gebaut: die Kupplungen der untersten
 // Lage sitzen genau darauf (y = 0), erst ein negativer Wert liegt darunter. Die
@@ -234,6 +232,10 @@ export class BuildModel {
   // Liefert je Stelle { nodes, hook:[x,y,z], normal:[..] } -- hook ist der
   // Einhaengepunkt (Mitte zwischen beiden Rohren, kurz ueber den unteren
   // Kupplungen), normal die Richtung, in die die Rutsche abfaellt.
+  //
+  // Weil das Teil eine feste Groesse hat, kommen nur Rohrpaare in Frage, deren
+  // untere Kupplungen GENAU zwei Rasterebenen ueber dem Boden sitzen -- und nur
+  // dann, wenn die Bahn davor frei ist (siehe _slidePathFree).
   slideMounts(width = 40, tol = 2) {
     const out = [];
     const seen = new Set();
@@ -259,9 +261,10 @@ export class BuildModel {
         const dx = q.x - p.x, dz = q.z - p.z;
         const d = Math.hypot(dx, dz);
         if (Math.abs(d - width) > tol) continue;              // falscher Abstand
+        // Feste Bauhoehe: die Kupplung muss genau SLIDE_DROP ueber dem Boden
+        // liegen, sonst haengt die Rutsche in der Luft oder steckt im Boden.
+        if (Math.abs(p.low - groundY - SLIDE_DROP) > 1) continue;
         const hook = [(p.x + q.x) / 2, p.low + SLIDE_HOOK_LIFT, (p.z + q.z) / 2];
-        // Zu tief eingehaengt gibt es keine Rutsche, sondern eine Rampe.
-        if (hook[1] - groundY < SLIDE_MIN_DROP) continue;
         const key = [Math.round(hook[0]), Math.round(hook[1]), Math.round(hook[2])].join("|");
         if (seen.has(key)) continue;
         seen.add(key);
@@ -274,7 +277,13 @@ export class BuildModel {
           const sdist = (n.x - hook[0]) * nrm[0] + (n.z - hook[2]) * nrm[2];
           if (sdist > 5) front++; else if (sdist < -5) back++;
         }
-        const dir = front > back ? [-nrm[0], 0, -nrm[2]] : nrm;
+        let dir = front > back ? [-nrm[0], 0, -nrm[2]] : nrm;
+        // Reicht der Platz? Sonst die Gegenseite versuchen, sonst gar nicht.
+        if (!this._slidePathFree(hook, dir)) {
+          const other = [-dir[0], 0, -dir[2]];
+          if (!this._slidePathFree(hook, other)) continue;
+          dir = other;
+        }
         // Auswahlflaeche: unten am Rohrpaar, eine Rutschenbreite hoch.
         const top = Math.min(p.high, q.high);
         const h2 = Math.min(top, p.low + width);
@@ -290,14 +299,29 @@ export class BuildModel {
     return out;
   }
 
-  // Rutsche an einer Montagestelle einhaengen. Der Fuss liegt am Boden, um die
-  // rutschentypische Neigung vom Einhaengepunkt entfernt.
+  /**
+   * Ist die Bahn vor dem Einhaengepunkt frei? Die Rutsche braucht ihre volle
+   * Laenge; steht eine Kupplung im Weg, laesst sie sich dort nicht montieren.
+   * Die beiden Rohre, an denen sie haengt, zaehlen nicht mit.
+   */
+  _slidePathFree(hook, dir) {
+    const foot = [hook[0] + dir[0] * SLIDE_RUN, hook[1] - SLIDE_DROP - SLIDE_HOOK_LIFT, hook[2] + dir[2] * SLIDE_RUN];
+    for (const n of this.nodes.values()) {
+      const rel = [n.x - hook[0], n.y - hook[1], n.z - hook[2]];
+      const along = rel[0] * dir[0] + rel[2] * dir[2];
+      if (along < SLIDE_CLEARANCE) continue;              // hinter dem Einstieg
+      const t = Math.min(1, along / SLIDE_RUN);
+      const on = [hook[0] + (foot[0] - hook[0]) * t, hook[1] + (foot[1] - hook[1]) * t, hook[2] + (foot[2] - hook[2]) * t];
+      if (Math.hypot(n.x - on[0], n.y - on[1], n.z - on[2]) < SLIDE_CLEARANCE) return false;
+    }
+    return true;
+  }
+
+  // Rutsche an einer Montagestelle einhaengen. Feste Groesse: zwei Rasterebenen
+  // Fall, drei Felder Auslauf -- der Fuss landet damit auf dem Boden.
   addSlide(hook, normal, kind = "slide-new2", color = null) {
-    // Fest ist nur die Neigung. Der Fuss liegt auf dem Boden, der Fall ergibt
-    // sich aus der Einhaenghoehe und daraus der waagerechte Auslauf -- so haelt
-    // es die Originalsoftware (35,4 Grad, Fall 45 bzw. 85 cm).
-    const drop = Math.max(0, hook[1] - this._groundLevel());
-    const run = drop / Math.tan(SLIDE_SLOPE);
+    const drop = SLIDE_DROP + SLIDE_HOOK_LIFT;
+    const run = SLIDE_RUN;
     const slide = {
       id: this._id("s"),
       x: round(hook[0] + normal[0] * run),
@@ -842,6 +866,58 @@ export class BuildModel {
       tube.bowCenter = [round(cx), round(cy), round(cz)];
     }
     return { node: to, tube };
+  }
+
+  /**
+   * Bogenrohr um 90 Grad um seine eigene Tangente drehen.
+   *
+   * Der Startknoten und die Richtung, in der der Bogen die Kupplung verlaesst,
+   * bleiben stehen; die Kruemmungsebene kippt. Nach vier Aufrufen ist der Bogen
+   * wieder da, wo er war. Das Ende wandert dabei auf einen neuen Rasterpunkt --
+   * ein dadurch verwaister Knoten wird entfernt.
+   *
+   * Liefert { node } oder { ground:true } / { duplicate:true }.
+   */
+  rotateBow(id) {
+    const t = this.tubes.get(id);
+    if (!t || !t.bow || !t.bowCenter) return null;
+    const a = this.nodes.get(t.a), b = this.nodes.get(t.b);
+    if (!a || !b) return null;
+    const c = { x: t.bowCenter[0], y: t.bowCenter[1], z: t.bowCenter[2] };
+    const R = Math.hypot(c.x - a.x, c.y - a.y, c.z - a.z);
+    if (R < 1) return null;
+    const n = [(c.x - a.x) / R, (c.y - a.y) / R, (c.z - a.z) / R];
+    // Tangente am Anfang: Sehne minus Radiusanteil, normiert.
+    const t0 = unit([(b.x - a.x) / R - n[0], (b.y - a.y) / R - n[1], (b.z - a.z) / R - n[2]]);
+    // Die drei uebrigen Lagen: 90, 180, 270 Grad um die Tangente. Geht eine
+    // nicht (unter dem Boden, Ziel schon verbunden), wird die naechste
+    // genommen -- sonst liesse sich ein Bogen ueber dem Boden gar nicht mehr
+    // bewegen, weil ausgerechnet der naechste Schritt nach unten zeigt.
+    const perp = cross(t0, n);
+    const steps = [perp, [-n[0], -n[1], -n[2]], [-perp[0], -perp[1], -perp[2]]];
+    let blocked = null;
+    for (const n2 of steps) {
+      const target = {
+        x: round(a.x + R * (t0[0] + n2[0])),
+        y: round(a.y + R * (t0[1] + n2[1])),
+        z: round(a.z + R * (t0[2] + n2[2])),
+      };
+      const cy = a.y + n2[1] * R;
+      if (this.isBelowGround(target.y) || this.isBelowGround(cy)) { blocked = { ground: true }; continue; }
+      const hit = this.findNodeNear(target.x, target.y, target.z);
+      if (hit && hit.id !== t.b && this.tubeBetween(t.a, hit.id)) { blocked = { duplicate: true }; continue; }
+
+      const oldEnd = t.b;
+      const to = hit || this.addNode(target.x, target.y, target.z);
+      if (to.id === t.a) { blocked = { duplicate: true }; continue; }
+      t.b = to.id;
+      t.bowCenter = [round(a.x + n2[0] * R), round(cy), round(a.z + n2[2] * R)];
+      // Zurueckgebliebener Knoten ohne Rohr verschwindet.
+      if (oldEnd !== to.id && this.degree(oldEnd) === 0) this.nodes.delete(oldEnd);
+      this._prunePanels();
+      return { node: to };
+    }
+    return blocked || null;
   }
 
   isEmpty() {

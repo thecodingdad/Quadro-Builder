@@ -1144,6 +1144,20 @@ export class Builder {
   _clickAdd(e) {
     // 1. Handle?
     const h = this.scene.pickHandle(e.clientX, e.clientY);
+    // Klick auf ein Bogenrohr dreht es um 90 Grad weiter -- wie das Umlegen
+    // einer Platte. Ein Griff HINTER dem Bogen darf das nicht abfangen,
+    // deshalb entscheidet die Entfernung.
+    const front = this.scene.pickBuild(e.clientX, e.clientY);
+    const bow = front && front.data.kind === "tube" ? this.model.tubes.get(front.data.id) : null;
+    if (bow && bow.bow && (!h || front.distance < h.distance)) {
+      let res;
+      this.recordHistory(() => { res = this.model.rotateBow(bow.id); });
+      if (res && res.ground) this.onNotice(t("notice_ground"));
+      else if (res && res.duplicate) this.onNotice(t("notice_bow_blocked"));
+      else if (res && res.node) this.selectedNodeId = res.node.id;
+      this.refresh();
+      return;
+    }
     if (h) {
       if (h.data.origin) {
         this.recordHistory(() => {
@@ -1195,7 +1209,7 @@ export class Builder {
     }
     // 2. bestehende Kupplung als Anbaupunkt waehlen. Umfaerben gibt es hier
     // bewusst nicht mehr -- das passiert nur im Cursor-Modus.
-    const pick = this.scene.pickBuild(e.clientX, e.clientY);
+    const pick = front;
     if (!pick) return;
     if (pick.data.kind === "node" && this._isBuildable(pick.data.id)) {
       // Erneuter Klick auf die BEREITS gewaehlte Kupplung schaltet zwischen

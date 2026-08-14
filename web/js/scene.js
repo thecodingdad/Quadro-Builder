@@ -2357,7 +2357,7 @@ export class SceneManager {
       [...this.pickNodes, ...this.pickTubes, ...this.pickPanels, ...this.pickClamps, ...this.pickTextiles]
     );
     const data = this._hitData(hit);
-    return data ? { object: hit.object, data, point: hit.point } : null;
+    return data ? { object: hit.object, data, point: hit.point, distance: hit.distance } : null;
   }
 
   // Wie pickBuild, aber inkl. Rutschen/Dächer (nur fuers Loeschen relevant; im
