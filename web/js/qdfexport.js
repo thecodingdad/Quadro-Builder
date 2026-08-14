@@ -280,9 +280,9 @@ export function buildQDF(model) {
   //   * Die Plattenmitte liegt exakt in der Kupplungsebene (2603 von 2604
   //     Platten, Versatz 0). Auf welcher Seite der Rohre das Teil liegt, sagt
   //     die Normale -- siehe canonicalNormal.
-  const rectLine = (name, nodeIds, matNum, dims, side) => {
-    const [A, B, C, D] = nodeIds.map(node);
-    if (!A || !B || !C || !D) return null;
+  const rectLine = (name, corners, matNum, dims, side) => {
+    if (!corners) return null;
+    const [A, B, C, D] = corners.map((c) => ({ x: c[0], y: c[1], z: c[2] }));
     const e1 = dirOf(A, B), e2 = dirOf(A, D);
     let w = lenOf(A, B), h = lenOf(A, D);
     if (dims && dims[0] > 0 && dims[1] > 0) {
@@ -305,11 +305,11 @@ export function buildQDF(model) {
 
   for (const p of model.panels.values()) {
     const def = getPanel(p.panelId);
-    const line = rectLine("panel2", p.nodes, panelMat(p.color), def ? [def.w, def.h] : null, p.side);
+    const line = rectLine("panel2", model.panelCorners(p), panelMat(p.color), def ? [def.w, def.h] : null, p.side);
     if (line) { lines.push(line); stats.panels++; }
   }
   for (const x of (model.textiles ? model.textiles.values() : [])) {
-    const line = rectLine("textil2", x.nodes, panelMat(x.color), [x.w, x.h], x.side);
+    const line = rectLine("textil2", model.panelCorners(x), panelMat(x.color), [x.w, x.h], x.side);
     if (line) { lines.push(line); stats.textiles++; }
   }
 

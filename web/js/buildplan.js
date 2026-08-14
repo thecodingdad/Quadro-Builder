@@ -180,10 +180,19 @@ export function computeBuildPlan(model, order = "y+") {
   }
 
   // Platten: dem Schritt der hoechsten beteiligten Ebene zuordnen
+  // Platten haengen an zwei Rohren -- die Ebene ergibt sich aus deren Knoten.
+  const railNodeIds = (p) => {
+    const out = [];
+    for (const tid of [p.a, p.b]) {
+      const t = model.tubes.get(tid);
+      if (t) out.push(t.a, t.b);
+    }
+    return out;
+  };
   const panelsByLevel = levels.map(() => []);
   for (const p of model.panels.values()) {
     let maxLi = 0;
-    for (const id of p.nodes) maxLi = Math.max(maxLi, nodeLevel.get(id) ?? 0);
+    for (const id of railNodeIds(p)) maxLi = Math.max(maxLi, nodeLevel.get(id) ?? 0);
     panelsByLevel[maxLi].push(p);
   }
 
@@ -191,7 +200,7 @@ export function computeBuildPlan(model, order = "y+") {
   const textilesByLevel = levels.map(() => []);
   for (const tx of (model.textiles ? model.textiles.values() : [])) {
     let maxLi = 0;
-    for (const id of tx.nodes) maxLi = Math.max(maxLi, nodeLevel.get(id) ?? 0);
+    for (const id of railNodeIds(tx)) maxLi = Math.max(maxLi, nodeLevel.get(id) ?? 0);
     textilesByLevel[maxLi].push(tx);
   }
   const slidesByLevel = levels.map(() => []);

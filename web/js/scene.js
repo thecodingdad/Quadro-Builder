@@ -1679,16 +1679,16 @@ export class SceneManager {
     const middle = modelMiddle(model.nodes.values());
     for (const p of model.panels.values()) {
       if (hideFlat) continue;
-      const ns = p.nodes.map((id) => model.nodes.get(id));
-      if (ns.some((n) => !n)) continue;
+      const cor = model.panelCorners(p);
+      if (!cor) continue;
       const st = stateOf(p.id);
       if (st === "future") continue;
-      const [A, B, , D] = ns;
+      const [A, B, , D] = cor.map((c) => ({ x: c[0], y: c[1], z: c[2] }));
       const va = new THREE.Vector3(A.x, A.y, A.z);
       const u = new THREE.Vector3(B.x, B.y, B.z).sub(va);
       const w = new THREE.Vector3(D.x, D.y, D.z).sub(va);
-      const center = ns
-        .reduce((acc, n) => acc.add(new THREE.Vector3(n.x, n.y, n.z)), new THREE.Vector3())
+      const center = cor
+        .reduce((acc, c) => acc.add(new THREE.Vector3(c[0], c[1], c[2])), new THREE.Vector3())
         .multiplyScalar(0.25);
       const xAxis = u.clone().normalize();
       const zAxis = w.clone().normalize();
@@ -1751,16 +1751,16 @@ export class SceneManager {
     // Netze/Stoffe (textil2): halbtransparente Flaeche ueber 4 Eck-Kupplungen.
     for (const tx of (model.textiles ? model.textiles.values() : [])) {
       if (hideFlat) continue;
-      const ns = tx.nodes.map((id) => model.nodes.get(id));
-      if (ns.some((n) => !n)) continue;
+      const cor = model.panelCorners(tx);
+      if (!cor) continue;
       const st = stateOf(tx.id);
       if (st === "future") continue;
-      const [A, B, , D] = ns;
+      const [A, B, , D] = cor.map((c) => ({ x: c[0], y: c[1], z: c[2] }));
       const va = new THREE.Vector3(A.x, A.y, A.z);
       const u = new THREE.Vector3(B.x, B.y, B.z).sub(va);
       const w = new THREE.Vector3(D.x, D.y, D.z).sub(va);
-      const center = ns
-        .reduce((acc, n) => acc.add(new THREE.Vector3(n.x, n.y, n.z)), new THREE.Vector3())
+      const center = cor
+        .reduce((acc, c) => acc.add(new THREE.Vector3(c[0], c[1], c[2])), new THREE.Vector3())
         .multiplyScalar(0.25);
       const xAxis = u.clone().normalize();
       const zAxis = w.clone().normalize();

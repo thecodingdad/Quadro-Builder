@@ -189,23 +189,78 @@ export class BuildModel {
   }
 
   // --- Platten -----------------------------------------------------------
-  _panelKey(nodeIds) {
-    return nodeIds.slice().sort().join("|");
+  //
+  // Eine Platte haengt an ZWEI parallelen Rohren -- so wie man sie wirklich
+  // einclipst und wie die Herstellersoftware es fuehrt. Gespeichert werden die
+  // beiden Tragrohre, der Versatz entlang (t0) und die Laenge in Rohrrichtung
+  // (len). Daraus ergeben sich die vier Ecken; sie muessen NICHT auf Kupplungen
+  // liegen -- eine 40er-Platte darf mitten auf zwei 75ern sitzen.
+
+  /** Achse eines Rohrs: Startpunkt, Einheitsrichtung, Laenge. Null bei Bogen. */
+  _rail(tubeId) {
+    const t = this.tubes.get(tubeId);
+    if (!t || t.arm || t.link || t.bow) return null;
+    const a = this.nodes.get(t.a), b = this.nodes.get(t.b);
+    if (!a || !b) return null;
+    const d = [b.x - a.x, b.y - a.y, b.z - a.z];
+    const len = Math.hypot(d[0], d[1], d[2]);
+    if (len < 1e-6) return null;
+    return { p0: [a.x, a.y, a.z], dir: [d[0] / len, d[1] / len, d[2] / len], len };
   }
 
-  panelOnCell(nodeIds) {
-    const k = this._panelKey(nodeIds);
-    for (const p of this.panels.values()) if (this._panelKey(p.nodes) === k) return p;
+  /**
+   * Die vier Eckpunkte einer Platte (oder eines Netzes) in Weltkoordinaten,
+   * umlaufend. Liefert null, wenn eines der Tragrohre fehlt.
+   */
+  panelCorners(p) {
+    const ra = this._rail(p.a), rb = this._rail(p.b);
+    if (!ra || !rb) return null;
+    const d = ra.dir;
+    // Versatz quer: der Anteil von rb.p0 - ra.p0, der senkrecht auf der Achse steht.
+    const off = [rb.p0[0] - ra.p0[0], rb.p0[1] - ra.p0[1], rb.p0[2] - ra.p0[2]];
+    const along = off[0] * d[0] + off[1] * d[1] + off[2] * d[2];
+    const perp = [off[0] - d[0] * along, off[1] - d[1] * along, off[2] - d[2] * along];
+    const at = (s) => [ra.p0[0] + d[0] * s, ra.p0[1] + d[1] * s, ra.p0[2] + d[2] * s];
+    const c0 = at(p.t0), c1 = at(p.t0 + p.len);
+    const add = (q) => [q[0] + perp[0], q[1] + perp[1], q[2] + perp[2]];
+    return [c0, c1, add(c1), add(c0)];
+  }
+
+  /** Abstand der beiden Tragrohre (Breite der Platte). */
+  panelGap(p) {
+    const c = this.panelCorners(p);
+    if (!c) return 0;
+    return Math.hypot(c[3][0] - c[0][0], c[3][1] - c[0][1], c[3][2] - c[0][2]);
+  }
+
+  /** Liegt auf diesen beiden Rohren im Bereich [t0, t0+len] schon eine Platte? */
+  panelAt(aId, bId, t0, len, map = this.panels) {
+    for (const p of map.values()) {
+      const same = (p.a === aId && p.b === bId) || (p.a === bId && p.b === aId);
+      if (!same) continue;
+      // Bei vertauschten Rohren laeuft t0 von der anderen Achse aus -- die
+      // Ueberdeckung wird deshalb ueber die Weltkoordinaten geprueft.
+      const c1 = this.panelCorners(p), c2 = { a: aId, b: bId, t0, len };
+      const c2c = this.panelCorners(c2);
+      if (!c1 || !c2c) continue;
+      const mid = (c) => [(c[0][0] + c[2][0]) / 2, (c[0][1] + c[2][1]) / 2, (c[0][2] + c[2][2]) / 2];
+      const m1 = mid(c1), m2 = mid(c2c);
+      if (Math.hypot(m1[0] - m2[0], m1[1] - m2[1], m1[2] - m2[2]) < Math.max(1, Math.min(p.len, len) / 2)) return p;
+    }
     return null;
   }
 
-  // side: +1 = liegt oben auf den Rohren (bzw. aussen), -1 = haengt darunter.
-  // Die Bezugsrichtung liefert util.panelNormal; im Raster liegt die Platte auf
-  // der Rohrachse, in Wirklichkeit auf einer der beiden Seiten.
-  addPanel(nodeIds, panelId, color, side = 1) {
-    if (nodeIds.length !== 4) return null;
-    if (this.panelOnCell(nodeIds)) return null;
-    const panel = { id: this._id("p"), nodes: nodeIds.slice(), panelId, color, side: side < 0 ? -1 : 1 };
+  /**
+   * Platte auf zwei parallele Rohre setzen.
+   * side: +1 = liegt oben auf den Rohren (bzw. aussen), -1 = haengt darunter.
+   */
+  addPanel(aId, bId, t0, len, panelId, color, side = 1) {
+    if (!this._rail(aId) || !this._rail(bId)) return null;
+    if (this.panelAt(aId, bId, t0, len)) return null;
+    const panel = {
+      id: this._id("p"), a: aId, b: bId, t0: round(t0), len: round(len),
+      panelId, color, side: side < 0 ? -1 : 1,
+    };
     this.panels.set(panel.id, panel);
     return panel;
   }
@@ -399,20 +454,13 @@ export class BuildModel {
     this.clamps.delete(id);
   }
 
-  // Entfernt Platten, deren 4 Rand-Rohre nicht mehr vollstaendig vorhanden sind.
+  // Platten und Netze haengen an ihren beiden Tragrohren: faellt eines weg,
+  // faellt die Platte mit.
   _prunePanels() {
-    for (const p of [...this.panels.values()]) {
-      const ns = p.nodes;
-      // Wie beim Setzen (findRectangles) genuegen ZWEI GEGENUEBERLIEGENDE Rohre:
-      // die Platte bleibt liegen, solange eines der beiden Seitenpaare steht.
-      const edge = (k) => !!this.tubeBetween(ns[k], ns[(k + 1) % 4]);
-      const ok = ns.every((id) => this.nodes.has(id)) &&
-        ((edge(0) && edge(2)) || (edge(1) && edge(3)));
-      if (!ok) this.panels.delete(p.id);
-    }
-    // Netze/Stoffe (textil2): entfernen, sobald eine ihrer 4 Eck-Kupplungen fehlt.
-    for (const t of [...this.textiles.values()]) {
-      if (!t.nodes.every((id) => this.nodes.has(id))) this.textiles.delete(t.id);
+    for (const map of [this.panels, this.textiles]) {
+      for (const p of [...map.values()]) {
+        if (!this._rail(p.a) || !this._rail(p.b)) map.delete(p.id);
+      }
     }
   }
 
@@ -489,8 +537,14 @@ export class BuildModel {
     for (const [id, kind] of sel) {
       if (kind === "node") { if (this.nodes.has(id)) nodes.add(id); }
       else if (kind === "tube") { const t = this.tubes.get(id); if (t) addNodes([t.a, t.b]); }
-      else if (kind === "panel") { const p = this.panels.get(id); if (p) addNodes(p.nodes); }
-      else if (kind === "textile") { const x = this.textiles.get(id); if (x) addNodes(x.nodes); }
+      // Platten und Netze haengen an zwei Rohren -- verschoben werden deren Knoten.
+      else if (kind === "panel" || kind === "textile") {
+        const p = (kind === "panel" ? this.panels : this.textiles).get(id);
+        for (const tid of p ? [p.a, p.b] : []) {
+          const t = this.tubes.get(tid);
+          if (t) addNodes([t.a, t.b]);
+        }
+      }
       else if (kind === "clamp") { if (this.clamps.has(id)) clamps.add(id); }
       else if (kind === "slide") { if (this.slides.has(id)) slides.add(id); }
     }
@@ -510,9 +564,19 @@ export class BuildModel {
   _detachBoundary(nodeIds) {
     // Platten und Netze, deren Ecken auseinandergerissen wuerden, gibt es
     // danach nicht mehr -- sie sind starre Fertigteile.
+    // Eine Platte, deren zwei Tragrohre auseinandergerissen wuerden, gibt es
+    // danach nicht mehr -- sie ist ein starres Fertigteil.
+    const railNodes = (p) => {
+      const out = [];
+      for (const tid of [p.a, p.b]) {
+        const t = this.tubes.get(tid);
+        if (t) out.push(t.a, t.b);
+      }
+      return out;
+    };
     const torn = (ids) => ids.some((id) => nodeIds.has(id)) && ids.some((id) => !nodeIds.has(id));
-    for (const p of [...this.panels.values()]) if (torn(p.nodes)) this.panels.delete(p.id);
-    for (const x of [...this.textiles.values()]) if (torn(x.nodes)) this.textiles.delete(x.id);
+    for (const p of [...this.panels.values()]) if (torn(railNodes(p))) this.panels.delete(p.id);
+    for (const x of [...this.textiles.values()]) if (torn(railNodes(x))) this.textiles.delete(x.id);
 
     const stubs = new Map();   // mitwandernde Knoten-id -> zurueckbleibende Kupplung
     const touched = new Set();
@@ -661,9 +725,7 @@ export class BuildModel {
       if (t.a === fromId) t.a = toId;
       if (t.b === fromId) t.b = toId;
     }
-    const swap = (ids) => ids.map((x) => (x === fromId ? toId : x));
-    for (const p of this.panels.values()) p.nodes = swap(p.nodes);
-    for (const x of this.textiles.values()) x.nodes = swap(x.nodes);
+    // Platten verweisen auf Rohre, nicht auf Knoten -- da ist nichts zu tauschen.
   }
 
   // Nach dem Zusammenlegen koennen Rohre zwischen denselben zwei Kupplungen
@@ -969,6 +1031,68 @@ export class BuildModel {
     return blocked || null;
   }
 
+  /**
+   * Platten-/Netz-Datensatz aus dem Speicherformat.
+   *
+   * Neue Staende bringen die beiden Tragrohre mit. Aeltere (und der QDF-Import)
+   * liefern vier Eck-Knoten -- daraus werden die zwei gegenueberliegenden Rohre
+   * gesucht, an denen die Platte haengt. Findet sich keines, gehoert die Platte
+   * nirgends hin und faellt weg.
+   */
+  _panelRecord(p) {
+    const side = p.side < 0 ? -1 : 1;
+    if (p.a && p.b) {
+      return { id: p.id, a: p.a, b: p.b, t0: p.t0 || 0, len: p.len || 0, color: p.color, side };
+    }
+    if (!p.nodes || p.nodes.length !== 4) return null;
+    const ns = p.nodes.map((id) => this.nodes.get(id));
+    if (ns.some((n) => !n)) return null;
+    // [A,B,C,D] laeuft umlaufend: Kandidaten sind (A,B)+(D,C) oder (B,C)+(A,D).
+    const pairs = [[[0, 1], [3, 2]], [[1, 2], [0, 3]]];
+    for (const [[i0, i1], [j0, j1]] of pairs) {
+      // Erst das Rohr genau zwischen den beiden Ecken; sonst irgendeines, das
+      // auf der Kante liegt. Lange Platten (Baellebad-Wand, Netze) spannen ueber
+      // mehrere Rohre -- dann traegt sie das erste davon.
+      const ta = this.tubeBetween(p.nodes[i0], p.nodes[i1]) || this._tubeAlong(ns[i0], ns[i1]);
+      const tb = this.tubeBetween(p.nodes[j0], p.nodes[j1]) || this._tubeAlong(ns[j0], ns[j1]);
+      if (!ta || !tb || ta.bow || tb.bow) continue;
+      const rail = this._rail(ta.id);
+      if (!rail) continue;
+      const s = (n) => (n.x - rail.p0[0]) * rail.dir[0] + (n.y - rail.p0[1]) * rail.dir[1] + (n.z - rail.p0[2]) * rail.dir[2];
+      const s0 = s(ns[i0]), s1 = s(ns[i1]);
+      return {
+        id: p.id, a: ta.id, b: tb.id,
+        t0: round(Math.min(s0, s1)), len: round(Math.abs(s1 - s0)),
+        color: p.color, side,
+      };
+    }
+    return null;
+  }
+
+  /**
+   * Ein Rohr, das auf der Strecke a->b liegt (gleiche Achse, echte Ueberdeckung).
+   * Gebraucht fuer Platten, die ueber mehrere Rohre spannen.
+   */
+  _tubeAlong(a, b) {
+    const d = [b.x - a.x, b.y - a.y, b.z - a.z];
+    const L = Math.hypot(d[0], d[1], d[2]);
+    if (L < 1e-6) return null;
+    const u = [d[0] / L, d[1] / L, d[2] / L];
+    let best = null, bestS = Infinity;
+    for (const t of this.tubes.values()) {
+      if (t.arm || t.link || t.bow) continue;
+      const p = this.nodes.get(t.a), q = this.nodes.get(t.b);
+      if (!p || !q) continue;
+      if (perpDist(a, u, p) > MERGE_EPS || perpDist(a, u, q) > MERGE_EPS) continue;
+      const s0 = (p.x - a.x) * u[0] + (p.y - a.y) * u[1] + (p.z - a.z) * u[2];
+      const s1 = (q.x - a.x) * u[0] + (q.y - a.y) * u[1] + (q.z - a.z) * u[2];
+      if (Math.min(s0, s1) > L - MERGE_EPS || Math.max(s0, s1) < MERGE_EPS) continue;
+      const start = Math.min(s0, s1);
+      if (start < bestS) { bestS = start; best = t; }
+    }
+    return best;
+  }
+
   isEmpty() {
     return this.nodes.size === 0;
   }
@@ -1006,7 +1130,7 @@ export class BuildModel {
         return o;
       }),
       panels: [...this.panels.values()].map((p) => {
-        const o = { id: p.id, nodes: p.nodes.slice(), panelId: p.panelId, color: p.color };
+        const o = { id: p.id, a: p.a, b: p.b, t0: round(p.t0), len: round(p.len), panelId: p.panelId, color: p.color };
         if ((p.side || 1) < 0) o.side = -1;   // Standard ist oben/aussen
         return o;
       }),
@@ -1017,7 +1141,7 @@ export class BuildModel {
         return o;
       }),
       textiles: [...this.textiles.values()].map((t) => {
-        const o = { id: t.id, nodes: t.nodes.slice(), w: t.w, h: t.h, color: t.color };
+        const o = { id: t.id, a: t.a, b: t.b, t0: round(t.t0), len: round(t.len), w: t.w, h: t.h, color: t.color };
         if ((t.side || 1) < 0) o.side = -1;
         return o;
       }),
@@ -1066,11 +1190,10 @@ export class BuildModel {
       maxSeq = Math.max(maxSeq, parseSeq(t.id));
     }
     for (const p of data.panels || []) {
-      if (!p.nodes || !Array.isArray(p.nodes)) continue;
-      this.panels.set(p.id, {
-        id: p.id, nodes: p.nodes.slice(), panelId: p.panelId, color: p.color,
-        side: p.side < 0 ? -1 : 1,
-      });
+      const rec = this._panelRecord(p);
+      if (!rec) continue;
+      rec.panelId = p.panelId;
+      this.panels.set(p.id, rec);
       maxSeq = Math.max(maxSeq, parseSeq(p.id));
     }
     for (const c of data.clamps || []) {
@@ -1081,7 +1204,10 @@ export class BuildModel {
       maxSeq = Math.max(maxSeq, parseSeq(c.id));
     }
     for (const t of data.textiles || []) {
-      this.textiles.set(t.id, { id: t.id, nodes: t.nodes.slice(), w: t.w, h: t.h, color: t.color, side: t.side < 0 ? -1 : 1 });
+      const rec = this._panelRecord(t);
+      if (!rec) continue;
+      rec.w = t.w; rec.h = t.h;
+      this.textiles.set(t.id, rec);
       maxSeq = Math.max(maxSeq, parseSeq(t.id));
     }
     for (const s of data.slides || []) {
