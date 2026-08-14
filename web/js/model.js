@@ -20,6 +20,12 @@ const SLIDE_CLEARANCE = 18;
 // So nah muss eine Kupplung am Auslauf liegen, damit er getragen wird.
 const SLIDE_SUPPORT = 30;
 
+// Zwei Platten gelten als in derselben Ebene, wenn ihre Mitten quer dazu weniger
+// als so weit auseinanderliegen (oben/unten am selben Rohrpaar sind es 3,3 cm).
+const PANEL_PLANE_EPS = 6;
+// Erst ab dieser Ueberdeckung zaehlt es als Ueberlappung -- Kante an Kante nicht.
+const PANEL_OVERLAP_EPS = 1;
+
 // Boden. Unter der Nullebene wird nicht gebaut: die Kupplungen der untersten
 // Lage sitzen genau darauf (y = 0), erst ein negativer Wert liegt darunter. Die
 // Toleranz faengt Rundungsreste aus round2 ab.
@@ -234,18 +240,51 @@ export class BuildModel {
   }
 
   /** Liegt auf diesen beiden Rohren im Bereich [t0, t0+len] schon eine Platte? */
-  panelAt(aId, bId, t0, len, map = this.panels) {
-    for (const p of map.values()) {
-      const same = (p.a === aId && p.b === bId) || (p.a === bId && p.b === aId);
-      if (!same) continue;
-      // Bei vertauschten Rohren laeuft t0 von der anderen Achse aus -- die
-      // Ueberdeckung wird deshalb ueber die Weltkoordinaten geprueft.
-      const c1 = this.panelCorners(p), c2 = { a: aId, b: bId, t0, len };
-      const c2c = this.panelCorners(c2);
-      if (!c1 || !c2c) continue;
-      const mid = (c) => [(c[0][0] + c[2][0]) / 2, (c[0][1] + c[2][1]) / 2, (c[0][2] + c[2][2]) / 2];
-      const m1 = mid(c1), m2 = mid(c2c);
-      if (Math.hypot(m1[0] - m2[0], m1[1] - m2[1], m1[2] - m2[2]) < Math.max(1, Math.min(p.len, len) / 2)) return p;
+  /**
+   * Ueberdecken sich zwei Plattenflaechen? Geprueft wird auf DERSELBEN Ebene:
+   * gleiche Ausrichtung, dicht beieinander (die beiden Seiten desselben
+   * Rohrpaars liegen nur gut 3 cm auseinander) und ueberlappende Flaeche.
+   *
+   * Die Flaechenpruefung laeuft ueber Trennachsen -- die beiden Platten koennen
+   * an ganz verschiedenen Rohren haengen und trotzdem dasselbe Feld belegen
+   * (Nord/Sued gegen Ost/West).
+   */
+  _panelsOverlap(ca, cb) {
+    const sub = (p, q) => [p[0] - q[0], p[1] - q[1], p[2] - q[2]];
+    const cross3 = (u, v) => [u[1] * v[2] - u[2] * v[1], u[2] * v[0] - u[0] * v[2], u[0] * v[1] - u[1] * v[0]];
+    const dot3 = (u, v) => u[0] * v[0] + u[1] * v[1] + u[2] * v[2];
+    const unit3 = (v) => { const l = Math.hypot(v[0], v[1], v[2]) || 1; return [v[0] / l, v[1] / l, v[2] / l]; };
+    const centre = (c) => [0, 1, 2].map((i) => (c[0][i] + c[1][i] + c[2][i] + c[3][i]) / 4);
+
+    const ua = unit3(sub(ca[1], ca[0])), va = unit3(sub(ca[3], ca[0]));
+    const ub = unit3(sub(cb[1], cb[0])), vb = unit3(sub(cb[3], cb[0]));
+    const na = unit3(cross3(ua, va)), nb = unit3(cross3(ub, vb));
+    if (Math.abs(dot3(na, nb)) < 0.99) return false;              // andere Ausrichtung
+    const d = sub(centre(cb), centre(ca));
+    if (Math.abs(dot3(d, na)) > PANEL_PLANE_EPS) return false;    // andere Ebene
+    // Trennachsen-Test in der gemeinsamen Ebene.
+    for (const axis of [ua, va, ub, vb]) {
+      const proj = (c) => c.map((q) => dot3(q, axis));
+      const pa = proj(ca), pb = proj(cb);
+      const loA = Math.min(...pa), hiA = Math.max(...pa);
+      const loB = Math.min(...pb), hiB = Math.max(...pb);
+      if (Math.min(hiA, hiB) - Math.max(loA, loB) <= PANEL_OVERLAP_EPS) return false;
+    }
+    return true;
+  }
+
+  /**
+   * Liegt an dieser Stelle schon eine Platte (oder ein Netz)? Geprueft werden
+   * beide Sammlungen -- gestapelt wird nichts.
+   */
+  panelAt(aId, bId, t0, len) {
+    const probe = this.panelCorners({ a: aId, b: bId, t0, len });
+    if (!probe) return null;
+    for (const map of [this.panels, this.textiles]) {
+      for (const p of map.values()) {
+        const c = this.panelCorners(p);
+        if (c && this._panelsOverlap(c, probe)) return p;
+      }
     }
     return null;
   }
