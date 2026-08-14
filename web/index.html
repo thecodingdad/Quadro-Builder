@@ -122,6 +122,14 @@
               <line x1="3" y1="5"  x2="15" y2="5" /><line x1="3" y1="9"  x2="15" y2="9" /><line x1="3" y1="13" x2="11" y2="13" />
             </svg>
           </button>
+          <button id="toggle-library" class="btn ghost icon-sq" data-i18n-title="btn_library_title" title="Modelle">
+            <!-- Gestapelte Blaetter: die eigene Modellsammlung -->
+            <svg viewBox="0 0 18 18" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round">
+              <path d="M9 2.5 16 6l-7 3.5L2 6z"/>
+              <path d="M2.5 9.2 9 12.4l6.5-3.2"/>
+              <path d="M2.5 12.2 9 15.4l6.5-3.2"/>
+            </svg>
+          </button>
           <button id="toggle-inventory" class="btn ghost icon-sq" data-i18n-title="btn_inventory_title" title="Bestand">
             <svg viewBox="0 0 18 18" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
               <rect x="3" y="3" width="5" height="5" rx="1"/><rect x="10" y="3" width="5" height="5" rx="1"/>
@@ -320,6 +328,25 @@
           </div>
         </div>
         <div id="inventory-editor" class="inv-editor" hidden></div>
+      </section>
+
+      <section class="panel" id="panel-library" hidden>
+        <h2 data-i18n="lib_title">Modelle</h2>
+        <p class="hint" data-i18n="lib_hint">Lies deine eigene QDF-Sammlung ein (z. B. den Beispiel-Ordner der QUADRO-Software). Die Dateien bleiben im Browser.</p>
+        <div class="lib-actions">
+          <button id="lib-add-folder" class="btn ghost small" data-i18n="btn_lib_folder" data-i18n-title="btn_lib_folder_title">📂 Ordner…</button>
+          <button id="lib-add-files" class="btn ghost small" data-i18n="btn_lib_files" data-i18n-title="btn_lib_files_title">＋ Dateien…</button>
+          <button id="lib-clear" class="btn ghost small danger" data-i18n="btn_lib_clear" data-i18n-title="btn_lib_clear_title">🗑</button>
+          <input id="lib-file-folder" type="file" accept=".qdf" webkitdirectory directory multiple hidden>
+          <input id="lib-file-list" type="file" accept=".qdf" multiple hidden>
+        </div>
+        <input id="lib-search" class="lib-search" type="search" data-i18n-placeholder="lib_search" placeholder="Suchen…">
+        <label class="lib-opt">
+          <input type="checkbox" id="lib-only-feasible">
+          <span data-i18n="lib_only_feasible">Nur mit meinem Bestand baubar</span>
+        </label>
+        <div id="lib-status" class="lib-status"></div>
+        <div id="lib-list" class="lib-list"></div>
       </section>
 
       <section class="panel" id="panel-assembly" hidden>

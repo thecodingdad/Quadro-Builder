@@ -82,6 +82,57 @@ export function deleteNamed(name) {
   localStorage.setItem(INDEX_KEY, JSON.stringify(names));
 }
 
+// --- Modell-Bibliothek (IndexedDB) --------------------------------------
+// Die Bibliothek nimmt ganze QDF-Ordner auf (die Beispielsammlung der
+// Herstellersoftware sind ~235 Dateien, zusammen gut 3 MB). Das sprengt
+// localStorage, das sich die 5 MB mit Autosave und Entwuerfen teilt -- deshalb
+// hier IndexedDB. Gespeichert wird der QDF-Text im Original plus die beim
+// Einlesen berechneten Kennzahlen; geparst wird erst beim Oeffnen.
+
+const LIB_DB = "quadro.library.v1";
+const LIB_STORE = "designs";
+
+function openLib() {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(LIB_DB, 1);
+    req.onupgradeneeded = () => {
+      const db = req.result;
+      if (!db.objectStoreNames.contains(LIB_STORE)) db.createObjectStore(LIB_STORE, { keyPath: "id" });
+    };
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+function libTx(mode, fn) {
+  return openLib().then((db) => new Promise((resolve, reject) => {
+    const tx = db.transaction(LIB_STORE, mode);
+    const out = fn(tx.objectStore(LIB_STORE));
+    tx.oncomplete = () => { db.close(); resolve(out && out.result !== undefined ? out.result : out); };
+    tx.onerror = () => { db.close(); reject(tx.error); };
+    tx.onabort = () => { db.close(); reject(tx.error); };
+  }));
+}
+
+/** Eintraege ablegen (gleiche id ueberschreibt). */
+export function libPut(entries) {
+  return libTx("readwrite", (store) => { for (const e of entries) store.put(e); });
+}
+
+/** Alle Eintraege, nach Namen sortiert. */
+export function libAll() {
+  return libTx("readonly", (store) => store.getAll())
+    .then((rows) => (rows || []).sort((a, b) => a.name.localeCompare(b.name, "de")));
+}
+
+export function libGet(id) {
+  return libTx("readonly", (store) => store.get(id));
+}
+
+export function libClear() {
+  return libTx("readwrite", (store) => store.clear());
+}
+
 // --- Datei Export/Import (echte Offline-Sicherung) ----------------------
 export function exportFile(data, filename) {
   const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });

@@ -7,6 +7,7 @@ import { parseQDF } from "./qdfimport.js";
 import { QUALITY_LEVELS } from "./scene.js";
 import { RANDOM_COLOR } from "./builder.js";
 import * as storage from "./storage.js";
+import { designEntry, parseDesign, checkAgainstInventory, missingCount } from "./library.js";
 import { t, getLang, setLang, applyTranslations } from "./i18n.js";
 
 const INV_KEY = "quadro.inventory.v1";
@@ -822,31 +823,184 @@ export function initUI({ scene, model, builder }) {
   $("btn-help").addEventListener("click", () => { $("help-overlay").hidden = false; });
   $("help-close").addEventListener("click", () => { $("help-overlay").hidden = true; });
 
+  // --- Modell-Bibliothek -------------------------------------------------
+  // Eigene QDF-Sammlung: einmal einlesen, danach durchsuchen, gegen den
+  // Bestand filtern und mit einem Klick oeffnen. Die Dateien liegen in
+  // IndexedDB (localStorage waere mit ~3 MB Sammlung zu klein).
+  let libEntries = [];        // { id, name, file, qdf, meta }
+  let libLoaded = false;
+
+  function libStatus(msg) { $("lib-status").textContent = msg || ""; }
+
+  async function loadLibrary() {
+    try {
+      libEntries = await storage.libAll();
+    } catch (e) {
+      console.warn("Bibliothek nicht lesbar:", e);
+      libEntries = [];
+    }
+    libLoaded = true;
+    renderLibrary();
+  }
+
+  // Dateien einlesen. Laeuft in Haeppchen, damit die Oberflaeche bei einem
+  // ganzen Ordner (mehrere hundert Dateien) nicht einfriert.
+  async function addToLibrary(fileList) {
+    const files = [...fileList].filter((f) => /\.qdf$/i.test(f.name));
+    if (!files.length) return;
+    const fresh = [];
+    let skipped = 0;
+    for (let i = 0; i < files.length; i++) {
+      const f = files[i];
+      if (i % 10 === 0) {
+        libStatus(t("lib_reading", i, files.length));
+        await new Promise((r) => setTimeout(r, 0));
+      }
+      let entry = null;
+      try {
+        entry = designEntry(`${f.name}|${f.size}`, f.name, await f.text());
+      } catch (err) {
+        console.warn("QDF nicht lesbar:", f.name, err);
+      }
+      if (entry) fresh.push(entry); else skipped++;
+    }
+    if (fresh.length) {
+      try {
+        await storage.libPut(fresh);
+      } catch (e) {
+        console.warn("Bibliothek nicht speicherbar:", e);
+      }
+    }
+    await loadLibrary();
+    libStatus(t("lib_added", fresh.length, skipped));
+    flash(t("lib_added", fresh.length, skipped));
+  }
+
+  function libVisible() {
+    const q = $("lib-search").value.trim().toLowerCase();
+    const onlyFeasible = $("lib-only-feasible").checked;
+    const rows = [];
+    for (const e of libEntries) {
+      if (q && !e.name.toLowerCase().includes(q)) continue;
+      const check = checkAgainstInventory(e.meta, inventory);
+      if (onlyFeasible && !check.ok) continue;
+      rows.push({ entry: e, check });
+    }
+    return rows;
+  }
+
+  function renderLibrary() {
+    const list = $("lib-list");
+    list.innerHTML = "";
+    if (!libLoaded) return;
+    if (!libEntries.length) {
+      list.appendChild(el("p", "hint", t("lib_empty")));
+      libStatus("");
+      return;
+    }
+    const rows = libVisible();
+    libStatus(t("lib_count", rows.length, libEntries.length));
+    if (!rows.length) {
+      list.appendChild(el("p", "hint", t("lib_no_match")));
+      return;
+    }
+    for (const { entry, check } of rows) {
+      const m = entry.meta;
+      const row = el("button", "lib-row" + (check.ok ? " ok" : ""));
+      row.type = "button";
+      row.title = check.ok ? t("lib_feasible_title") : t("lib_infeasible_title");
+      const head = el("div", "lib-row-head");
+      head.appendChild(el("span", "lib-name", entry.name));
+      const badge = el("span", "lib-badge", check.ok ? "✓" : String(missingCount(check)));
+      head.appendChild(badge);
+      row.appendChild(head);
+      row.appendChild(el("span", "lib-meta", t("lib_parts", m.connectors, m.tubes, m.panels)));
+      row.appendChild(el("span", "lib-meta", t("lib_size", m.size[0], m.size[1], m.size[2])));
+      row.addEventListener("click", () => openFromLibrary(entry));
+      list.appendChild(row);
+    }
+  }
+
+  function openFromLibrary(entry) {
+    if (!model.isEmpty() && !confirm(t("confirm_replace_model"))) return;
+    const data = parseDesign(entry.qdf);
+    if (!data) { flash(t("lib_load_failed")); return; }
+    let loadRes;
+    builder.modelReplaced();
+    builder.recordHistory(() => { loadRes = model.loadJSON(data); });
+    if (!loadRes.ok) {
+      flash(t(loadRes.reason === "format" ? "load_error_format" : "load_error_data"));
+      return;
+    }
+    builder.selectedNodeId = null;
+    builder.refresh();
+    scene.resetCamera();
+    flash(t("lib_loaded", entry.name));
+  }
+
+  $("lib-add-folder").addEventListener("click", () => $("lib-file-folder").click());
+  $("lib-add-files").addEventListener("click", () => $("lib-file-list").click());
+  for (const id of ["lib-file-folder", "lib-file-list"]) {
+    $(id).addEventListener("change", async (e) => {
+      // FileList ist LEBENDIG: das Zuruecksetzen von value leert sie sofort
+      // wieder. Deshalb erst kopieren, dann das Feld freigeben (sonst laesst
+      // sich derselbe Ordner nicht ein zweites Mal waehlen).
+      const files = [...e.target.files];
+      e.target.value = "";
+      await addToLibrary(files);
+    });
+  }
+  $("lib-clear").addEventListener("click", async () => {
+    if (!libEntries.length || !confirm(t("lib_confirm_clear"))) return;
+    await storage.libClear();
+    await loadLibrary();
+  });
+  $("lib-search").addEventListener("input", renderLibrary);
+  $("lib-only-feasible").addEventListener("change", (e) => {
+    if (e.target.checked && inventoryEmpty()) {
+      e.target.checked = false;
+      flash(t("lib_no_inventory"));
+    }
+    renderLibrary();
+  });
+
+  // Ohne eingetragenen Bestand ist der Machbarkeits-Filter sinnlos.
+  function inventoryEmpty() {
+    for (const bucket of Object.values(inventory)) {
+      if (bucket && Object.values(bucket).some((v) => v > 0)) return false;
+    }
+    return true;
+  }
+
   // --- Seitenleiste: EIN Panel auf Abruf (Stückliste / Bestand) ----------
   // Die Leiste ist standardmäßig zu (body.sidebar-hidden im HTML). Die
   // Menüband-Buttons "Stückliste" und "Bestand" öffnen je genau ihr Panel;
   // erneuter Klick schließt wieder. Der Aufbau-Modus zeigt das Aufbau-Panel.
   const SIDEBAR_W_KEY = "quadro.sidebarWidth.v1";
-  const SIDEBAR_PANEL_KEY = "quadro.sidebarPanel.v1"; // '', 'bom', 'inventory'
+  const SIDEBAR_PANEL_KEY = "quadro.sidebarPanel.v1"; // '', 'bom', 'inventory', 'library'
   const root = document.documentElement;
   const savedW = parseInt(localStorage.getItem(SIDEBAR_W_KEY), 10);
   if (savedW >= 240 && savedW <= 640) root.style.setProperty("--sidebar-w", savedW + "px");
 
-  let currentPanel = null; // 'bom' | 'inventory' | 'assembly' | null
+  let currentPanel = null; // 'bom' | 'inventory' | 'library' | 'assembly' | null
 
   function applyPanelVisibility() {
     $("panel-bom").hidden = currentPanel !== "bom";
     $("panel-inventory").hidden = currentPanel !== "inventory";
+    $("panel-library").hidden = currentPanel !== "library";
     $("panel-assembly").hidden = currentPanel !== "assembly";
     document.body.classList.toggle("sidebar-hidden", currentPanel === null);
     $("toggle-bom").classList.toggle("active", currentPanel === "bom");
     $("toggle-inventory").classList.toggle("active", currentPanel === "inventory");
+    $("toggle-library").classList.toggle("active", currentPanel === "library");
     requestAnimationFrame(() => scene.onResize());
   }
-  // name: 'bom' | 'inventory' | 'assembly' | null. Nur bom/inventory/zu wird gemerkt.
+  // name: 'bom' | 'inventory' | 'library' | 'assembly' | null.
+  // Nur bom/inventory/library/zu wird gemerkt.
   function showSidebarPanel(name) {
     currentPanel = name;
-    if (name === "bom" || name === "inventory" || name === null)
+    if (name === "library" && !libLoaded) loadLibrary();
+    if (name === "bom" || name === "inventory" || name === "library" || name === null)
       localStorage.setItem(SIDEBAR_PANEL_KEY, name || "");
     applyPanelVisibility();
   }
@@ -856,6 +1010,7 @@ export function initUI({ scene, model, builder }) {
 
   $("toggle-bom").addEventListener("click", () => toggleSidebarPanel("bom"));
   $("toggle-inventory").addEventListener("click", () => toggleSidebarPanel("inventory"));
+  $("toggle-library").addEventListener("click", () => toggleSidebarPanel("library"));
 
   // Szene (Gras, Baeume, Himmel) ein-/ausblenden via Canvas-Icon. Der Zustand
   // wird gemerkt; Standard beim allerersten Start ist aus.
@@ -1304,6 +1459,9 @@ export function initUI({ scene, model, builder }) {
 
     renderInventory(bom);
     if (!$("inventory-editor").hidden) renderInventoryEditor();
+    // Die Bibliothek zeigt je Modell, ob der Bestand reicht -- nach einer
+    // Bestandsaenderung muessen die Haken neu gerechnet werden.
+    if (currentPanel === "library") renderLibrary();
     if (builder.mode === "assembly") renderAssembly();
     showSaved();
   }

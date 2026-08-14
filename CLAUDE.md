@@ -64,6 +64,7 @@ Three.js ausschließlich in `scene.js`, DOM ausschließlich in `ui.js`/`scene.js
 | `web/js/storage.js` | `localStorage` (Autosave + benannte Entwürfe) + Datei-Export/Import |
 | `web/js/ui.js` | Toolbar, Panels (Stückliste/Bestand/Aufbau), Tastatur, Entwurfs-Menü |
 | `web/js/qdfimport.js` | Parser für QDF-Dateien der Original-QUADRO-3D-Software |
+| `web/js/library.js` | Modell-Bibliothek: QDF-Sammlung einlesen, Kennzahlen, Bestandsabgleich |
 
 **Datenfluss:** Jede Modelländerung → `builder.refresh()` → `scene.renderModel()` + Handles neu →
 `builder.onChange()` → (in `main.js`) `ui.update()` + `autosave(model.toJSON())`.
@@ -132,6 +133,10 @@ Koordinaten in **cm**, Three.js-Konvention **y = oben**, Boden bei y = 0.
 - `localStorage`-Schlüssel: `quadro.autosave.v1`, `quadro.designs.index.v1`,
   `quadro.design.v1.<name>`, `quadro.inventory.v1`, `quadro.sidebarWidth.v1`,
   `quadro.sidebarPanel.v1`, Sprache in `i18n.js`. Quota-Fehler werden als `QuotaError` geworfen.
+- Die **Modell-Bibliothek** liegt in **IndexedDB** (`quadro.library.v1`, Store `designs`), nicht in
+  `localStorage` – eine QDF-Sammlung bringt schnell 3–4 MB mit und würde die 5-MB-Grenze sprengen,
+  die sich Autosave und Entwürfe teilen. Gespeichert wird der QDF-Text im Original plus die beim
+  Einlesen berechneten Kennzahlen; geparst wird erst beim Öffnen.
 - Dev-Hook: App mit `?dev` in der URL öffnen ⇒ `window.__qdf.import(text)` importiert QDF
   programmatisch (für Tests aus der Konsole).
 - `scene.js` cached Materialien/Geometrien bewusst (GPU-Leaks); neue Materialien nach diesem

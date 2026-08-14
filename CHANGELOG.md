@@ -10,6 +10,10 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Hinzugefügt · Added
+- **Modell-Bibliothek** (`web/js/library.js`, Panel „Modelle") – eigene QDF-Sammlung ordnerweise einlesen, durchsuchen und nach „mit meinem Bestand baubar" filtern; je Eintrag Kupplungen/Rohre/Platten, Außenmaße und die Zahl der fehlenden Teile. Ablage in IndexedDB (`quadro.library.v1`), nichts wird hochgeladen · **Model library** (`web/js/library.js`, “Models” panel) – read in your own QDF collection folder by folder, search it and filter by “buildable with my inventory”; each entry shows connectors/tubes/panels, outer dimensions and the number of missing parts. Stored in IndexedDB, nothing is uploaded
+- `applyTranslations()` übersetzt jetzt auch `data-i18n-placeholder` · `applyTranslations()` now also translates `data-i18n-placeholder`
+
 ### Behoben · Fixed
 - `bom.js` `infeasibleConnectors()` wertete die Hülse einer 45°-Winkelkupplung als schiefen Arm (~17° gemessen) und hielt damit jede im Editor gebaute Schräge für nicht herstellbar – das blockierte das Verschieben jeder Auswahl, die eine enthielt · `infeasibleConnectors()` treated the sleeve of a 45° angle connector as a skewed arm (~17° as measured) and so considered every diagonal built in the editor impossible to build, which blocked moving any selection containing one
 - Escape schließt jetzt zuerst ein offenes Overlay (Tastenkürzel), statt den Modus zu wechseln · Escape now closes an open overlay (shortcuts) first instead of switching the mode

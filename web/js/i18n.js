@@ -67,6 +67,35 @@ const de = {
   btn_bom_title: 'Stückliste ein-/ausblenden',
   btn_inventory: '▦ Bestand',
   btn_inventory_title: 'Bestand & Machbarkeit ein-/ausblenden',
+  btn_library_title: 'Modelle – eigene QDF-Sammlung ein-/ausblenden',
+
+  // Seitenleiste – Modell-Bibliothek
+  lib_title: 'Modelle',
+  lib_hint: 'Lies deine eigene QDF-Sammlung ein (z. B. den Beispiel-Ordner der QUADRO-Software). Die Dateien bleiben im Browser, es wird nichts hochgeladen.',
+  btn_lib_folder: '📂 Ordner…',
+  btn_lib_folder_title: 'Einen ganzen Ordner mit QDF-Dateien einlesen',
+  btn_lib_files: '＋ Dateien…',
+  btn_lib_files_title: 'Einzelne QDF-Dateien hinzufügen',
+  btn_lib_clear: '🗑',
+  btn_lib_clear_title: 'Bibliothek leeren',
+  lib_search: 'Suchen…',
+  lib_only_feasible: 'Nur mit meinem Bestand baubar',
+  lib_empty: 'Noch keine Modelle eingelesen.',
+  lib_no_match: 'Kein Modell passt zu dieser Suche.',
+  lib_reading: (done, total) => `Lese ein… ${done}/${total}`,
+  lib_added: (n, skipped) => skipped
+    ? `${n} Modell(e) eingelesen, ${skipped} übersprungen (keine Teile erkannt).`
+    : `${n} Modell(e) eingelesen.`,
+  lib_count: (shown, total) => shown === total ? `${total} Modelle` : `${shown} von ${total} Modellen`,
+  lib_parts: (conn, tubes, panels) => `${conn} Kupplungen · ${tubes} Rohre · ${panels} Platten`,
+  lib_size: (w, h, d) => `${w} × ${h} × ${d} cm`,
+  lib_missing: (n) => `${n} Teile fehlen`,
+  lib_feasible_title: 'Mit deinem Bestand baubar',
+  lib_infeasible_title: 'Bestand reicht nicht – Zahl = fehlende Teile',
+  lib_confirm_clear: 'Alle eingelesenen Modelle aus der Bibliothek entfernen?',
+  lib_load_failed: 'Dieses Modell ließ sich nicht laden.',
+  lib_loaded: (name) => `„${name}" geladen.`,
+  lib_no_inventory: 'Kein Bestand eingetragen – der Filter bleibt aus.',
 
   // Dateimenü
   menu_named: 'Benannter Entwurf',
@@ -189,6 +218,7 @@ const de = {
   // Bestätigungs- und Eingabedialoge
   prompt_save_name: 'Name für diesen Entwurf:',
   confirm_clear: 'Gesamtes Modell löschen?',
+  confirm_replace_model: 'Das aktuelle Modell wird ersetzt. Fortfahren?',
   confirm_delete_save: (name) => `Gespeicherten Entwurf "${name}" löschen?`,
 
   // Aufbaumodus
@@ -323,6 +353,35 @@ const en = {
   btn_bom_title: 'Toggle parts list',
   btn_inventory: '▦ Inventory',
   btn_inventory_title: 'Toggle inventory & feasibility',
+  btn_library_title: 'Models – toggle your own QDF collection',
+
+  // Sidebar – model library
+  lib_title: 'Models',
+  lib_hint: 'Read in your own QDF collection (for example the sample folder of the QUADRO software). The files stay in your browser, nothing is uploaded.',
+  btn_lib_folder: '📂 Folder…',
+  btn_lib_folder_title: 'Read in a whole folder of QDF files',
+  btn_lib_files: '＋ Files…',
+  btn_lib_files_title: 'Add individual QDF files',
+  btn_lib_clear: '🗑',
+  btn_lib_clear_title: 'Clear library',
+  lib_search: 'Search…',
+  lib_only_feasible: 'Only buildable with my inventory',
+  lib_empty: 'No models read in yet.',
+  lib_no_match: 'No model matches this search.',
+  lib_reading: (done, total) => `Reading… ${done}/${total}`,
+  lib_added: (n, skipped) => skipped
+    ? `${n} model(s) read in, ${skipped} skipped (no parts recognised).`
+    : `${n} model(s) read in.`,
+  lib_count: (shown, total) => shown === total ? `${total} models` : `${shown} of ${total} models`,
+  lib_parts: (conn, tubes, panels) => `${conn} connectors · ${tubes} tubes · ${panels} panels`,
+  lib_size: (w, h, d) => `${w} × ${h} × ${d} cm`,
+  lib_missing: (n) => `${n} parts missing`,
+  lib_feasible_title: 'Buildable with your inventory',
+  lib_infeasible_title: 'Not enough parts – number = missing pieces',
+  lib_confirm_clear: 'Remove all models from the library?',
+  lib_load_failed: 'This model could not be loaded.',
+  lib_loaded: (name) => `“${name}” loaded.`,
+  lib_no_inventory: 'No inventory entered – the filter stays off.',
 
   // File menu
   menu_named: 'Named design',
@@ -444,6 +503,7 @@ const en = {
   // Confirm / prompt dialogs
   prompt_save_name: 'Name for this design:',
   confirm_clear: 'Delete the entire model?',
+  confirm_replace_model: 'This replaces the current model. Continue?',
   confirm_delete_save: (name) => `Delete saved design "${name}"?`,
 
   // Assembly
@@ -549,5 +609,8 @@ export function applyTranslations() {
   });
   document.querySelectorAll('[data-i18n-title]').forEach((el) => {
     el.title = t(el.dataset.i18nTitle);
+  });
+  document.querySelectorAll('[data-i18n-placeholder]').forEach((el) => {
+    el.placeholder = t(el.dataset.i18nPlaceholder);
   });
 }

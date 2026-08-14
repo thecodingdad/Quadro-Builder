@@ -512,6 +512,35 @@ body.sidebar-hidden #sidebar, body.sidebar-hidden #sidebar-resizer { display: no
 .help-card td { padding: 5px 4px; font-size: 13px; border-bottom: 1px solid var(--line); vertical-align: top; }
 .help-card td:first-child { font-weight: 600; white-space: nowrap; padding-right: 14px; }
 
+/* Modell-Bibliothek */
+.lib-actions { display: flex; gap: 4px; margin: 10px 0 8px; }
+.lib-actions .btn { flex: 1; }
+.lib-actions .btn.danger { flex: 0 0 auto; }
+.lib-search {
+  width: 100%; padding: 6px 9px; font-size: 13px; font-family: inherit;
+  border: 1px solid var(--line); border-radius: 8px; background: #fff; color: var(--ink);
+}
+.lib-search:focus { outline: none; border-color: var(--accent); }
+.lib-opt { display: flex; align-items: center; gap: 7px; font-size: 12px; margin: 8px 0 4px; cursor: pointer; }
+.lib-status { font-size: 11px; color: var(--muted); min-height: 1.2em; margin-bottom: 6px; }
+.lib-list { display: flex; flex-direction: column; gap: 4px; }
+.lib-row {
+  display: flex; flex-direction: column; gap: 2px;
+  padding: 7px 9px; text-align: left; font-family: inherit;
+  border: 1px solid var(--line); border-left: 3px solid var(--line);
+  border-radius: 8px; background: #fff; color: var(--ink); cursor: pointer;
+}
+.lib-row:hover { border-color: var(--accent); border-left-color: var(--accent); }
+.lib-row.ok { border-left-color: var(--ok); }
+.lib-row-head { display: flex; align-items: baseline; gap: 8px; }
+.lib-name { flex: 1; font-size: 13px; font-weight: 600; }
+.lib-badge {
+  font-size: 11px; font-variant-numeric: tabular-nums;
+  color: var(--no); flex: 0 0 auto;
+}
+.lib-row.ok .lib-badge { color: var(--ok); }
+.lib-meta { font-size: 11px; color: var(--muted); }
+
 /* Aufbaumodus */
 .asm-head { display: flex; align-items: center; justify-content: space-between; }
 .asm-head h2 { margin: 0; }
