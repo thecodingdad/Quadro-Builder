@@ -564,6 +564,7 @@ export class Builder {
       ? this.selection : null;
     this.scene.renderModel(this.model, this.selectedNodeId,
       { labelFor, slideNameFor, labelIds, soloId, assembly, suggest, reinforce, collide,
+        hintDim: this.showHints,
         selected, highlight: this.highlight });
     this._buildHandles();
     this.scene.requestRender();

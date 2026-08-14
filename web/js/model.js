@@ -421,8 +421,37 @@ export class BuildModel {
   // Endknoten keine senkrechte Stuetze nach unten hat (frei tragend, Kragarm,
   // Diagonale mit ungestuetzter Kupplung).  Senkrechte Rohre und Rohre auf
   // Bodenebene werden ausgeschlossen.  Liefert ein Set von Rohr-IDs.
+  /**
+   * Traegt etwas den Auslauf dieser Rutsche? Boden, eine Kupplung oder ein Rohr
+   * unter dem Fuss zaehlen. Ohne Auflage braucht die Rutsche eine Stuetze --
+   * genau darauf weist der Verstaerkungs-Vorschlag hin.
+   */
+  slideRests(sl) {
+    const groundY = this._groundLevel();
+    if (sl.y - groundY < 1) return true;
+    for (const n of this.nodes.values()) {
+      if (Math.hypot(n.x - sl.x, n.y - sl.y, n.z - sl.z) <= SLIDE_SUPPORT) return true;
+    }
+    // Auch mitten auf einem Rohr liegt der Auslauf auf.
+    for (const t of this.tubes.values()) {
+      if (t.arm || t.link) continue;
+      const a = this.nodes.get(t.a), b = this.nodes.get(t.b);
+      if (!a || !b) continue;
+      const d = [b.x - a.x, b.y - a.y, b.z - a.z];
+      const len2 = d[0] * d[0] + d[1] * d[1] + d[2] * d[2];
+      if (len2 < 1e-6) continue;
+      let u = ((sl.x - a.x) * d[0] + (sl.y - a.y) * d[1] + (sl.z - a.z) * d[2]) / len2;
+      u = Math.max(0, Math.min(1, u));
+      const p = [a.x + d[0] * u, a.y + d[1] * u, a.z + d[2] * u];
+      if (Math.hypot(sl.x - p[0], sl.y - p[1], sl.z - p[2]) <= SLIDE_SUPPORT) return true;
+    }
+    return false;
+  }
+
   reinforcementSuggestions() {
     const out = new Set();
+    // Rutschen ohne Auflage brauchen eine Stuetze.
+    for (const sl of this.slides.values()) if (!this.slideRests(sl)) out.add(sl.id);
     let minY = Infinity;
     for (const n of this.nodes.values()) if (n.y < minY) minY = n.y;
     for (const t of this.tubes.values()) {

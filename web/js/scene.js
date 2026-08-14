@@ -1337,10 +1337,16 @@ export class SceneManager {
     const highlight = opts.highlight && opts.highlight.size ? opts.highlight : null;
     const marked = selected || highlight;
     const dimOthers = !selected && !!highlight;
+    // Im Vorschlags-Modus treten alle Teile zurueck, die keine Verstaerkung
+    // brauchen -- sonst sucht man die orangen Rohre im Gewirr.
+    const hintDim = !!opts.hintDim && !!opts.suggest;
     const matFor = (id, base) => {
-      if (!marked) return base;
-      if (id != null && marked.has(id)) return this._selectedMaterial(base);
-      return dimOthers ? this._dimmedMaterial(base) : base;
+      if (marked) {
+        if (id != null && marked.has(id)) return this._selectedMaterial(base);
+        return dimOthers ? this._dimmedMaterial(base) : base;
+      }
+      if (hintDim && !(id != null && opts.suggest.has(id))) return this._dimmedMaterial(base);
+      return base;
     };
 
     const tubeRadius = geometry().tubeRadius;
@@ -1763,9 +1769,10 @@ export class SceneManager {
       if (hideFlat) continue;
       const st = stateOf(sl.id);
       if (st === "future") continue;
-      const mat = matFor(sl.id, (asm && st === "done")
-        ? this._fadedMaterial(sl.color ? colorHex(sl.color) : 0xd23b3b)
-        : this._slideMatFor(sl.kind, st === "current", sl.color));
+      const mat = matFor(sl.id, (suggest && suggest.has(sl.id)) ? this._tubeSuggest()
+        : (asm && st === "done")
+          ? this._fadedMaterial(sl.color ? colorHex(sl.color) : 0xd23b3b)
+          : this._slideMatFor(sl.kind, st === "current", sl.color));
 
       // Beschriftung: Name des Rutschenenteils/Dachs wenn Labels aktiv.
       if (slideNameFor && wantsLabel(sl.id) && st !== "future") {
