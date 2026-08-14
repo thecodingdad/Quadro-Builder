@@ -28,6 +28,14 @@ const DEFAULT_QUALITY = "medium";
 // Spalt zwischen benachbarten Platten (cm, gesamt -- je Seite die Haelfte).
 const PANEL_GAP = 1.5;
 
+// Anbauteile: Radgroesse und Radius der gebogenen Wand, aus den Entwurfsdaten
+// (Rad sitzt 5 cm neben der Kupplung, Rundwand 40 cm von Kupplung und Rohr).
+const WHEEL_R = 19;
+const ROUND_WALL_R = 40;
+// Flaechige Anbauteile verschwinden im Verstaerken- und Kollisions-Modus, wie
+// Platten und Netze auch.
+const FLAT_FITTINGS = new Set(["lattice2", "textil-round2", "roof-large2"]);
+
 const HIGHLIGHT_COLOR = 0x9b30ff;
 const HIGHLIGHT_EMISSIVE = 0x3a0066;
 
@@ -151,6 +159,7 @@ export class SceneManager {
     this.pickClamps = [];
     this.pickTextiles = [];
     this.pickSlides = [];
+    this.pickFittings = [];
     this.handleMeshes = [];
     this.labelMeshes = [];
 
@@ -646,6 +655,134 @@ export class SceneManager {
       m.color = new THREE.Color(0xff8c1a);
       if (m.emissive) m.emissive = new THREE.Color(0x5a3000);
       this._materials[key] = m;
+    }
+    return this._materials[key];
+  }
+
+  /**
+   * Geometrie eines Anbauteils. Die Formen stammen aus den Bildschirmfotos der
+   * Herstellersoftware; Lage und Ausrichtung aus den Entwurfsdateien. Die lokale
+   * +X-Achse ist bei allen Teilen die Bezugsrichtung (Radachse, Rollenachse,
+   * Flaechennormale) -- genau wie im QDF.
+   */
+  _fittingMeshes(f) {
+    const q = f.quat && f.quat.length === 4
+      ? new THREE.Quaternion(f.quat[0], f.quat[1], f.quat[2], f.quat[3]).normalize()
+      : new THREE.Quaternion();
+    const hex = f.color ? colorHex(f.color) : 0x2b2b2b;
+    let geo = null, mat = null;
+    const cs = geometry().connectorSize;
+
+    switch (f.kind) {
+      case "multi-wheel2": {            // Speichenrad: Scheibe mit Kranz
+        geo = this._wheelGeometry(WHEEL_R, 2.4, true);
+        mat = this._fittingMaterial(hex, false);
+        break;
+      }
+      case "floating-wheel2": {         // schwarzes Vollrad, dicker
+        geo = this._wheelGeometry(WHEEL_R, 6, false);
+        mat = this._fittingMaterial(0x1c1c1c, false);
+        break;
+      }
+      case "hub-cap2": {                // rote Nabenkappe
+        geo = this._cachedGeo("hubcap", () =>
+          new THREE.CylinderGeometry(3.2, 4.2, 2.2, Math.max(10, this._q().tube)));
+        mat = this._fittingMaterial(f.color ? hex : 0xd42e2e, false);
+        break;
+      }
+      case "casters2": {                // Lenkrolle: Gabel mit Raedchen darunter
+        const dark = this._fittingMaterial(0x1c1c1c, false);
+        const fork = new THREE.Mesh(this._cachedGeo("casterFork", () => {
+          const g = new THREE.BoxGeometry(4.5, 5, 3);
+          g.translate(0, -2.5, 0);
+          return g;
+        }), dark);
+        const roll = new THREE.Mesh(this._cachedGeo("casterRoll", () => {
+          const g = new THREE.CylinderGeometry(3.2, 3.2, 2.2, Math.max(10, this._q().tube));
+          g.rotateZ(Math.PI / 2);
+          g.translate(0, -6.5, 0);
+          return g;
+        }), dark);
+        return [fork, roll].map((m) => this._placeFitting(m, f, q));
+      }
+      case "bearing2":
+      case "steering-lock2":
+      case "adapter2":
+      case "open-connector2":
+      case "hole-connector4": {         // Kupplungsnahe Teile: Wuerfel in Teilegroesse
+        const sz = f.kind === "steering-lock2" ? cs * 0.55 : cs * 0.9;
+        geo = this._cachedGeo("fitbox" + sz.toFixed(2), () => new THREE.BoxGeometry(sz, sz, sz));
+        mat = this._fittingMaterial(f.kind === "steering-lock2" ? 0xd42e2e : 0x2b2b2b, false);
+        break;
+      }
+      case "lattice2": {                // Gitter: Rechteck, halbdurchsichtig
+        const w = f.w || 40, h = f.h || 40;
+        geo = this._cachedGeo(`lattice${w}x${h}`, () => new THREE.BoxGeometry(0.8, h, w));
+        mat = this._fittingMaterial(hex, true);
+        break;
+      }
+      case "textil-round2": {           // Viertelzylinder, Radius 40 cm
+        geo = this._cachedGeo("roundwall", () =>
+          new THREE.CylinderGeometry(ROUND_WALL_R, ROUND_WALL_R, ROUND_WALL_R, 20, 1, true, 0, Math.PI / 2));
+        mat = this._fittingMaterial(hex, true);
+        break;
+      }
+      case "roof-large2": {             // grosse Dachplatte
+        geo = this._cachedGeo("rooflarge", () => new THREE.BoxGeometry(80, 3, 160));
+        mat = this._fittingMaterial(hex, false);
+        break;
+      }
+      case "bag2": {
+        geo = this._cachedGeo("bag", () => new THREE.SphereGeometry(12, 12, 8));
+        mat = this._fittingMaterial(hex, false);
+        break;
+      }
+      default:
+        return [];
+    }
+    return [this._placeFitting(new THREE.Mesh(geo, mat), f, q)];
+  }
+
+  /** Anbauteil an seinen Platz drehen und setzen. */
+  _placeFitting(mesh, f, q) {
+    mesh.quaternion.copy(q);
+    mesh.position.set(f.x, f.y, f.z);
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+    return mesh;
+  }
+
+  /** Rad: Scheibe mit Kranz, wahlweise mit Speichenkerben. */
+  _wheelGeometry(r, thickness, spokes) {
+    return this._cachedGeo(`wheel${r}x${thickness}${spokes ? "s" : ""}`, () => {
+      const seg = Math.max(12, this._q().tube);
+      const g = new THREE.CylinderGeometry(r, r, thickness, seg);
+      // Das Rad steht senkrecht auf seiner Achse: lokale +X ist die Achse.
+      g.rotateZ(Math.PI / 2);
+      return g;
+    });
+  }
+
+  /** Geometrie einmal bauen und behalten (wie _tubeGeometry). */
+  _cachedGeo(key, make) {
+    if (!this._fitGeos) this._fitGeos = new Map();
+    let g = this._fitGeos.get(key);
+    if (!g) {
+      g = make();
+      this._fitGeos.set(key, g);
+      this._keepGeos.add(g);
+    }
+    return g;
+  }
+
+  _fittingMaterial(hex, transparent) {
+    const key = `fit${hex}${transparent ? "t" : ""}`;
+    if (!this._materials[key]) {
+      this._materials[key] = new THREE.MeshStandardMaterial({
+        color: new THREE.Color(hex), roughness: 0.55, metalness: 0.05,
+        side: THREE.DoubleSide,
+        transparent, opacity: transparent ? 0.55 : 1,
+      });
     }
     return this._materials[key];
   }
@@ -1340,6 +1477,7 @@ export class SceneManager {
     this.pickClamps = [];
     this.pickTextiles = [];
     this.pickSlides = [];
+    this.pickFittings = [];
     this._nodePoints = [];
     this._batches.clear();
 
@@ -1774,6 +1912,21 @@ export class SceneManager {
       mesh.userData = { kind: "textile", id: tx.id };
       this.buildGroup.add(mesh);
       if (st !== "future") this.pickTextiles.push(mesh);
+    }
+
+    // Anbauteile: Raeder, Rollen, Kappen, Gitter, Rundwand, Dach, Sonderkupplungen.
+    for (const f of (model.fittings ? model.fittings.values() : [])) {
+      if (hideFlat && FLAT_FITTINGS.has(f.kind)) continue;
+      const st = stateOf(f.id);
+      if (st === "future") continue;
+      for (const mesh of this._fittingMeshes(f)) {
+        mesh.userData = { kind: "fitting", id: f.id };
+        const base = mesh.material;
+        mesh.material = matFor(f.id, (suggest && suggest.has(f.id)) ? this._suggestMaterial(base)
+          : (asm && st === "done") ? this._fadedMaterial(base.color.getHex()) : base);
+        this.buildGroup.add(mesh);
+        this.pickFittings.push(mesh);
+      }
     }
 
     // Rutschen/Daecher: eigene Geometrie je Art (Bogen/gerade/Auslauf = U-Rinne,
@@ -2392,7 +2545,8 @@ export class SceneManager {
     if (!ids || !ids.size) return null;
     this._setMouse(clientX, clientY);
     const objs = [...this.pickTubes, ...this.pickNodes, ...this.pickPanels,
-                  ...this.pickClamps, ...this.pickTextiles, ...this.pickSlides];
+                  ...this.pickClamps, ...this.pickTextiles, ...this.pickSlides,
+                  ...this.pickFittings];
     for (const hit of this._raycaster.intersectObjects(objs, false)) {
       if (this._clipPlane && this._clipPlane.distanceToPoint(hit.point) < 0) continue;
       const data = this._hitData(hit);
@@ -2404,7 +2558,8 @@ export class SceneManager {
   pickBuild(clientX, clientY) {
     const hit = this.raycastObjects(
       clientX, clientY,
-      [...this.pickNodes, ...this.pickTubes, ...this.pickPanels, ...this.pickClamps, ...this.pickTextiles]
+      [...this.pickNodes, ...this.pickTubes, ...this.pickPanels, ...this.pickClamps,
+       ...this.pickTextiles, ...this.pickFittings]
     );
     const data = this._hitData(hit);
     return data ? { object: hit.object, data, point: hit.point, distance: hit.distance } : null;
@@ -2416,7 +2571,7 @@ export class SceneManager {
     const hit = this.raycastObjects(
       clientX, clientY,
       [...this.pickNodes, ...this.pickTubes, ...this.pickPanels, ...this.pickClamps,
-       ...this.pickTextiles, ...this.pickSlides]
+       ...this.pickTextiles, ...this.pickSlides, ...this.pickFittings]
     );
     const data = this._hitData(hit);
     return data ? { object: hit.object, data, point: hit.point, distance: hit.distance } : null;
@@ -2487,7 +2642,8 @@ export class SceneManager {
     const mat = new THREE.Matrix4();
     this.scene.updateMatrixWorld();
     const meshes = [...this.pickNodes, ...this.pickTubes, ...this.pickPanels,
-                    ...this.pickClamps, ...this.pickTextiles, ...this.pickSlides];
+                    ...this.pickClamps, ...this.pickTextiles, ...this.pickSlides,
+                    ...this.pickFittings];
     const emit = (m, world, d) => {
       if (!d || !d.id) return;
       if (!m.geometry.boundingBox) m.geometry.computeBoundingBox();
