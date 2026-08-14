@@ -5,7 +5,7 @@ import { geometry, getTube, spacingFor, getPanel, defaultPanel, diagonalTubeId, 
 import { computeBuildPlan, connectorLabelInfo } from "./buildplan.js";
 import { infeasibleConnectors } from "./bom.js";
 import { t } from "./i18n.js";
-import { round2 } from "./util.js";
+import { round2, panelNormal, modelMiddle } from "./util.js";
 
 const CLICK_TOLERANCE = 9; // px: groessere Bewegung = Kamera drehen, kein Klick (Touch-tauglich)
 
@@ -138,6 +138,26 @@ export class Builder {
   }
   setTube(tubeId) { this.tubeId = tubeId; }
   setPanel(panelId) { this.panelId = panelId; if (this.mode === "panel") this.refresh(); }
+
+  /**
+   * Auf welche Seite der Rohre gehoert eine neu gesetzte Platte?
+   *
+   * Auf die, von der aus man sie setzt: schaut man von oben auf das Feld, legt
+   * sich die Platte oben auf, schaut man von unten dagegen, haengt sie darunter.
+   * Umlegen laesst sie sich danach mit einem Klick auf die Platte selbst.
+   */
+  _panelSideFromView(nodeIds) {
+    const ns = nodeIds.map((id) => this.model.nodes.get(id));
+    if (ns.some((n) => !n)) return 1;
+    const [A, B, , D] = ns;
+    const e1 = [B.x - A.x, B.y - A.y, B.z - A.z];
+    const e2 = [D.x - A.x, D.y - A.y, D.z - A.z];
+    const c = [0, 1, 2].map((i) => ns.reduce((s, n) => s + [n.x, n.y, n.z][i], 0) / 4);
+    const n = panelNormal(e1, e2, c, modelMiddle(this.model.nodes.values()));
+    const cam = this.scene.cameraPosition();
+    const toCam = [cam[0] - c[0], cam[1] - c[1], cam[2] - c[2]];
+    return (toCam[0] * n[0] + toCam[1] * n[1] + toCam[2] * n[2]) < 0 ? -1 : 1;
+  }
   // Farbe der Toolbar. Im Cursor-Modus faerbt sie ausserdem die aktuelle
   // Auswahl um -- im Platzier-Modus gilt sie nur fuer NEUE Teile.
   setColor(colorId) {
@@ -1101,7 +1121,17 @@ export class Builder {
     // Umfaerben passiert ausschliesslich im Cursor-Modus -- hier wird nur gebaut.
     const h = this.scene.pickHandle(e.clientX, e.clientY);
     if (h && h.data.panelCell) {
-      this.recordHistory(() => this.model.addPanel(h.data.rectNodes, this.panelId, this.colorFor("panel")));
+      const side = this._panelSideFromView(h.data.rectNodes);
+      this.recordHistory(() => this.model.addPanel(h.data.rectNodes, this.panelId, this.colorFor("panel"), side));
+      this.refresh();
+      return;
+    }
+    // Klick auf eine liegende Platte legt sie auf die andere Seite der Rohre.
+    const pick = this.scene.pickForDelete(e.clientX, e.clientY);
+    if (pick && pick.data.kind === "panel") {
+      let side = null;
+      this.recordHistory(() => { side = this.model.flipPanelSide(pick.data.id); });
+      if (side != null) this.onNotice(t(side < 0 ? "notice_panel_below" : "notice_panel_above"));
       this.refresh();
     }
   }

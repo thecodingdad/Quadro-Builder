@@ -180,12 +180,23 @@ export class BuildModel {
     return null;
   }
 
-  addPanel(nodeIds, panelId, color) {
+  // side: +1 = liegt oben auf den Rohren (bzw. aussen), -1 = haengt darunter.
+  // Die Bezugsrichtung liefert util.panelNormal; im Raster liegt die Platte auf
+  // der Rohrachse, in Wirklichkeit auf einer der beiden Seiten.
+  addPanel(nodeIds, panelId, color, side = 1) {
     if (nodeIds.length !== 4) return null;
     if (this.panelOnCell(nodeIds)) return null;
-    const panel = { id: this._id("p"), nodes: nodeIds.slice(), panelId, color };
+    const panel = { id: this._id("p"), nodes: nodeIds.slice(), panelId, color, side: side < 0 ? -1 : 1 };
     this.panels.set(panel.id, panel);
     return panel;
+  }
+
+  /** Platte auf die andere Seite der Rohre legen. Liefert die neue Seite. */
+  flipPanelSide(id) {
+    const p = this.panels.get(id) || this.textiles.get(id);
+    if (!p) return null;
+    p.side = (p.side || 1) < 0 ? 1 : -1;
+    return p.side;
   }
 
   removePanel(id) {
@@ -852,18 +863,22 @@ export class BuildModel {
         if (t.bow) { o.bow = true; o.bowCenter = t.bowCenter; } // Bogenrohr (Viertelkreis)
         return o;
       }),
-      panels: [...this.panels.values()].map((p) => ({
-        id: p.id, nodes: p.nodes.slice(), panelId: p.panelId, color: p.color,
-      })),
+      panels: [...this.panels.values()].map((p) => {
+        const o = { id: p.id, nodes: p.nodes.slice(), panelId: p.panelId, color: p.color };
+        if ((p.side || 1) < 0) o.side = -1;   // Standard ist oben/aussen
+        return o;
+      }),
       clamps: [...this.clamps.values()].map((c) => {
         const o = { id: c.id, x: round(c.x), y: round(c.y), z: round(c.z), connectorId: c.connectorId };
         if (c.dir) o.dir = c.dir;   // Achse der gehaltenen Tubes
         if (c.off) o.off = c.off;   // Versatz zur zweiten Tube (die "8")
         return o;
       }),
-      textiles: [...this.textiles.values()].map((t) => ({
-        id: t.id, nodes: t.nodes.slice(), w: t.w, h: t.h, color: t.color,
-      })),
+      textiles: [...this.textiles.values()].map((t) => {
+        const o = { id: t.id, nodes: t.nodes.slice(), w: t.w, h: t.h, color: t.color };
+        if ((t.side || 1) < 0) o.side = -1;
+        return o;
+      }),
       slides: [...this.slides.values()].map((s) => {
         const o = { id: s.id, x: round(s.x), y: round(s.y), z: round(s.z), kind: s.kind };
         if (s.quat) o.quat = s.quat;
@@ -912,6 +927,7 @@ export class BuildModel {
       if (!p.nodes || !Array.isArray(p.nodes)) continue;
       this.panels.set(p.id, {
         id: p.id, nodes: p.nodes.slice(), panelId: p.panelId, color: p.color,
+        side: p.side < 0 ? -1 : 1,
       });
       maxSeq = Math.max(maxSeq, parseSeq(p.id));
     }
@@ -923,7 +939,7 @@ export class BuildModel {
       maxSeq = Math.max(maxSeq, parseSeq(c.id));
     }
     for (const t of data.textiles || []) {
-      this.textiles.set(t.id, { id: t.id, nodes: t.nodes.slice(), w: t.w, h: t.h, color: t.color });
+      this.textiles.set(t.id, { id: t.id, nodes: t.nodes.slice(), w: t.w, h: t.h, color: t.color, side: t.side < 0 ? -1 : 1 });
       maxSeq = Math.max(maxSeq, parseSeq(t.id));
     }
     for (const s of data.slides || []) {

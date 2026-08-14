@@ -24,7 +24,7 @@
 //
 // Bewusst ohne Three.js/DOM, damit per Node testbar und Backend-tauglich.
 
-import { round2 as round } from "./util.js";
+import { round2 as round, panelNormal, modelMiddle } from "./util.js";
 
 // Alle benannten Richtungen (kardinal + 45°-diagonal) fuer Arm-Erkennung.
 const S45 = Math.SQRT1_2;
@@ -444,6 +444,19 @@ export function parseQDF(text, opts = {}) {
     return null;
   }
 
+  // Auf welcher Seite der Rohre liegt die Platte? Die Datei sagt es ueber ihre
+  // lokale Z-Achse; verglichen wird sie mit der kanonischen Normalen der vier
+  // gefundenen Ecken (oben bzw. aussen = +1).
+  function sideFromQuat(q, corners) {
+    const [A, B, , D] = corners;
+    const e1 = [B.x - A.x, B.y - A.y, B.z - A.z];
+    const e2 = [D.x - A.x, D.y - A.y, D.z - A.z];
+    const c = [0, 1, 2].map((i) => corners.reduce((s2, n) => s2 + [n.x, n.y, n.z][i], 0) / 4);
+    const canon = panelNormal(e1, e2, c, modelMiddle(nodes));
+    const ez = rotateByQuat(q, [0, 0, 1]);
+    return (ez[0] * canon[0] + ez[1] * canon[1] + ez[2] * canon[2]) < 0 ? -1 : 1;
+  }
+
   for (const raw of lines) {
     const p = parseLine(raw);
     if (!p) continue;
@@ -463,7 +476,8 @@ export function parseQDF(text, opts = {}) {
       const nodesFound = findPanelCorners(q, cx, cy, cz, (dimW + conn) / 2, (dimH + conn) / 2);
       if (!nodesFound) { skipped[p.name] = (skipped[p.name] || 0) + 1; continue; }
       const mat = typeof p.rest[0] === "number" ? p.rest[0] : null;
-      panels.push({ id: "p" + seq++, nodes: nodesFound.map((n) => n.id), panelId, color: materials.get(mat) || FALLBACK_COLOR });
+      panels.push({ id: "p" + seq++, nodes: nodesFound.map((n) => n.id), panelId,
+        color: materials.get(mat) || FALLBACK_COLOR, side: sideFromQuat(q, nodesFound) });
 
     } else if (p.name === "textil2") {
       // Netz/Stoff: gleiche Struktur wie panel2 (Zentrum + Maße + Quat). Maße z.B.
@@ -482,7 +496,7 @@ export function parseQDF(text, opts = {}) {
       textiles.push({
         id: "x" + seq++, nodes: nodesFound.map((n) => n.id),
         w: Math.round(Math.min(wGrid, hGrid)), h: Math.round(Math.max(wGrid, hGrid)),
-        color: materials.get(mat) || FALLBACK_COLOR,
+        color: materials.get(mat) || FALLBACK_COLOR, side: sideFromQuat(q, nodesFound),
       });
 
     } else if (p.name === "pool2" || p.name === "pool-small2") {

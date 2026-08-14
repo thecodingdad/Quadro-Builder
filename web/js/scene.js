@@ -3,6 +3,7 @@
 import * as THREE from "three";
 import { OrbitControls } from "../vendor/three/OrbitControls.js";
 import { geometry, colorHex, connectorColor, getPanel } from "./catalog.js";
+import { panelNormal, modelMiddle } from "./util.js";
 
 const UP = new THREE.Vector3(0, 1, 0);
 const ONE = new THREE.Vector3(1, 1, 1);
@@ -324,6 +325,12 @@ export class SceneManager {
     const f = new THREE.Vector3();
     this.camera.getWorldDirection(f);
     return Math.abs(f.y) < Math.SQRT1_2;
+  }
+
+  /** Standort der Kamera in Weltkoordinaten -- von wo aus wird gebaut? */
+  cameraPosition() {
+    const p = this.camera.position;
+    return [p.x, p.y, p.z];
   }
 
   getHorizontalAxes() {
@@ -1612,6 +1619,7 @@ export class SceneManager {
 
     // Platten (flache Box in der Feld-Ebene) – im Verstaerken-/Kollisions-Modus ausgeblendet.
     const thickness = geometry().panelThickness || 1.6;
+    const middle = modelMiddle(model.nodes.values());
     for (const p of model.panels.values()) {
       if (hideFlat) continue;
       const ns = p.nodes.map((id) => model.nodes.get(id));
@@ -1628,6 +1636,15 @@ export class SceneManager {
       const xAxis = u.clone().normalize();
       const zAxis = w.clone().normalize();
       const yAxis = new THREE.Vector3().crossVectors(zAxis, xAxis).normalize();
+      // Die Platte liegt nicht auf der Rohrachse, sondern oben auf den Rohren
+      // (side +1) oder darunter (side -1) -- so wie man sie wirklich montiert.
+      const nrm = panelNormal(
+        [xAxis.x, xAxis.y, xAxis.z], [zAxis.x, zAxis.y, zAxis.z],
+        [center.x, center.y, center.z], middle,
+      );
+      const lift = (geometry().tubeRadius || 2.45) + thickness / 2;
+      const sgn = (p.side || 1) < 0 ? -1 : 1;
+      center.add(new THREE.Vector3(nrm[0], nrm[1], nrm[2]).multiplyScalar(lift * sgn));
       const geo = this._panelGeometry(p.panelId, u.length(), w.length(), thickness);
       const mat = st === "future" ? this._ghostMaterial()
         : (asm && st === "done") ? this._fadedMaterial(colorHex(p.color))

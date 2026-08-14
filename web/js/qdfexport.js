@@ -20,6 +20,7 @@
 // Bewusst ohne Three.js und DOM -- wie qdfimport.js in Node testbar.
 
 import { geometry, getPanel } from "./catalog.js";
+import { panelNormal, modelMiddle } from "./util.js";
 
 // Farbtabelle wie in den Dateien der Herstellersoftware: erst der Satz fuer
 // Rohre und Kupplungen (kind 1), dann derselbe Satz fuer Platten (kind 2). Die
@@ -104,26 +105,6 @@ function rotateByQuat(q, v) {
 /** Gegendrehung: Welt -> lokale Achsen der Kupplung. */
 function conjugate(q) { return [q[0], -q[1], -q[2], -q[3]]; }
 
-/**
- * Eindeutige Normale einer Platte aus ihren beiden Kantenrichtungen.
- *
- * Aus der Eckenreihenfolge allein ergibt sich das Vorzeichen zufaellig -- und da
- * die Originalsoftware die Platte auf die Seite der Normalen legt, lag sie
- * einmal ueber und einmal unter den Rohren. Die Regel stammt aus den
- * Herstellerdateien: waagerechte Platten liegen OBEN auf (1457 von 1464),
- * senkrechte zeigen nach AUSSEN, vom Modell weg (1141 von 1340).
- */
-function canonicalNormal(e1, e2, center, middle) {
-  const n = norm(cross(e1, e2));
-  const flip = () => n.map((v) => -v);
-  if (Math.abs(n[1]) > 0.01) return n[1] < 0 ? flip() : n;
-  const away = (center[0] - middle[0]) * n[0] + (center[2] - middle[2]) * n[2];
-  if (Math.abs(away) > 0.5) return away < 0 ? flip() : n;
-  // Genau mittig: irgendein festes Vorzeichen, damit dieselbe Platte nicht mal
-  // so und mal so herauskommt.
-  if (Math.abs(n[0]) > 0.01) return n[0] < 0 ? flip() : n;
-  return n[2] < 0 ? flip() : n;
-}
 function cross(a, b) {
   return [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
 }
@@ -193,9 +174,7 @@ export function buildQDF(model) {
   const dirOf = (a, b) => norm([b.x - a.x, b.y - a.y, b.z - a.z]);
   const lenOf = (a, b) => Math.hypot(b.x - a.x, b.y - a.y, b.z - a.z);
   // Mittelpunkt des Modells: sagt bei senkrechten Platten, wo "aussen" ist.
-  const middle = [0, 0, 0];
-  for (const n of model.nodes.values()) { middle[0] += n.x; middle[1] += n.y; middle[2] += n.z; }
-  if (model.nodes.size) for (let i = 0; i < 3; i++) middle[i] /= model.nodes.size;
+  const middle = modelMiddle(model.nodes.values());
 
   // --- Kupplungen ---------------------------------------------------------
   // Der Adapterkoerper einer 45-Grad-Winkelkupplung ist kein eigenes Teil: er
@@ -301,7 +280,7 @@ export function buildQDF(model) {
     // Normale nicht aus der Ecken-Reihenfolge ableiten (die ist beliebig und
     // liess die Platte mal oben, mal unten erscheinen), sondern eindeutig
     // festlegen und mit der gespeicherten Seite multiplizieren.
-    const n = canonicalNormal(e1, e2, [cx, cy, cz], middle).map((v) => v * (side < 0 ? -1 : 1));
+    const n = panelNormal(e1, e2, [cx, cy, cz], middle).map((v) => v * (side < 0 ? -1 : 1));
     // Rechtshaendiges Dreibein zur gewaehlten Normalen: X bleibt e1.
     const q = encodeQuat(quatFromAxes(e1, cross(n, e1), n));
     // w liegt auf der lokalen X-Achse, h auf Y -- geschrieben wird Y zuerst.
