@@ -44,6 +44,8 @@ const CURVED_SLIDE_DROP = new THREE.Vector3(60, -80, 60);
 // ihrem lokalen +Z und dreht auf das lokale +X -- das Folgeteil steht in allen
 // zehn Faellen mit seinem eigenen +Z genau auf dem lokalen +X des Bogens.
 const CURVED_SLIDE_ENTRY = new THREE.Vector3(0, 0, 1);
+// Gerade Rutsche: Folgeteil auf dem lokalen Versatz (0, -800, 1200) mm.
+const STRAIGHT_SLIDE_DROP = new THREE.Vector3(0, -80, 120);
 // Austrittsrichtung am Ende des Bogens: lokales +X, rund 33 Grad abwaerts --
 // dasselbe Gefaelle wie die gerade Rutsche (80 cm auf 120 cm).
 const CURVED_SLIDE_EXIT = new THREE.Vector3(1, -0.55, 0).normalize();
@@ -800,11 +802,11 @@ export class SceneManager {
 
   /**
    * Gitter als echtes Netz: schmale Baender in der lokalen XY-Ebene, aussen ein
-   * Rahmen, innen ein Raster von rund 10 cm. Alles in EINER Geometrie (eine
+   * Rahmen, innen ein Raster von rund 2,5 cm. Alles in EINER Geometrie (eine
    * Zeichnung), weil mergeGeometries nicht mitgeliefert ist. sx laeuft auf der
    * lokalen X-, sy auf der lokalen Y-Achse.
    */
-  _latticeGeometry(sx, sy, bar = 1.2, step = 10) {
+  _latticeGeometry(sx, sy, bar = 0.5, step = 2.5) {
     const pos = [];
     // Ein Band als zwei Dreiecke, Ecken gegen den Uhrzeigersinn.
     const ribbon = (x0, y0, x1, y1) => {
@@ -2080,14 +2082,21 @@ export class SceneManager {
   // fehlplatzierte Viewer-Transformation (fester Block + rotateY45 + Offsets).
   _addStraightSlide(sl, model, mat, st) {
     let P0 = new THREE.Vector3(sl.x, sl.y, sl.z);
+    // Auch die gerade Rutsche ist ein festes Teil: bei 73 von 76 Vorkommen im
+    // Bestand sitzt das Folgeteil auf dem lokalen Versatz (0, -800, 1200) -- drei
+    // Felder in Laufrichtung (lokales +Z), zwei Ebenen tiefer. Gesucht wird das
+    // Teil DORT, nicht mehr das naechstgelegene tiefere: in Abenteuerschloss
+    // liegt die Rutsche einer anderen Kette naeher, und die obere Rutsche lief
+    // dadurch quer durch das Geruest zu ihr hinueber.
+    const P1exp = STRAIGHT_SLIDE_DROP.clone().applyQuaternion(this._slideQuat(sl)).add(P0);
     let target = null, bestD = Infinity;
     for (const s2 of model.slides.values()) {
       if (s2 === sl) continue;
       if (s2.kind !== "slide2" && s2.kind !== "slide-new2" && s2.kind !== "slide-end2") continue;
-      if (s2.y > sl.y - 1) continue;
-      const d = (s2.x - sl.x) ** 2 + (s2.y - sl.y) ** 2 + (s2.z - sl.z) ** 2;
+      const d = Math.hypot(s2.x - P1exp.x, s2.y - P1exp.y, s2.z - P1exp.z);
       if (d < bestD) { bestD = d; target = s2; }
     }
+    if (bestD > 40) target = null;   // dort steht nichts -> Rutsche haengt allein
     let P1;
     // Im Editor gesetzte Rutsche: Der Einhaengepunkt am senkrechten Rohrpaar ist
     // bekannt, es muss nichts aus Quaternion/Kette hergeleitet werden.
