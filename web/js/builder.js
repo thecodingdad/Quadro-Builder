@@ -85,6 +85,23 @@ export class Builder {
     return ret;
   }
 
+  /**
+   * Alle Markierungen aufheben: Auswahl, Hervorhebung, gewaehltes Tragrohr,
+   * Bau-Kupplung. Liefert true, wenn es etwas zu raeumen gab -- die Oberflaeche
+   * wechselt erst beim naechsten Escape den Modus.
+   */
+  clearMarks() {
+    const had = this.selection.size > 0 || !!this.highlight || !!this.panelRail ||
+      (this.mode !== "select" && !!this.selectedNodeId);
+    if (!had) return false;
+    this.selection.clear();
+    this.highlight = null;
+    this.panelRail = null;
+    if (this.mode !== "select") this.selectedNodeId = null;
+    this.refresh();
+    return true;
+  }
+
   canUndo() { return this._undoStack.length > 0; }
 
   canRedo() { return this._redoStack.length > 0; }
@@ -975,7 +992,8 @@ export class Builder {
       else obj = p && p.data.kind === "node" && this._isBuildable(p.data.id) ? p.object : null;
     } else if (this.mode === "panel") {
       // Anklickbar sind Rohre (Tragrohr waehlen) und liegende Platten (umlegen).
-      const p = this.scene.pickForDelete(x, y);
+      const p = (this.panelRail && this.highlight && this.scene.pickAmong(x, y, this.highlight))
+        || this.scene.pickForDelete(x, y);
       const kind = p && p.data.kind;
       if (kind === "panel") obj = p.object;
       else if (kind === "tube") {
@@ -1127,7 +1145,12 @@ export class Builder {
    * sie stattdessen auf die andere Seite der Rohre.
    */
   _clickPanel(e) {
-    const pick = this.scene.pickForDelete(e.clientX, e.clientY);
+    // Ist ein Tragrohr gewaehlt, zaehlen zuerst die hervorgehobenen Gegenrohre --
+    // auch wenn ein anderes Teil davor liegt. Sie scheinen ohnehin durch die
+    // zurueckgeblendeten Teile hindurch.
+    const pick = (this.panelRail && this.highlight
+      && this.scene.pickAmong(e.clientX, e.clientY, this.highlight))
+      || this.scene.pickForDelete(e.clientX, e.clientY);
     if (!pick) { this._clearPanelRail(); return; }
 
     if (pick.data.kind === "panel" && !this.panelRail) {

@@ -2382,6 +2382,25 @@ export class SceneManager {
     return hit ? { object: hit.object, data: hit.object.userData, distance: hit.distance } : null;
   }
 
+  /**
+   * Erster Treffer entlang des Strahls, dessen id in `ids` steht -- auch wenn
+   * etwas davor liegt. Gebraucht im Platten-Modus: die hervorgehobenen
+   * Gegenrohre scheinen durch die zurueckgeblendeten Teile hindurch und sollen
+   * sich auch dann anklicken lassen.
+   */
+  pickAmong(clientX, clientY, ids) {
+    if (!ids || !ids.size) return null;
+    this._setMouse(clientX, clientY);
+    const objs = [...this.pickTubes, ...this.pickNodes, ...this.pickPanels,
+                  ...this.pickClamps, ...this.pickTextiles, ...this.pickSlides];
+    for (const hit of this._raycaster.intersectObjects(objs, false)) {
+      if (this._clipPlane && this._clipPlane.distanceToPoint(hit.point) < 0) continue;
+      const data = this._hitData(hit);
+      if (data && ids.has(data.id)) return { object: hit.object, data, point: hit.point, distance: hit.distance };
+    }
+    return null;
+  }
+
   pickBuild(clientX, clientY) {
     const hit = this.raycastObjects(
       clientX, clientY,

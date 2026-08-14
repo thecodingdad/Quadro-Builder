@@ -1277,13 +1277,10 @@ export function initUI({ scene, model, builder }) {
     }
   }
 
-  let flashTimer = null;
+  // Meldungen bleiben stehen, bis die naechste kommt -- eine Meldung, die man
+  // gerade nicht angesehen hat, war sonst weg.
   function flash(msg) {
     $("status").textContent = msg;
-    clearTimeout(flashTimer);
-    flashTimer = setTimeout(() => {
-      $("status").textContent = "";
-    }, 2500);
   }
 
   // --- Tastatur ----------------------------------------------------------
@@ -1373,12 +1370,11 @@ export function initUI({ scene, model, builder }) {
         closePopup();
         // Offene Overlays zuerst: Escape schliesst sie, statt den Modus zu wechseln.
         if (!$("help-overlay").hidden) { $("help-overlay").hidden = true; break; }
-        if (builder.mode === "assembly") {
-          builder.clearSelection();
-          builder.setHighlight(null);
-        } else {
-          setMode("select");
-        }
+        // Erst aufraeumen, dann den Modus wechseln: ein Escape, das eine
+        // Markierung wegnimmt, soll einen nicht gleichzeitig aus dem Modus
+        // werfen. Im Aufbau-Modus wird der Modus nie verlassen.
+        if (builder.clearMarks()) { update(); break; }
+        if (builder.mode !== "assembly") setMode("select");
         break;
       case "delete":
       case "backspace":
