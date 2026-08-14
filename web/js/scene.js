@@ -1078,10 +1078,6 @@ export class SceneManager {
     // der Draufsicht und faellt dabei 80 cm. Frueher kam die Form aus der Lage
     // des naechsten Rutschenteils; das ging schief, sobald ein anderes Teil
     // naeher lag.
-    const P3 = CURVED_SLIDE_DROP.clone().applyQuaternion(q).add(P0);
-    const C1 = P0.clone().addScaledVector(CURVED_SLIDE_ENTRY.clone().applyQuaternion(q), 33);
-    const exitDir = this._curvedSlideExit(sl);
-    const C2 = P3.clone().addScaledVector(exitDir, -33);
     // Kette: das naechste Rutschenteil setzt am Bogen an.
     let target = null, bestD = Infinity;
     for (const s2 of model.slides.values()) {
@@ -1090,6 +1086,21 @@ export class SceneManager {
       const d = (s2.x - sl.x) ** 2 + (s2.y - sl.y) ** 2 + (s2.z - sl.z) ** 2;
       if (d < bestD) { bestD = d; target = s2; }
     }
+    // Endpunkt: der Bogen hoert dort auf, wo das Folgeteil ANFAENGT. Das
+    // Endstueck beginnt nicht auf seinem QDF-Punkt, sondern 12 cm darueber
+    // (_slideEndConnectPoint) -- ohne das blieb eine Stufe zwischen beiden
+    // Teilen. Sitzt das Folgeteil nicht dort, wo es laut Versatz sitzen muesste,
+    // bleibt es beim festen Endpunkt (die Form kippt dann nicht weg).
+    let P3 = CURVED_SLIDE_DROP.clone().applyQuaternion(q).add(P0);
+    if (target) {
+      const entry = target.kind === "slide-end2"
+        ? this._slideEndConnectPoint(target)
+        : new THREE.Vector3(target.x, target.y, target.z);
+      if (entry.distanceTo(P3) < 40) P3 = entry;
+    }
+    const C1 = P0.clone().addScaledVector(CURVED_SLIDE_ENTRY.clone().applyQuaternion(q), 33);
+    const exitDir = this._curvedSlideExit(sl);
+    const C2 = P3.clone().addScaledVector(exitDir, -33);
     // ECHTE kubische Bézier (P0,C1,C2,P3) -- vorher war C2 unbenutzt (quadratisch),
     // dadurch hatte der Bogen keine eigene Austrittsrichtung am Ende (Knick/unschoen).
     const bez = (t) => {
