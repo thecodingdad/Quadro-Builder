@@ -35,10 +35,11 @@ export class Builder {
     this.onHistoryChange = () => {}; // Undo-Verfuegbarkeit hat sich geaendert
 
     // "select" (Cursor: vorhandenes auswaehlen) | "add" | "panel" | "slide" |
-    // "clamp" | "reinforce" | "assembly"
+    // "clamp" | "fitting" | "reinforce" | "assembly"
     this.mode = "select";
     this.tubeId = geometry().defaultTube;
     this.panelId = defaultPanel();
+    this.fittingKind = "multi-wheel2";   // gewaehltes Anbauteil (QDF-Art)
     // Platten-Modus: erstes angeklicktes Tragrohr + Stelle entlang davon.
     this.panelRail = null;
     this.color = "blue";
@@ -158,6 +159,7 @@ export class Builder {
   }
   setTube(tubeId) { this.tubeId = tubeId; }
   setPanel(panelId) { this.panelId = panelId; if (this.mode === "panel") this.refresh(); }
+  setFitting(kind) { this.fittingKind = kind; if (this.mode === "fitting") this.refresh(); }
 
   /**
    * Auf welche Seite der Rohre gehoert eine neu gesetzte Platte?
@@ -597,6 +599,7 @@ export class Builder {
     if (this.mode === "panel") return;
     if (this.mode === "slide") { this._buildSlideHandles(); return; }
     if (this.mode === "clamp") { this._buildClampHandles(); return; }
+    if (this.mode === "fitting") { this._buildFittingHandles(); return; }
     if (this.mode !== "add") return;
 
     const cs = geometry().connectorSize;
@@ -778,6 +781,20 @@ export class Builder {
   // --- Doppelrohrverbinder ------------------------------------------------
   // Grüner Punkt in der leeren Öffnung jeder "8": dort kann eine zweite,
   // parallele Tube gesetzt werden.
+  // Anbauteile: an jeder Montagestelle des gewaehlten Teils ein Ankerpunkt.
+  // Wo dasselbe Teil schon steckt, wird keiner gezeigt -- gestapelt wird nicht.
+  _buildFittingHandles() {
+    for (const m of this.model.fittingMounts(this.fittingKind)) {
+      let taken = false;
+      for (const f of this.model.fittings.values()) {
+        if (f.kind !== this.fittingKind) continue;
+        if (Math.hypot(f.x - m.pos[0], f.y - m.pos[1], f.z - m.pos[2]) < 2) { taken = true; break; }
+      }
+      if (taken) continue;
+      this.scene.addHandle(m.pos, { fittingMount: m }, "dir");
+    }
+  }
+
   _buildClampHandles() {
     for (const c of this.model.clamps.values()) {
       if (!c.dir || !c.off) continue;
@@ -1002,6 +1019,12 @@ export class Builder {
       }
     } else if (this.mode === "slide") {
       obj = handle();                            // nur die Feld-Handles
+    } else if (this.mode === "fitting") {
+      // Ankerpunkte setzen, ein Klick auf ein gesetztes Anbauteil entfernt es.
+      const h = this.scene.pickHandle(x, y);
+      const p = this.scene.pickForDelete(x, y);
+      if (h && (!p || h.distance <= p.distance)) obj = h.object;
+      else obj = p && p.data.kind === "fitting" ? p.object : null;
     } else if (this.mode === "clamp") {
       obj = handle() || build(["tube", "clamp"])?.object || null;
     } else if (this.mode === "reinforce") {
@@ -1055,6 +1078,7 @@ export class Builder {
     else if (this.mode === "add") this._clickAdd(e);
     else if (this.mode === "panel") this._clickPanel(e);
     else if (this.mode === "slide") this._clickSlide(e);
+    else if (this.mode === "fitting") this._clickFitting(e);
     else if (this.mode === "clamp") this._clickClamp(e);
     else if (this.mode === "reinforce") this._clickReinforce(e);
     else if (this.mode === "assembly") this._clickAssembly(e);
@@ -1112,6 +1136,29 @@ export class Builder {
   _buildSlideHandles() {
     for (const m of this.model.slideMounts()) {
       this.scene.addPanelHandle(m.corners, { slideMount: m });
+    }
+  }
+
+  /**
+   * Anbauteil-Modus: Ankerpunkt anklicken setzt das gewaehlte Teil, ein Klick
+   * auf ein gesetztes Anbauteil nimmt es wieder weg. Naeher am Auge gewinnt --
+   * sonst laege ein Ankerpunkt hinter einem Teil und man kaeme nicht daran.
+   */
+  _clickFitting(e) {
+    const h = this.scene.pickHandle(e.clientX, e.clientY);
+    const p = this.scene.pickForDelete(e.clientX, e.clientY);
+    if (h && h.data && h.data.fittingMount && (!p || h.distance <= p.distance)) {
+      let added = null;
+      this.recordHistory(() => {
+        added = this.model.addFittingAt(this.fittingKind, h.data.fittingMount, this.colorFor("fitting"));
+      });
+      if (!added) this.onNotice(t("notice_fitting_exists"));
+      this.refresh();
+      return;
+    }
+    if (p && p.data.kind === "fitting") {
+      this.recordHistory(() => this.model.removeFitting(p.data.id));
+      this.refresh();
     }
   }
 

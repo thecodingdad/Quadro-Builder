@@ -1,6 +1,7 @@
 // Verkabelt die Bedienoberflaeche (Toolbar, Tastatur, Stueckliste, Bestand).
 
-import { buildableTubes, buildableCurvedTubes, buildablePanels, tubeColors, geometry, allTubes, allConnectors, panels, reinforcements, slideKindName, partName } from "./catalog.js";
+import { buildableTubes, buildableCurvedTubes, buildablePanels, tubeColors, geometry, allTubes, allConnectors, panels, reinforcements, slideKindName, partName, partForFitting } from "./catalog.js";
+import { PLACEABLE_FITTINGS } from "./model.js";
 import { computeBOM, compareInventory, connectorsForNode } from "./bom.js";
 import { computeBuildPlan, BUILD_ORDERS } from "./buildplan.js";
 import { parseQDF } from "./qdfimport.js";
@@ -57,6 +58,8 @@ function renderHelpTable() {
 
 export function initUI({ scene, model, builder }) {
   let slideBtn = null;
+  let fittingBtn = null;
+  let renderFittingButton = () => {};
   const inventory = loadInv();
 
   // Übersetzungen initial anwenden
@@ -396,6 +399,7 @@ export function initUI({ scene, model, builder }) {
     if (bowBtn) bowBtn.classList.toggle("active", inAdd && curved);
     panelBtn.classList.toggle("active", inPanel);
     if (slideBtn) slideBtn.classList.toggle("active", builder.mode === "slide");
+    if (fittingBtn) { renderFittingButton(); fittingBtn.classList.toggle("active", builder.mode === "fitting"); }
     $("btn-diagonal").classList.toggle("active", inAdd && builder.diagonal);
     syncPartColors();
   }
@@ -410,7 +414,7 @@ export function initUI({ scene, model, builder }) {
     builder.setMode(m);
     // Der Cursor-Modus gehoert zum Bauen (nicht zum Aufbau-Modus), deshalb
     // bleibt "Bauen" oben mit markiert.
-    $("mode-add").classList.toggle("active", m === "add" || m === "panel" || m === "slide" || m === "select");
+    $("mode-add").classList.toggle("active", m === "add" || m === "panel" || m === "slide" || m === "fitting" || m === "select");
     $("mode-select").classList.toggle("active", m === "select");
     $("mode-clamp").classList.toggle("active", m === "clamp");
     $("mode-reinforce").classList.toggle("active", m === "reinforce");
@@ -437,6 +441,7 @@ export function initUI({ scene, model, builder }) {
       reinforce: "status_reinforce",
       collision: "status_collision",
       clamp: "status_clamp",
+      fitting: "status_fitting",
       assembly: "status_assembly",
     };
     $("status").textContent = t(statusMap[m] || "status_add");
@@ -699,6 +704,42 @@ export function initUI({ scene, model, builder }) {
     b.addEventListener("click", () => setMode(builder.mode === "slide" ? "add" : "slide"));
     $("slide-buttons").appendChild(b);
     slideBtn = b;
+  }
+
+  // --- Anbauteile (Raeder, Lager, Rollen, Sonderkupplungen) ---------------
+  // Ein Button mit Klappliste wie bei Rohren und Platten; das gewaehlte Teil
+  // bestimmt, welche Ankerpunkte der Anbauteil-Modus anbietet.
+  // Die Liste kommt aus den setzbaren Arten, nicht aus einer Katalog-Rubrik:
+  // Lagerkupplung und Lochzapfenkupplung stehen bei den Kupplungen, Rad und
+  // Rolle beim Zubehoer. id = QDF-Art, damit das Popup die aktive Zeile findet.
+  const fittingList = PLACEABLE_FITTINGS
+    .map((k) => { const p = partForFitting(k); return p ? { ...p, id: k, qdf: k } : null; })
+    .filter(Boolean);
+  if (fittingList.length) {
+    const fittingIcon = () =>
+      `<svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true">` +
+      `<circle cx="8" cy="8" r="5.4" fill="none" stroke="currentColor" stroke-width="1.6"/>` +
+      `<circle cx="8" cy="8" r="1.6" fill="currentColor"/></svg>`;
+    fittingBtn = el("button", "btn part");
+    fittingBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      if (builder.mode !== "fitting") setMode("fitting");
+      showPartPopup(fittingBtn, fittingList, builder.fittingKind, fittingIcon, (p) => {
+        builder.setFitting(p.qdf);
+        setMode("fitting");
+      });
+    });
+    $("fitting-buttons").appendChild(fittingBtn);
+    function currentFitting() {
+      return fittingList.find((a) => a.qdf === builder.fittingKind) || fittingList[0];
+    }
+    renderFittingButton = () => {
+      const a = currentFitting();
+      fittingBtn.innerHTML = fittingIcon() + `<span></span>`;
+      fittingBtn.lastChild.textContent = partName(a);
+      fittingBtn.title = `${t("part_fitting")}: ${partName(a)}`;
+    };
+    renderFittingButton();
   }
 
   // --- Aktionen ----------------------------------------------------------

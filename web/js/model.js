@@ -2,7 +2,37 @@
 // Bewusst ohne Three.js-Abhaengigkeit, damit es testbar und Backend-tauglich bleibt.
 
 import { MERGE_EPS, FORMAT_VERSION, DIAGONAL_SNAP_TOL } from "./config.js";
-import { round2 as round } from "./util.js";
+import { round2 as round, quatFromXAxis } from "./util.js";
+
+// Wohin ein Anbauteil gehoert, gemessen an den 799 Vorkommen in den Dateien des
+// Herstellers: `at` ist der Anker (Kupplung oder Rohr), `offset` der Abstand in
+// cm entlang der gewaehlten Achse. Die Achse ist immer die lokale +X des Teils.
+const FITTING_MOUNTS = {
+  "bearing2":        { at: "node", offset: 0 },   // Lagerkupplung sitzt auf der Kupplung
+  "steering-lock2":  { at: "node", offset: 0 },
+  "adapter2":        { at: "node", offset: 0 },
+  "open-connector2": { at: "node", offset: 0 },
+  "hole-connector4": { at: "node", offset: 5 },   // 50 mm neben der Kupplung
+  "multi-wheel2":    { at: "node", offset: 5 },   // Rad auf der Lagerachse
+  "hub-cap2":        { at: "node", offset: 5 },   // Nabenkappe in der Radmitte
+  "casters2":        { at: "node", offset: 0, dirs: "down" },  // haengt immer nach unten
+  "floating-wheel2": { at: "tube", offset: 10 },  // 100 mm vom Rohrende, auf dem Rohr
+  "bag2":            { at: "tube", offset: 20 },  // 200 mm vom Rohrende
+};
+
+// Welche Anbauteile sich setzen lassen (die uebrigen -- Gitter, Rundabdeckung,
+// grosses Dach -- haengen an Flaechen und kommen ueber eigene Ablaeufe).
+export const PLACEABLE_FITTINGS = Object.keys(FITTING_MOUNTS);
+
+const CARDINALS = [[1, 0, 0], [-1, 0, 0], [0, 1, 0], [0, -1, 0], [0, 0, 1], [0, 0, -1]];
+
+// Name der naechsten Achsrichtung -- reicht, um belegte Arme zu erkennen.
+function cardinalName(v) {
+  const ax = Math.abs(v[0]), ay = Math.abs(v[1]), az = Math.abs(v[2]);
+  if (ax >= ay && ax >= az) return v[0] > 0 ? "+x" : "-x";
+  if (ay >= az) return v[1] > 0 ? "+y" : "-y";
+  return v[2] > 0 ? "+z" : "-z";
+}
 
 // Rutsche: Einhaengepunkt sitzt knapp ueber den unteren Kupplungen des
 // senkrechten Rohrpaars.
@@ -400,6 +430,80 @@ export class BuildModel {
 
   removeFitting(id) {
     this.fittings.delete(id);
+  }
+
+  /**
+   * Montagestellen eines Anbauteils. Die Regeln sind an den Herstellerdateien
+   * gemessen (FITTING_MOUNTS): die einen sitzen an einer Kupplung und zeigen in
+   * eine freie Achsrichtung, die anderen stecken auf einem Rohr.
+   * Liefert je Stelle { pos:[x,y,z], dir:[x,y,z], nodeId?, tubeId? }.
+   */
+  fittingMounts(kind) {
+    const spec = FITTING_MOUNTS[kind];
+    if (!spec) return [];
+    return spec.at === "tube" ? this._fittingTubeMounts(spec) : this._fittingNodeMounts(spec);
+  }
+
+  // An der Kupplung: jede kardinale Richtung ohne Rohr, nicht unter den Boden.
+  // Die Lenkrolle haengt immer nach unten, sie kennt nur diese eine Stelle.
+  _fittingNodeMounts(spec) {
+    const out = [];
+    for (const n of this.nodes.values()) {
+      if (n.c45body) continue;                       // Adapterkoerper ist keine Kupplung
+      const taken = new Set();
+      for (const t of this.tubes.values()) {
+        const other = t.a === n.id ? this.nodes.get(t.b) : t.b === n.id ? this.nodes.get(t.a) : null;
+        if (!other) continue;
+        const d = [other.x - n.x, other.y - n.y, other.z - n.z];
+        const L = Math.hypot(d[0], d[1], d[2]) || 1;
+        taken.add(cardinalName([d[0] / L, d[1] / L, d[2] / L]));
+      }
+      for (const dir of (spec.dirs === "down" ? [[0, -1, 0]] : CARDINALS)) {
+        if (taken.has(cardinalName(dir))) continue;
+        const pos = [n.x + dir[0] * spec.offset, n.y + dir[1] * spec.offset, n.z + dir[2] * spec.offset];
+        if (this.isBelowGround(pos[1])) continue;
+        out.push({ pos, dir, nodeId: n.id });
+      }
+    }
+    return out;
+  }
+
+  // Auf dem Rohr: fester Abstand ab jedem Rohrende, Achse = Rohrrichtung.
+  _fittingTubeMounts(spec) {
+    const out = [];
+    for (const t of this.tubes.values()) {
+      if (t.arm || t.link || t.bow) continue;
+      const a = this.nodes.get(t.a), b = this.nodes.get(t.b);
+      if (!a || !b) continue;
+      const d = [b.x - a.x, b.y - a.y, b.z - a.z];
+      const L = Math.hypot(d[0], d[1], d[2]) || 1;
+      if (L < spec.offset * 2) continue;
+      const u = [d[0] / L, d[1] / L, d[2] / L];
+      for (const [from, sign] of [[a, 1], [b, -1]]) {
+        const pos = [from.x + u[0] * spec.offset * sign,
+          from.y + u[1] * spec.offset * sign,
+          from.z + u[2] * spec.offset * sign];
+        if (this.isBelowGround(pos[1])) continue;
+        out.push({ pos, dir: u, tubeId: t.id });
+      }
+    }
+    return out;
+  }
+
+  /**
+   * Anbauteil an einer Montagestelle setzen. Die lokale +X-Achse des Teils
+   * zeigt in `dir` -- dieselbe Regel, nach der die Dateien des Herstellers
+   * gelesen und geschrieben werden. Sitzt dort schon dasselbe Teil, passiert
+   * nichts (kein Stapeln).
+   */
+  addFittingAt(kind, mount, color) {
+    if (!FITTING_MOUNTS[kind]) return null;
+    for (const f of this.fittings.values()) {
+      if (f.kind !== kind) continue;
+      if (Math.hypot(f.x - mount.pos[0], f.y - mount.pos[1], f.z - mount.pos[2]) < 2) return null;
+    }
+    return this.addFitting(kind, mount.pos[0], mount.pos[1], mount.pos[2],
+      { quat: quatFromXAxis(mount.dir), color: color || null });
   }
 
   // Montagestellen fuer eine Rutsche: zwei parallele SENKRECHTE Rohre. Die

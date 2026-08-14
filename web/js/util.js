@@ -34,6 +34,25 @@ export function panelNormal(e1, e2, center, middle) {
   return n[2] < 0 ? flip() : n;
 }
 
+/**
+ * Quaternion (Three-Reihenfolge x,y,z,w), die die lokale +X-Achse auf `dir`
+ * dreht -- auf kuerzestem Weg. Anbauteile speichern ihre Ausrichtung genau so:
+ * die lokale +X ist Radachse, Rollenachse oder Flaechenbezug.
+ */
+export function quatFromXAxis(dir) {
+  const L = Math.hypot(dir[0], dir[1], dir[2]) || 1;
+  const d = [dir[0] / L, dir[1] / L, dir[2] / L];
+  if (d[0] > 0.999999) return [0, 0, 0, 1];
+  if (d[0] < -0.999999) return [0, 0, 1, 0];      // 180 Grad um die Z-Achse
+  // Achse = +X x d, Winkel aus dem Skalarprodukt (halber Winkel ueber die
+  // uebliche w = 1 + cos-Form, danach normiert).
+  const q = [0, -d[2], d[1], 1 + d[0]];
+  const n = Math.hypot(q[0], q[1], q[2], q[3]) || 1;
+  // Vier Nachkommastellen wie beim Import -- zwei waeren als Drehung zu grob.
+  const r4 = (v) => Math.round((v / n) * 1e4) / 1e4;
+  return [r4(q[0]), r4(q[1]), r4(q[2]), r4(q[3])];
+}
+
 /** Mittelpunkt aller Kupplungen -- Bezugspunkt fuer panelNormal. */
 export function modelMiddle(nodes) {
   const m = [0, 0, 0];
