@@ -343,7 +343,7 @@
       "shape": "angled",
       "angle": 90,
       "price": 11.49,
-      "buildable": false,
+      "buildable": true,
       "colored": true
     },
     {
@@ -355,7 +355,7 @@
       "shape": "angled",
       "angle": 135,
       "price": 11.49,
-      "buildable": false,
+      "buildable": true,
       "colored": true
     },
     {
@@ -367,7 +367,7 @@
       "shape": "angled",
       "angle": 180,
       "price": 11.49,
-      "buildable": false,
+      "buildable": true,
       "colored": true
     },
     {
@@ -379,7 +379,7 @@
       "shape": "angled",
       "angle": 90,
       "price": 11.49,
-      "buildable": false,
+      "buildable": true,
       "colored": true
     },
     {
@@ -391,7 +391,7 @@
       "shape": "angled",
       "angle": 135,
       "price": 11.49,
-      "buildable": false,
+      "buildable": true,
       "colored": true
     },
     {
@@ -403,7 +403,7 @@
       "shape": "angled",
       "angle": 180,
       "price": 11.49,
-      "buildable": false,
+      "buildable": true,
       "colored": true
     },
     {
@@ -415,7 +415,7 @@
       "shape": "curved",
       "angle": 135,
       "price": 22.99,
-      "buildable": false,
+      "buildable": true,
       "colored": true
     }
   ],
@@ -476,7 +476,7 @@
       "w": 30,
       "h": 30,
       "price": 5.99,
-      "buildable": false,
+      "buildable": true,
       "colored": true,
       "note": "30er-Raster (25er-Rohr)"
     },
