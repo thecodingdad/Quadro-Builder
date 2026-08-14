@@ -25,6 +25,9 @@ const DEFAULT_QUALITY = "medium";
 // unabhaengig von der Teilefarbe. Nur die Emissive einzufaerben liess die
 // Grundfarbe durchschlagen -- ein rotes und ein blaues Rohr sahen dann
 // unterschiedlich aus. Lila kommt im Teile-Katalog nicht vor.
+// Spalt zwischen benachbarten Platten (cm, gesamt -- je Seite die Haelfte).
+const PANEL_GAP = 1.5;
+
 const HIGHLIGHT_COLOR = 0x9b30ff;
 const HIGHLIGHT_EMISSIVE = 0x3a0066;
 
@@ -568,7 +571,11 @@ export class SceneManager {
   // mit ausgestanzten Kreisen extrudiert.
   // Wichtig: Der Cache muss in _disposeGroup ausgenommen werden, sonst gibt der
   // naechste Render-Durchlauf die noch benutzte Geometrie frei.
-  _panelGeometry(panelId, w, d, thickness) {
+  // Zwischen zwei Platten bleibt ein schmaler Spalt, damit die Rohre darunter
+  // sichtbar und anklickbar bleiben -- Kante an Kante verdeckt das Geruest.
+  _panelGeometry(panelId, wSpan, dSpan, thickness) {
+    const w = Math.max(1, wSpan - PANEL_GAP);
+    const d = Math.max(1, dSpan - PANEL_GAP);
     const def = getPanel(panelId);
     const holes = (def && def.holes) || 0;
     const seg = this._q().notch;
