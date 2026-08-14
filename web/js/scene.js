@@ -2319,7 +2319,9 @@ export class SceneManager {
 
   pickHandle(clientX, clientY) {
     const hit = this.raycastObjects(clientX, clientY, this.handleMeshes);
-    return hit ? { object: hit.object, data: hit.object.userData } : null;
+    // distance: Abstand zur Kamera -- damit laesst sich ein Griff gegen ein
+    // Bauteil abwaegen, das davor liegt.
+    return hit ? { object: hit.object, data: hit.object.userData, distance: hit.distance } : null;
   }
 
   pickBuild(clientX, clientY) {
@@ -2340,7 +2342,7 @@ export class SceneManager {
        ...this.pickTextiles, ...this.pickSlides]
     );
     const data = this._hitData(hit);
-    return data ? { object: hit.object, data, point: hit.point } : null;
+    return data ? { object: hit.object, data, point: hit.point, distance: hit.distance } : null;
   }
 
   // --- Auswahl-Rechteck (Cursor-Modus) ------------------------------------

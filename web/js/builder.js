@@ -1120,17 +1120,22 @@ export class Builder {
   _clickPanel(e) {
     // Umfaerben passiert ausschliesslich im Cursor-Modus -- hier wird nur gebaut.
     const h = this.scene.pickHandle(e.clientX, e.clientY);
-    if (h && h.data.panelCell) {
-      const side = this._panelSideFromView(h.data.rectNodes);
-      this.recordHistory(() => this.model.addPanel(h.data.rectNodes, this.panelId, this.colorFor("panel"), side));
+    const pick = this.scene.pickForDelete(e.clientX, e.clientY);
+    const panelHit = pick && pick.data.kind === "panel" ? pick : null;
+    const cell = h && h.data.panelCell ? h : null;
+    // Was naeher an der Kamera liegt, gewinnt. Sonst wuerde ein freies Feld
+    // IRGENDWO hinter der angeklickten Platte gewinnen und dort eine neue
+    // Platte setzen, statt die sichtbare umzulegen.
+    if (cell && (!panelHit || cell.distance <= panelHit.distance)) {
+      const side = this._panelSideFromView(cell.data.rectNodes);
+      this.recordHistory(() => this.model.addPanel(cell.data.rectNodes, this.panelId, this.colorFor("panel"), side));
       this.refresh();
       return;
     }
     // Klick auf eine liegende Platte legt sie auf die andere Seite der Rohre.
-    const pick = this.scene.pickForDelete(e.clientX, e.clientY);
-    if (pick && pick.data.kind === "panel") {
+    if (panelHit) {
       let side = null;
-      this.recordHistory(() => { side = this.model.flipPanelSide(pick.data.id); });
+      this.recordHistory(() => { side = this.model.flipPanelSide(panelHit.data.id); });
       if (side != null) this.onNotice(t(side < 0 ? "notice_panel_below" : "notice_panel_above"));
       this.refresh();
     }
