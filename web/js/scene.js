@@ -1636,13 +1636,15 @@ export class SceneManager {
       const xAxis = u.clone().normalize();
       const zAxis = w.clone().normalize();
       const yAxis = new THREE.Vector3().crossVectors(zAxis, xAxis).normalize();
-      // Die Platte liegt nicht auf der Rohrachse, sondern oben auf den Rohren
-      // (side +1) oder darunter (side -1) -- so wie man sie wirklich montiert.
+      // Die Platte liegt nicht auf der Rohrachse, sondern oben (side +1) oder
+      // unten (side -1) BUENDIG mit dem Rohr: ihre Oberflaeche schliesst mit dem
+      // Rohrscheitel ab, sie sitzt also in der oberen Rohrhaelfte und steht
+      // nicht darauf. Mitte = Scheitel - halbe Plattenstaerke.
       const nrm = panelNormal(
         [xAxis.x, xAxis.y, xAxis.z], [zAxis.x, zAxis.y, zAxis.z],
         [center.x, center.y, center.z], middle,
       );
-      const lift = (geometry().tubeRadius || 2.45) + thickness / 2;
+      const lift = (geometry().tubeRadius || 2.45) - thickness / 2;
       const sgn = (p.side || 1) < 0 ? -1 : 1;
       center.add(new THREE.Vector3(nrm[0], nrm[1], nrm[2]).multiplyScalar(lift * sgn));
       const geo = this._panelGeometry(p.panelId, u.length(), w.length(), thickness);
