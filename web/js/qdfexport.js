@@ -103,6 +103,27 @@ function rotateByQuat(q, v) {
 }
 /** Gegendrehung: Welt -> lokale Achsen der Kupplung. */
 function conjugate(q) { return [q[0], -q[1], -q[2], -q[3]]; }
+
+/**
+ * Eindeutige Normale einer Platte aus ihren beiden Kantenrichtungen.
+ *
+ * Aus der Eckenreihenfolge allein ergibt sich das Vorzeichen zufaellig -- und da
+ * die Originalsoftware die Platte auf die Seite der Normalen legt, lag sie
+ * einmal ueber und einmal unter den Rohren. Die Regel stammt aus den
+ * Herstellerdateien: waagerechte Platten liegen OBEN auf (1457 von 1464),
+ * senkrechte zeigen nach AUSSEN, vom Modell weg (1141 von 1340).
+ */
+function canonicalNormal(e1, e2, center, middle) {
+  const n = norm(cross(e1, e2));
+  const flip = () => n.map((v) => -v);
+  if (Math.abs(n[1]) > 0.01) return n[1] < 0 ? flip() : n;
+  const away = (center[0] - middle[0]) * n[0] + (center[2] - middle[2]) * n[2];
+  if (Math.abs(away) > 0.5) return away < 0 ? flip() : n;
+  // Genau mittig: irgendein festes Vorzeichen, damit dieselbe Platte nicht mal
+  // so und mal so herauskommt.
+  if (Math.abs(n[0]) > 0.01) return n[0] < 0 ? flip() : n;
+  return n[2] < 0 ? flip() : n;
+}
 function cross(a, b) {
   return [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
 }
@@ -171,6 +192,10 @@ export function buildQDF(model) {
   const node = (id) => model.nodes.get(id);
   const dirOf = (a, b) => norm([b.x - a.x, b.y - a.y, b.z - a.z]);
   const lenOf = (a, b) => Math.hypot(b.x - a.x, b.y - a.y, b.z - a.z);
+  // Mittelpunkt des Modells: sagt bei senkrechten Platten, wo "aussen" ist.
+  const middle = [0, 0, 0];
+  for (const n of model.nodes.values()) { middle[0] += n.x; middle[1] += n.y; middle[2] += n.z; }
+  if (model.nodes.size) for (let i = 0; i < 3; i++) middle[i] /= model.nodes.size;
 
   // --- Kupplungen ---------------------------------------------------------
   // Der Adapterkoerper einer 45-Grad-Winkelkupplung ist kein eigenes Teil: er
@@ -251,7 +276,16 @@ export function buildQDF(model) {
   // 40x40-Platte auf einer 45-Grad-Schraege spannt gemessen 40,9 cm, und mit
   // diesem krummen Mass findet der Import beim Zurueckladen kein Teil mehr.
   // Die Ecken selbst vertragen den kleinen Versatz (Snap-Toleranz 5 cm).
-  const rectLine = (name, nodeIds, matNum, dims) => {
+  //
+  // Zwei Konventionen, an den Herstellerdateien abgelesen:
+  //   * Das ERSTE Mass gehoert zur lokalen Y-Achse, das zweite zur X-Achse --
+  //     in allen 98 Rechteckplatten der Beispielsammlung. Andersherum liegt eine
+  //     40x20-Platte quer. (Unser Import probiert beide Zuordnungen und merkt
+  //     den Unterschied deshalb nicht.)
+  //   * Die Plattenmitte liegt exakt in der Kupplungsebene (2603 von 2604
+  //     Platten, Versatz 0). Auf welcher Seite der Rohre das Teil liegt, sagt
+  //     die Normale -- siehe canonicalNormal.
+  const rectLine = (name, nodeIds, matNum, dims, side) => {
     const [A, B, C, D] = nodeIds.map(node);
     if (!A || !B || !C || !D) return null;
     const e1 = dirOf(A, B), e2 = dirOf(A, D);
@@ -264,17 +298,23 @@ export function buildQDF(model) {
     const cx = (A.x + B.x + C.x + D.x) / 4;
     const cy = (A.y + B.y + C.y + D.y) / 4;
     const cz = (A.z + B.z + C.z + D.z) / 4;
-    const q = encodeQuat(quatFromAxes(e1, e2, cross(e1, e2)));
-    return `${name}{${matNum}, ${tuple(q, cx, cy, cz)}, 1, ${mm(w - conn)}, 0., ${mm(h - conn)}, 0., 0}`;
+    // Normale nicht aus der Ecken-Reihenfolge ableiten (die ist beliebig und
+    // liess die Platte mal oben, mal unten erscheinen), sondern eindeutig
+    // festlegen und mit der gespeicherten Seite multiplizieren.
+    const n = canonicalNormal(e1, e2, [cx, cy, cz], middle).map((v) => v * (side < 0 ? -1 : 1));
+    // Rechtshaendiges Dreibein zur gewaehlten Normalen: X bleibt e1.
+    const q = encodeQuat(quatFromAxes(e1, cross(n, e1), n));
+    // w liegt auf der lokalen X-Achse, h auf Y -- geschrieben wird Y zuerst.
+    return `${name}{${matNum}, ${tuple(q, cx, cy, cz)}, 1, ${mm(h - conn)}, 0., ${mm(w - conn)}, 0., 0}`;
   };
 
   for (const p of model.panels.values()) {
     const def = getPanel(p.panelId);
-    const line = rectLine("panel2", p.nodes, panelMat(p.color), def ? [def.w, def.h] : null);
+    const line = rectLine("panel2", p.nodes, panelMat(p.color), def ? [def.w, def.h] : null, p.side);
     if (line) { lines.push(line); stats.panels++; }
   }
   for (const x of (model.textiles ? model.textiles.values() : [])) {
-    const line = rectLine("textil2", x.nodes, panelMat(x.color), [x.w, x.h]);
+    const line = rectLine("textil2", x.nodes, panelMat(x.color), [x.w, x.h], x.side);
     if (line) { lines.push(line); stats.textiles++; }
   }
 
