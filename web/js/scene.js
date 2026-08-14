@@ -12,10 +12,12 @@ const ONE = new THREE.Vector3(1, 1, 1);
 // die Masse. conn = [Segmente breit, hoch] des abgerundeten Kupplungs-Wuerfels
 // (null = scharfkantiger Wuerfel), tube = Umfangssegmente der Rohre.
 export const QUALITY_LEVELS = ["low", "medium", "high"];
+// notch = Segmente je Eck-Aussparung einer Platte. 0 heisst rechtwinklig --
+// das passt zur Stufe "low", auf der auch die Kupplungen kantig sind.
 const QUALITY = {
-  low:    { conn: null,      tube: 8,  bow: 8,  shadow: 0,    antialias: false },
-  medium: { conn: [16, 10],  tube: 16, bow: 14, shadow: 1024, antialias: true  },
-  high:   { conn: [48, 32],  tube: 44, bow: 32, shadow: 2048, antialias: true  },
+  low:    { conn: null,      tube: 8,  bow: 8,  notch: 0,  shadow: 0,    antialias: false },
+  medium: { conn: [16, 10],  tube: 16, bow: 14, notch: 6,  shadow: 1024, antialias: true  },
+  high:   { conn: [48, 32],  tube: 44, bow: 32, notch: 16, shadow: 2048, antialias: true  },
 };
 const DEFAULT_QUALITY = "medium";
 
@@ -458,9 +460,11 @@ export class SceneManager {
       if (this[key]) { this._keepGeos.delete(this[key]); this[key].dispose(); }
       this[key] = null;
     }
-    // Rohr- und Deckel-Segmentzahl haengen an der Stufe -> Cache leeren.
+    // Rohr-, Deckel- und Plattengeometrien haengen an der Stufe -> Cache leeren.
     for (const g of this._tubeGeos.values()) { this._keepGeos.delete(g); g.dispose(); }
     this._tubeGeos.clear();
+    for (const g of this._panelGeos.values()) { this._keepGeos.delete(g); g.dispose(); }
+    this._panelGeos.clear();
     if (this._capGeos) {
       for (const g of this._capGeos.values()) { this._keepGeos.delete(g); g.dispose(); }
       this._capGeos.clear();
@@ -567,7 +571,8 @@ export class SceneManager {
   _panelGeometry(panelId, w, d, thickness) {
     const def = getPanel(panelId);
     const holes = (def && def.holes) || 0;
-    const key = `${holes}:${w.toFixed(2)}x${d.toFixed(2)}x${thickness}`;
+    const seg = this._q().notch;
+    const key = `${holes}:${seg}:${w.toFixed(2)}x${d.toFixed(2)}x${thickness}`;
     const hit = this._panelGeos.get(key);
     if (hit) return hit;
 
@@ -577,19 +582,28 @@ export class SceneManager {
     // gedeckelt, damit nicht mehr Ecke fehlt als Platte bleibt.
     const notch = Math.min((geometry().connectorSize || 5) / 2, Math.min(w, d) / 4);
     const x0 = -w / 2, x1 = w / 2, y0 = -d / 2, y1 = d / 2;
+    // Die Aussparung ist ein Viertelkreis um den Eckpunkt. Der Umriss laeuft
+    // gegen den Uhrzeigersinn, die Boegen dagegen -- so schneiden sie in die
+    // Platte hinein, statt sie abzurunden. Auf der Stufe "low" wird der Bogen
+    // zum rechten Winkel; dort sind auch die Kupplungen kantig.
+    const HALF = Math.PI / 2;
     const shape = new THREE.Shape();
+    const corner = (cx, cy, from) => {
+      if (seg > 0) { shape.absarc(cx, cy, notch, from, from - HALF, true); return; }
+      const at = (a) => [cx + Math.cos(a) * notch, cy + Math.sin(a) * notch];
+      const [sx, sy] = at(from), [ex, ey] = at(from - HALF);
+      shape.lineTo(sx + (ex - cx), sy + (ey - cy));   // innere Ecke des Quadrats
+      shape.lineTo(ex, ey);
+    };
     shape.moveTo(x0 + notch, y0);
     shape.lineTo(x1 - notch, y0);
-    shape.lineTo(x1 - notch, y0 + notch);
-    shape.lineTo(x1, y0 + notch);
+    corner(x1, y0, Math.PI);
     shape.lineTo(x1, y1 - notch);
-    shape.lineTo(x1 - notch, y1 - notch);
-    shape.lineTo(x1 - notch, y1);
+    corner(x1, y1, -HALF);
     shape.lineTo(x0 + notch, y1);
-    shape.lineTo(x0 + notch, y1 - notch);
-    shape.lineTo(x0, y1 - notch);
+    corner(x0, y1, 0);
     shape.lineTo(x0, y0 + notch);
-    shape.lineTo(x0 + notch, y0 + notch);
+    corner(x0, y0, HALF);
     shape.closePath();
     if (holes === 9) {
       const r = Math.min(w, d) * 0.105;   // Lochradius ~4 cm im 40er-Feld
@@ -598,7 +612,9 @@ export class SceneManager {
         for (const gy of [-off, 0, off])
           shape.holes.push(new THREE.Path().absarc(gx, gy, r, 0, Math.PI * 2, true));
     }
-    const geo = new THREE.ExtrudeGeometry(shape, { depth: thickness, bevelEnabled: false, curveSegments: 14 });
+    const geo = new THREE.ExtrudeGeometry(shape, {
+      depth: thickness, bevelEnabled: false, curveSegments: Math.max(seg, 6),
+    });
     // Shape liegt in XY und wird nach +Z extrudiert. Die Drehung um -90 Grad
     // um X bringt das in die Box-Orientierung (x = u, y = Dicke, z = w);
     // danach mittig um die Plattenebene zentrieren.
