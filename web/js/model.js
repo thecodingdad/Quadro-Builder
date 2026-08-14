@@ -8,14 +8,17 @@ import { round2 as round } from "./util.js";
 // senkrechten Rohrpaars.
 const SLIDE_HOOK_LIFT = 5;                 // cm ueber der unteren Kupplung
 // Die Rutsche ist ein Fertigteil fester Groesse: im 40-cm-Raster zwei Ebenen
-// hoch und drei Felder lang. Sie haengt also an Kupplungen 80 cm ueber dem
-// Boden und laeuft 120 cm weit aus. In den Herstellerdateien steht genau das:
-// Fall 85 cm ab Einhaengepunkt (= 80 cm ab Kupplung, der Haken sitzt 5 cm
-// hoeher), Auslauf 120 cm, Neigung 35,3 Grad.
+// hoch und drei Felder lang -- Fall 80 cm ab der Kupplung, Auslauf 120 cm. In
+// den Herstellerdateien steht genau das: Fall 85 cm ab Einhaengepunkt (der
+// Haken sitzt 5 cm ueber der Kupplung), Auslauf 120 cm, Neigung 35,3 Grad.
+// Der Fuss muss nicht auf dem Boden landen -- er darf auch auf dem Geruest
+// aufliegen; nur unter den Boden darf er nicht.
 const SLIDE_DROP = 80;                     // cm, von der Kupplung bis zum Boden
 const SLIDE_RUN = 120;                     // cm waagerechter Auslauf
 // Freiraum, den die Bahn braucht: naeher als das darf keine Kupplung stehen.
 const SLIDE_CLEARANCE = 18;
+// So nah muss eine Kupplung am Auslauf liegen, damit er getragen wird.
+const SLIDE_SUPPORT = 30;
 
 // Boden. Unter der Nullebene wird nicht gebaut: die Kupplungen der untersten
 // Lage sitzen genau darauf (y = 0), erst ein negativer Wert liegt darunter. Die
@@ -261,9 +264,10 @@ export class BuildModel {
         const dx = q.x - p.x, dz = q.z - p.z;
         const d = Math.hypot(dx, dz);
         if (Math.abs(d - width) > tol) continue;              // falscher Abstand
-        // Feste Bauhoehe: die Kupplung muss genau SLIDE_DROP ueber dem Boden
-        // liegen, sonst haengt die Rutsche in der Luft oder steckt im Boden.
-        if (Math.abs(p.low - groundY - SLIDE_DROP) > 1) continue;
+        // Feste Bauhoehe: unterhalb von SLIDE_DROP ueber dem Boden wuerde der
+        // Fuss in den Boden laufen. Nach oben ist alles erlaubt -- die Rutsche
+        // endet dann auf einer Plattform statt auf dem Boden.
+        if (p.low - groundY < SLIDE_DROP - 1) continue;
         const hook = [(p.x + q.x) / 2, p.low + SLIDE_HOOK_LIFT, (p.z + q.z) / 2];
         const key = [Math.round(hook[0]), Math.round(hook[1]), Math.round(hook[2])].join("|");
         if (seen.has(key)) continue;
@@ -278,10 +282,12 @@ export class BuildModel {
           if (sdist > 5) front++; else if (sdist < -5) back++;
         }
         let dir = front > back ? [-nrm[0], 0, -nrm[2]] : nrm;
-        // Reicht der Platz? Sonst die Gegenseite versuchen, sonst gar nicht.
-        if (!this._slidePathFree(hook, dir)) {
+        // Reicht der Platz und traegt der Auslauf? Sonst die Gegenseite
+        // versuchen, sonst gibt es hier keine Montagestelle.
+        const usable = (d) => this._slidePathFree(hook, d) && this._slideFootRests(hook, d, groundY);
+        if (!usable(dir)) {
           const other = [-dir[0], 0, -dir[2]];
-          if (!this._slidePathFree(hook, other)) continue;
+          if (!usable(other)) continue;
           dir = other;
         }
         // Auswahlflaeche: unten am Rohrpaar, eine Rutschenbreite hoch.
@@ -300,21 +306,35 @@ export class BuildModel {
   }
 
   /**
-   * Ist die Bahn vor dem Einhaengepunkt frei? Die Rutsche braucht ihre volle
-   * Laenge; steht eine Kupplung im Weg, laesst sie sich dort nicht montieren.
-   * Die beiden Rohre, an denen sie haengt, zaehlen nicht mit.
+   * Ist die Bahn zwischen Einstieg und Auslauf frei? Die Rutsche braucht ihre
+   * volle Laenge; steht mittendrin eine Kupplung, laesst sie sich dort nicht
+   * montieren. Die Enden bleiben ausgenommen: oben sind es die beiden Rohre,
+   * an denen sie haengt, unten darf sie auf dem Geruest aufliegen.
    */
   _slidePathFree(hook, dir) {
     const foot = [hook[0] + dir[0] * SLIDE_RUN, hook[1] - SLIDE_DROP - SLIDE_HOOK_LIFT, hook[2] + dir[2] * SLIDE_RUN];
     for (const n of this.nodes.values()) {
       const rel = [n.x - hook[0], n.y - hook[1], n.z - hook[2]];
       const along = rel[0] * dir[0] + rel[2] * dir[2];
-      if (along < SLIDE_CLEARANCE) continue;              // hinter dem Einstieg
-      const t = Math.min(1, along / SLIDE_RUN);
+      if (along < SLIDE_CLEARANCE || along > SLIDE_RUN - SLIDE_CLEARANCE) continue;
+      const t = along / SLIDE_RUN;
       const on = [hook[0] + (foot[0] - hook[0]) * t, hook[1] + (foot[1] - hook[1]) * t, hook[2] + (foot[2] - hook[2]) * t];
       if (Math.hypot(n.x - on[0], n.y - on[1], n.z - on[2]) < SLIDE_CLEARANCE) return false;
     }
     return true;
+  }
+
+  /**
+   * Liegt der Auslauf auf? Entweder auf dem Boden oder auf dem Geruest -- eine
+   * Rutsche, die in der Luft endet, laesst sich nicht bauen.
+   */
+  _slideFootRests(hook, dir, groundY) {
+    const foot = [hook[0] + dir[0] * SLIDE_RUN, hook[1] - SLIDE_DROP - SLIDE_HOOK_LIFT, hook[2] + dir[2] * SLIDE_RUN];
+    if (foot[1] - groundY < 1) return true;                      // steht auf dem Boden
+    for (const n of this.nodes.values()) {
+      if (Math.hypot(n.x - foot[0], n.y - foot[1], n.z - foot[2]) <= SLIDE_SUPPORT) return true;
+    }
+    return false;
   }
 
   // Rutsche an einer Montagestelle einhaengen. Feste Groesse: zwei Rasterebenen
