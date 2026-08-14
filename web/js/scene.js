@@ -35,6 +35,13 @@ const ROUND_WALL_R = 40;
 // Laenge der Rundabdeckung entlang ihrer Achse: die Bogenpaare stehen in allen
 // Entwuerfen 800 mm auseinander.
 const ROUND_COVER_LEN = 80;
+
+// Bogenrutsche, gemessen an allen zehn Vorkommen im Bestand: das Folgeteil sitzt
+// stets 60 cm voraus (lokales +X), 80 cm tiefer und 60 cm zur Seite (lokales +Z).
+const CURVED_SLIDE_DROP = new THREE.Vector3(60, -80, 60);
+// Austrittsrichtung am Ende des Bogens: lokales +Z, rund 33 Grad abwaerts --
+// dasselbe Gefaelle wie die gerade Rutsche (80 cm auf 120 cm).
+const CURVED_SLIDE_EXIT = new THREE.Vector3(0, -0.55, 1).normalize();
 // Flaechige Anbauteile verschwinden im Verstaerken- und Kollisions-Modus, wie
 // Platten und Netze auch.
 const FLAT_FITTINGS = new Set(["lattice2", "textil-round2", "roof-large2"]);
@@ -725,20 +732,22 @@ export class SceneManager {
         // Platten. Ein 1550 x 775 grosses Gitter spannt damit genau zwischen den
         // beiden Rohrebenen, statt flach in der Gegend zu liegen.
         const w = f.w || 40, h = f.h || 40;
-        geo = this._cachedGeo(`lattice${w}x${h}`, () => new THREE.BoxGeometry(h, w, 0.8));
-        mat = this._fittingMaterial(hex, true);
+        geo = this._cachedGeo(`lattice${w}x${h}`, () => this._latticeGeometry(h, w));
+        mat = this._fittingMaterial(hex, false);
         break;
       }
       case "textil-round2": {           // Rundabdeckung: Viertelzylinder ueber einem Bogen
-        // Der Punkt im Entwurf ist der KRUEMMUNGSMITTELPUNKT des Bogens (an
-        // allen 52 Vorkommen liegen die Kupplungen des Bogens genau 400 mm
-        // entfernt, bei den lokalen Winkeln +Y und -X). Das Tuch laeuft vom
-        // Punkt aus 800 mm entlang der lokalen +Z-Achse.
+        // Die beiden Enden des Tuchs liegen 400 mm vom Punkt entfernt, in
+        // lokaler +Y- und -X-Richtung (52 von 52 Vorkommen). Der Kruemmungs-
+        // mittelpunkt ist die GEGENUEBERLIEGENDE Ecke, nicht der Punkt selbst:
+        // nur so steht die Tangente am Fuss senkrecht (das Bogenrohr setzt den
+        // Pfosten fort) und am Scheitel waagerecht. Das Tuch woelbt sich also
+        // zum Punkt hin. Entlang der lokalen +Z-Achse laeuft es 800 mm weit.
         geo = this._cachedGeo("roundwall", () => {
           const g = new THREE.CylinderGeometry(ROUND_WALL_R, ROUND_WALL_R, ROUND_COVER_LEN,
-            Math.max(12, this._q().tube * 2), 1, true, Math.PI, Math.PI / 2);
+            Math.max(12, this._q().tube * 2), 1, true, 0, Math.PI / 2);
           g.rotateX(Math.PI / 2);            // Achse von +Y auf +Z drehen
-          g.translate(0, 0, ROUND_COVER_LEN / 2);
+          g.translate(-ROUND_WALL_R, ROUND_WALL_R, ROUND_COVER_LEN / 2);
           return g;
         });
         mat = this._fittingMaterial(hex, true);
@@ -782,6 +791,33 @@ export class SceneManager {
     mesh.castShadow = true;
     mesh.receiveShadow = true;
     return mesh;
+  }
+
+  /**
+   * Gitter als echtes Netz: schmale Baender in der lokalen XY-Ebene, aussen ein
+   * Rahmen, innen ein Raster von rund 10 cm. Alles in EINER Geometrie (eine
+   * Zeichnung), weil mergeGeometries nicht mitgeliefert ist. sx laeuft auf der
+   * lokalen X-, sy auf der lokalen Y-Achse.
+   */
+  _latticeGeometry(sx, sy, bar = 1.2, step = 10) {
+    const pos = [];
+    // Ein Band als zwei Dreiecke, Ecken gegen den Uhrzeigersinn.
+    const ribbon = (x0, y0, x1, y1) => {
+      pos.push(x0, y0, 0, x1, y0, 0, x1, y1, 0, x0, y0, 0, x1, y1, 0, x0, y1, 0);
+    };
+    const hx = sx / 2, hy = sy / 2, b = bar / 2;
+    const lines = (span, make) => {
+      const n = Math.max(1, Math.round(span / step));
+      for (let i = 0; i <= n; i++) make(-span / 2 + (span * i) / n);
+    };
+    lines(sx, (x) => ribbon(Math.max(-hx, Math.min(hx - bar, x - b)),
+      -hy, Math.max(-hx + bar, Math.min(hx, x + b)), hy));
+    lines(sy, (y) => ribbon(-hx, Math.max(-hy, Math.min(hy - bar, y - b)),
+      hx, Math.max(-hy + bar, Math.min(hy, y + b))));
+    const g = new THREE.BufferGeometry();
+    g.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
+    g.computeVertexNormals();
+    return g;
   }
 
   /** Rad: Scheibe mit Kranz, wahlweise mit Speichenkerben. */
@@ -1011,35 +1047,37 @@ export class SceneManager {
   // _addCurvedSlide): nach der 90°-Drehung in der PERPENDIKULAEREN kardinalen
   // Richtung zum waagerechten Einlauf, ~33° abwaerts. Damit der Auslauf knickfrei
   // an die Bogenrutsche anschliesst.
-  _curvedSlideExit(sl, model) {
-    let target = null, bestD = Infinity;
-    for (const s2 of model.slides.values()) {
-      if (s2 === sl) continue;
-      if (s2.kind !== "slide2" && s2.kind !== "slide-new2" && s2.kind !== "slide-end2") continue;
-      if (s2.y > sl.y - 1) continue;
-      const d = (s2.x - sl.x) ** 2 + (s2.y - sl.y) ** 2 + (s2.z - sl.z) ** 2;
-      if (d < bestD) { bestD = d; target = s2; }
-    }
-    const dx = target ? target.x - sl.x : -60;
-    const dz = target ? target.z - sl.z : -60;
-    const exitH = Math.abs(dz) >= Math.abs(dx)
-      ? new THREE.Vector3(Math.sign(dx) || -1, 0, 0)
-      : new THREE.Vector3(0, 0, Math.sign(dz) || -1);
-    return exitH.multiplyScalar(1.4).add(new THREE.Vector3(0, -1, 0)).normalize();
+  _curvedSlideExit(sl) {
+    return CURVED_SLIDE_EXIT.clone().applyQuaternion(this._slideQuat(sl));
+  }
+
+  /** Eigenes Quaternion eines Rutschenteils (Three-Reihenfolge), sonst Einheit. */
+  _slideQuat(sl) {
+    return sl.quat && sl.quat.length === 4
+      ? new THREE.Quaternion(sl.quat[0], sl.quat[1], sl.quat[2], sl.quat[3]).normalize()
+      : new THREE.Quaternion();
   }
 
   // Bogenrutsche: gekrümmte Rutschflaeche, die KARDINAL+waagerecht am Anschluss
-  // beginnt (kein 45°) und SENKRECHT nach unten ins Rutschen-Endstueck laeuft
-  // (Gregor: "schliesst gekruemmt nach unten an slide end an"). Kubische Bézier:
-  //   P0(Bogen) -> C1 = P0 + Kardinalrichtung·d  (waagerechter, achsparalleler Start)
-  //             -> C2 = ueber P3                 (senkrechtes Ende)
-  //             -> P3 (gerenderte slide-end-Mitte).
-  // Der frueher diagonale Kontrollpunkt (P2.x,P0.y,P2.z) erzeugte die 45°-Drehung.
+  // Bogenrutsche: gekruemmte Rutschflaeche, die waagerecht in der lokalen
+  // +X-Richtung beginnt und nach einer 90-Grad-Drehung in der lokalen
+  // +Z-Richtung abwaerts wieder herauskommt. Kubische Bézier P0 -> C1 -> C2 -> P3,
+  // alle vier Punkte aus dem eigenen Quaternion des Teils.
   _addCurvedSlide(sl, model, mat, st) {
     const P0 = new THREE.Vector3(sl.x, sl.y, sl.z);
-    // Die Bogenrutsche geht in das NAECHSTE Rutschenteil ueber -- das kann eine
-    // GERADE Rutsche (slide2) ODER direkt das Endstueck sein (in C0065: gerade
-    // Rutsche; in C0076: Endstueck). Nimm das naechstgelegene unterhalb.
+    const q = this._slideQuat(sl);
+    // Die Bogenrutsche ist ein FESTES Teil: gemessen an allen zehn Vorkommen im
+    // Bestand liegt das Folgeteil IMMER auf demselben lokalen Versatz
+    // (600, -800, 600) mm -- also 60 cm voraus (lokales +X), 80 cm tiefer und
+    // 60 cm zur Seite (lokales +Z). Der Bogen dreht damit 90 Grad in der
+    // Draufsicht. Frueher kam die Form aus der Lage des naechsten Rutschenteils;
+    // das ging schief, sobald ein anderes Teil naeher lag, und der Bogen zeigte
+    // in die falsche Richtung.
+    const P3 = CURVED_SLIDE_DROP.clone().applyQuaternion(q).add(P0);
+    const C1 = P0.clone().addScaledVector(new THREE.Vector3(1, 0, 0).applyQuaternion(q), 33);
+    const exitDir = this._curvedSlideExit(sl);
+    const C2 = P3.clone().addScaledVector(exitDir, -33);
+    // Kette: das naechste Rutschenteil setzt am Bogen an.
     let target = null, bestD = Infinity;
     for (const s2 of model.slides.values()) {
       if (s2.kind !== "slide2" && s2.kind !== "slide-new2" && s2.kind !== "slide-end2") continue;
@@ -1047,37 +1085,6 @@ export class SceneManager {
       const d = (s2.x - sl.x) ** 2 + (s2.y - sl.y) ** 2 + (s2.z - sl.z) ** 2;
       if (d < bestD) { bestD = d; target = s2; }
     }
-    let P3;
-    if (target) {
-      // Endstueck: gerenderte Mitte (mit Offsets); gerade Rutsche: QDF-Position
-      // (= Beginn der Rutsche; der feste Versatz Bogen->Folgeteil ist QDF-zu-QDF).
-      P3 = target.kind === "slide-end2"
-        ? this._slideEndConnectPoint(target)
-        : new THREE.Vector3(target.x, target.y, target.z);
-    } else {
-      const fwd = new THREE.Vector3(1, 0, 0);
-      if (sl.quat && sl.quat.length === 4) fwd.applyQuaternion(new THREE.Quaternion(sl.quat[0], sl.quat[1], sl.quat[2], sl.quat[3]).normalize());
-      fwd.y = 0; if (fwd.lengthSq() < 0.01) fwd.set(1, 0, 0); fwd.normalize();
-      P3 = P0.clone().addScaledVector(fwd, 60).add(new THREE.Vector3(0, -80, 0));
-    }
-    // Waagerechte Laufrichtung auf die naechste KARDINALE Achse snappen (kein 45°).
-    const dx = P3.x - P0.x, dz = P3.z - P0.z;
-    const card = Math.abs(dz) >= Math.abs(dx)
-      ? new THREE.Vector3(0, 0, Math.sign(dz) || -1)
-      : new THREE.Vector3(Math.sign(dx) || -1, 0, 0);
-    const horizDist = Math.hypot(dx, dz) || 1;
-    const C1 = P0.clone().addScaledVector(card, horizDist * 0.5);  // waagerechter, kardinaler Start
-    // FESTE Austrittsrichtung der Bogenrutsche -- UNABHAENGIG vom Folgeteil, damit
-    // der Bogen in jeder Datei gleich aussieht (Gregor: C0065 richtig, C0076 war
-    // anders/falsch). Nach der 90°-Drehung laeuft sie in der PERPENDIKULAEREN
-    // kardinalen Richtung, ~33° abwaerts (= Standard-Anschluss an die gerade
-    // Rutsche). Frueher: senkrecht (Endstueck) vs. Folgeteil-Richtung -> uneinheitlich.
-    const exitH = Math.abs(card.z) > 0.5
-      ? new THREE.Vector3(Math.sign(dx) || -1, 0, 0)
-      : new THREE.Vector3(0, 0, Math.sign(dz) || -1);
-    const exitDir = exitH.multiplyScalar(1.4).add(new THREE.Vector3(0, -1, 0)).normalize();
-    const span = P0.distanceTo(P3) || 1;
-    const C2 = P3.clone().addScaledVector(exitDir, -span * 0.45);
     // ECHTE kubische Bézier (P0,C1,C2,P3) -- vorher war C2 unbenutzt (quadratisch),
     // dadurch hatte der Bogen keine eigene Austrittsrichtung am Ende (Knick/unschoen).
     const bez = (t) => {
