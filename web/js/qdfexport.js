@@ -4,13 +4,18 @@
 // Textdatei, eine Anweisung je Zeile, Koordinaten in Zehntel-Millimetern... genauer:
 // in mm (Raster 400 mm = 40 cm), y = oben, Zeilenende CRLF.
 //
-// Zwei Eigenheiten des Formats, die man beim Schreiben kennen muss:
+// Drei Eigenheiten des Formats, die man beim Schreiben kennen muss:
 //   1. Die Quaternion-Komponenten stehen vorzeichenbehaftet QUADRIERT in der
-//      Datei (sign*v^2). Beim Lesen wird sign*sqrt(|v|) zurueckgerechnet und
-//      normiert -- geschrieben wird also das Quadrat der Einheitsquaternion.
+//      Datei (sign*v^2) und zusaetzlich mit 4 skaliert -- die vier Betraege
+//      summieren sich in den Herstellerdateien ausnahmslos zu 4. Unser Import
+//      normiert und merkt den Unterschied nicht; die Originalsoftware rechnet
+//      ohne Normierung weiter und stellt ein falsch skaliertes Modell voellig
+//      verdreht dar.
 //   2. Rohre und Platten speichern das TEILEMASS, nicht die Rasterspannweite:
 //      ein 40-cm-Feld steht als 350 (= 35 cm Rohr) in der Datei. Die Kupplung
 //      steuert die fehlenden 5 cm bei (geometry.connectorSize).
+//   3. Gedrehte Kupplungen behalten ihre Lage, und ihre Arm-Maske (variant2)
+//      zaehlt die LOKALEN Wuerfelachsen, nicht die Weltachsen.
 //
 // Bewusst ohne Three.js und DOM -- wie qdfimport.js in Node testbar.
 
@@ -66,12 +71,19 @@ function fmt(v) {
 
 const mm = (cm) => fmt(Math.round(cm * 10 * 1e4) / 1e4);
 
+// Die gespeicherten Quadrate sind mit 4 skaliert: in JEDER der 10.958 geprueften
+// Zeilen der Herstellerdateien summieren sich die vier Betraege exakt zu 4 (die
+// Einheitsquaternion allein ergaebe 1). Unser Import normiert und merkt den
+// Unterschied nicht -- die Originalsoftware rechnet ohne Normierung weiter und
+// stellt ein Modell mit Faktor 1 voellig verdreht dar.
+const QUAT_SCALE = 4;
+
 /** Einheitsquaternion [w,x,y,z] -> die vier Dateiwerte (vorzeichenbehaftet quadriert). */
 function encodeQuat(q) {
   const n = Math.hypot(q[0], q[1], q[2], q[3]) || 1;
   return q.map((c) => {
     const u = c / n;
-    return fmt(Math.round(Math.sign(u) * u * u * 1e12) / 1e12);
+    return fmt(Math.round(Math.sign(u) * u * u * QUAT_SCALE * 1e12) / 1e12);
   });
 }
 
@@ -79,6 +91,18 @@ function norm(v) {
   const l = Math.hypot(v[0], v[1], v[2]) || 1;
   return [v[0] / l, v[1] / l, v[2] / l];
 }
+/** Vektor mit dem Quaternion [w,x,y,z] drehen (wie qdfimport.rotateByQuat). */
+function rotateByQuat(q, v) {
+  let [w, x, y, z] = q;
+  const n = Math.hypot(w, x, y, z) || 1;
+  w /= n; x /= n; y /= n; z /= n;
+  const u = [x, y, z];
+  const t = cross(u, v).map((c) => 2 * c);
+  const c2 = cross(u, t);
+  return [v[0] + w * t[0] + c2[0], v[1] + w * t[1] + c2[1], v[2] + w * t[2] + c2[2]];
+}
+/** Gegendrehung: Welt -> lokale Achsen der Kupplung. */
+function conjugate(q) { return [q[0], -q[1], -q[2], -q[3]]; }
 function cross(a, b) {
   return [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
 }
@@ -120,7 +144,8 @@ function quatFromAxes(ex, ey, ez) {
   return [w, x, y, z];
 }
 
-const IDENTITY = ["1.", "0.", "0.", "0."];
+// Auch die Ruhelage traegt die Skala: (4,0,0,0), nicht (1,0,0,0).
+const IDENTITY = [fmt(QUAT_SCALE), "0.", "0.", "0."];
 
 function tuple(q, x, y, z) {
   return `{${q[0]}, ${q[1]}, ${q[2]}, ${q[3]}, ${mm(x)}, ${mm(y)}, ${mm(z)}}`;
@@ -152,8 +177,21 @@ export function buildQDF(model) {
   // steckt auf der Eck-Kupplung, die dafuer als connector45_2 geschrieben wird.
   for (const n of model.nodes.values()) {
     if (n.c45body) continue;
+    // Eine gedrehte Kupplung (aus dem Import) behaelt ihre Lage. Die Arm-Maske
+    // zaehlt die LOKALEN Wuerfelachsen -- bei einer gedrehten Kupplung sind das
+    // nicht die Weltachsen, sonst bekaeme sie gar keine Arme zugeordnet.
+    const quat = n.quat && n.quat.length === 4
+      ? [n.quat[3], n.quat[0], n.quat[1], n.quat[2]]      // Three (x,y,z,w) -> Datei (w,x,y,z)
+      : null;
+    const toLocal = (d) => (quat ? rotateByQuat(conjugate(quat), d) : d);
+
     let mask = 0;
     let carriesAdapter = false;
+    // Vorhandene Stutzen aus dem Import (inklusive offener Arme ohne Rohr).
+    for (const a of n.arms || []) {
+      const l = toLocal(a);
+      for (const [bit, v] of ARM_BITS) if (dot(l, v) > 0.9) mask |= bit;
+    }
     for (const t of model.tubes.values()) {
       if (t.link) continue;
       const other = t.a === n.id ? node(t.b) : t.b === n.id ? node(t.a) : null;
@@ -162,11 +200,12 @@ export function buildQDF(model) {
       // c45 am Knoten fuehrt nur das Modell selbst nach, importierte Ecken
       // haben es nicht -- deshalb zaehlt die Kante, nicht das Flag.
       if (t.arm) carriesAdapter = true;
-      const d = dirOf(n, other);
-      for (const [bit, v] of ARM_BITS) if (dot(d, v) > 0.9) mask |= bit;
+      const l = toLocal(dirOf(n, other));
+      for (const [bit, v] of ARM_BITS) if (dot(l, v) > 0.9) mask |= bit;
     }
     const kind = (n.c45 || carriesAdapter) ? "connector45_2" : "connector3";
-    lines.push(`${kind}{${CONNECTOR_MAT}, ${tuple(IDENTITY, n.x, n.y, n.z)}, 1, 0, ${mask}, ${63 - mask}, ${RENDER_MASK}, 0}`);
+    const q = quat ? encodeQuat(quat) : IDENTITY;
+    lines.push(`${kind}{${CONNECTOR_MAT}, ${tuple(q, n.x, n.y, n.z)}, 1, 0, ${mask}, ${63 - mask}, ${RENDER_MASK}, 0}`);
     stats.connectors++;
   }
 
