@@ -39,9 +39,14 @@ const ROUND_COVER_LEN = 80;
 // Bogenrutsche, gemessen an allen zehn Vorkommen im Bestand: das Folgeteil sitzt
 // stets 60 cm voraus (lokales +X), 80 cm tiefer und 60 cm zur Seite (lokales +Z).
 const CURVED_SLIDE_DROP = new THREE.Vector3(60, -80, 60);
-// Austrittsrichtung am Ende des Bogens: lokales +Z, rund 33 Grad abwaerts --
+// Laufrichtung einer Rutsche ist ihr lokales +Z: bei 73 von 76 geraden Rutschen
+// sitzt das Endstueck auf (0, -800, 1200). Die Bogenrutsche START ET ebenso in
+// ihrem lokalen +Z und dreht auf das lokale +X -- das Folgeteil steht in allen
+// zehn Faellen mit seinem eigenen +Z genau auf dem lokalen +X des Bogens.
+const CURVED_SLIDE_ENTRY = new THREE.Vector3(0, 0, 1);
+// Austrittsrichtung am Ende des Bogens: lokales +X, rund 33 Grad abwaerts --
 // dasselbe Gefaelle wie die gerade Rutsche (80 cm auf 120 cm).
-const CURVED_SLIDE_EXIT = new THREE.Vector3(0, -0.55, 1).normalize();
+const CURVED_SLIDE_EXIT = new THREE.Vector3(1, -0.55, 0).normalize();
 // Flaechige Anbauteile verschwinden im Verstaerken- und Kollisions-Modus, wie
 // Platten und Netze auch.
 const FLAT_FITTINGS = new Set(["lattice2", "textil-round2", "roof-large2"]);
@@ -1068,13 +1073,13 @@ export class SceneManager {
     const q = this._slideQuat(sl);
     // Die Bogenrutsche ist ein FESTES Teil: gemessen an allen zehn Vorkommen im
     // Bestand liegt das Folgeteil IMMER auf demselben lokalen Versatz
-    // (600, -800, 600) mm -- also 60 cm voraus (lokales +X), 80 cm tiefer und
-    // 60 cm zur Seite (lokales +Z). Der Bogen dreht damit 90 Grad in der
-    // Draufsicht. Frueher kam die Form aus der Lage des naechsten Rutschenteils;
-    // das ging schief, sobald ein anderes Teil naeher lag, und der Bogen zeigte
-    // in die falsche Richtung.
+    // (600, -800, 600) mm. Losgelaufen wird im lokalen +Z (Laufrichtung jeder
+    // Rutsche), gedreht wird auf das lokale +X; der Bogen macht also 90 Grad in
+    // der Draufsicht und faellt dabei 80 cm. Frueher kam die Form aus der Lage
+    // des naechsten Rutschenteils; das ging schief, sobald ein anderes Teil
+    // naeher lag.
     const P3 = CURVED_SLIDE_DROP.clone().applyQuaternion(q).add(P0);
-    const C1 = P0.clone().addScaledVector(new THREE.Vector3(1, 0, 0).applyQuaternion(q), 33);
+    const C1 = P0.clone().addScaledVector(CURVED_SLIDE_ENTRY.clone().applyQuaternion(q), 33);
     const exitDir = this._curvedSlideExit(sl);
     const C2 = P3.clone().addScaledVector(exitDir, -33);
     // Kette: das naechste Rutschenteil setzt am Bogen an.
