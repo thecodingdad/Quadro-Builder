@@ -1137,12 +1137,14 @@ export class BuildModel {
     for (const f of this.fittings.values()) {
       if (f.kind === "bag2" && Math.hypot(f.x - c[0], f.y - c[1], f.z - c[2]) < 5) return null;
     }
-    // Lokales X quer zu den Rohren, Y laengs, Z senkrecht dazu. Z muss nach OBEN
-    // zeigen -- der Sack haengt in die Gegenrichtung, also nach unten.
-    let ex = u, ey = ra.dir;
+    // Dreibein wie in den Herstellerdateien: lokales X laeuft AM ROHR entlang,
+    // Y zeigt nach oben, Z zum zweiten Rohr. (Gemessen an allen fuenf Saecken:
+    // Kupplungen liegen lokal bei (+-200, 0, 0) und (+-200, 0, 400).)
+    const ey = [0, 1, 0];
+    let ex = ra.dir;
     let ez = cross3(ex, ey);
-    if (ez[1] < 0) { ey = [-ey[0], -ey[1], -ey[2]]; ez = cross3(ex, ey); }
-    if (ez[1] < 0.9) return null;                    // Feld liegt nicht waagerecht
+    if (dot3(ez, u) < 0) { ex = [-ex[0], -ex[1], -ex[2]]; ez = cross3(ex, ey); }
+    if (Math.abs(ex[1]) > 0.01 || dot3(ez, u) < 0.9) return null;   // Feld nicht waagerecht
     return this.addFitting("bag2", c[0], c[1], c[2],
       { quat: quatFromBasis(ex, ey, ez), color: color || null, w: BAG_SIZE, h: BAG_SIZE });
   }

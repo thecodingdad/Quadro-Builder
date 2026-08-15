@@ -368,7 +368,10 @@ export function buildQDF(model) {
     const q = f.quat && f.quat.length === 4
       ? encodeQuat([f.quat[3], f.quat[0], f.quat[1], f.quat[2]])
       : IDENTITY;
-    const mat = f.color ? tubeMat(f.color) : CONNECTOR_MAT;
+    // Tuchteile tragen die Platten-Materialien (Spielsack, Gitter, Rundwand);
+    // alles andere die der Rohre.
+    const stoff = f.kind === "bag2" || f.kind === "lattice2" || f.kind === "textil-round2";
+    const mat = f.color ? (stoff ? panelMat(f.color) : tubeMat(f.color)) : CONNECTOR_MAT;
     // Der Spielsack wird an dem Rohr gespeichert, an dem er haengt -- unsere
     // Mitte liegt 20 cm weiter in der lokalen +Z-Richtung, also zurueckrechnen.
     let fx = f.x, fy = f.y, fz = f.z;
