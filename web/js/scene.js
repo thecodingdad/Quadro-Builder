@@ -1693,6 +1693,12 @@ export class SceneManager {
       if (!near) continue;
       pushDir(near.id, f.x - near.x, f.y - near.y, f.z - near.z, false);
     }
+    // Die Kupplung, die eine Lagerkupplung traegt, steckt mit einem Stutzen in
+    // ihr -- der zeigt zurueck zum Rohr, sonst schwebt der Wuerfel frei.
+    for (const n of model.nodes.values()) {
+      if (n.part !== "bearing" || !n.stub) continue;
+      pushDir(n.id, -n.stub[0], -n.stub[1], -n.stub[2], false);
+    }
     for (const t of model.tubes.values()) {
       const na = model.nodes.get(t.a), nb = model.nodes.get(t.b);
       if (!na || !nb) continue;
