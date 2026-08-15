@@ -32,13 +32,15 @@ export const TUBE_FITTINGS = {
 // Welche Anbauteile sich setzen lassen: die an einer Kupplung (FITTING_MOUNTS),
 // die auf einem Rohr (TUBE_FITTINGS) und die mit eigenem Ablauf (Radarretierung,
 // Gitter, Rundabdeckung, grosses Dach).
-export const PLACEABLE_FITTINGS = [
+// Doppelte fallen raus: manche Teile stehen in zwei Tabellen, weil sie zwei
+// Wege kennen (Radkappe: Ankerpunkt an der Kupplung UND Klick aufs Rohrende).
+export const PLACEABLE_FITTINGS = [...new Set([
   ...Object.keys(FITTING_MOUNTS),
   ...Object.keys(TUBE_FITTINGS),
-  "steering-lock2", "hub-cap2",   // in der Radmitte, siehe _wheelLockMounts
+  "steering-lock2", "hub-cap2",   // in der Radmitte bzw. am Rohrende
   "bearing-clamp",                // Lagerkupplung: klemmt um ein Rohr (kein eigenes QDF-Element)
   "lattice2", "textil-round2", "roof-large2",
-];
+])];
 
 
 // Abstand der beiden Bogenrohre, ueber die eine Rundabdeckung gespannt wird:
