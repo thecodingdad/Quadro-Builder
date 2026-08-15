@@ -904,19 +904,32 @@ export class Builder {
     this._fittingMountNodes = new Set();
     if (this.fittingKind === "lattice2") return;      // Gitter laeuft ueber zwei Rohre
     if (TUBE_CLAMP_PARTS[this.fittingKind]) return;   // Klemm-Kupplung sitzt frei auf dem Rohr
-    // Raeder auf einem Rohr brauchen keinen Ankerpunkt -- das Multirad bekommt
-    // aber welche auf den Radlagern, dort sitzt es genauso.
-    if (TUBE_FITTINGS[this.fittingKind]
-        && this.fittingKind !== "multi-wheel2" && this.fittingKind !== "hub-cap2") return;
-    for (const m of this.model.fittingMounts(this.fittingKind)) {
-      if (m.nodeId) this._fittingMountNodes.add(m.nodeId);
-      let taken = false;
+    // Ist eine Kupplung gewaehlt, gelten nur ihre Stellen -- bei Teilen auf einem
+    // Rohr nur die Rohre, die an ihr haengen. Ohne Auswahl sind alle zu sehen.
+    const sel = this.selectedNodeId;
+    const amKnoten = (tubeId) => {
+      const tb = this.model.tubes.get(tubeId);
+      return !!tb && (tb.a === sel || tb.b === sel);
+    };
+    const frei = (m) => {
       for (const f of this.model.fittings.values()) {
         if (f.kind !== this.fittingKind) continue;
-        if (Math.hypot(f.x - m.pos[0], f.y - m.pos[1], f.z - m.pos[2]) < 2) { taken = true; break; }
+        if (Math.hypot(f.x - m.pos[0], f.y - m.pos[1], f.z - m.pos[2]) < 2) return false;
       }
-      if (taken) continue;
+      return true;
+    };
+    for (const m of this.model.fittingMounts(this.fittingKind)) {
+      if (m.nodeId) this._fittingMountNodes.add(m.nodeId);
+      if (sel && m.nodeId !== sel) continue;
+      if (!frei(m)) continue;
       this.scene.addHandle(m.handle || m.pos, { fittingMount: m }, "dir");
+    }
+    // Teile, die frei auf einem Rohr sitzen: je Rohr ein Vorschlag in der Mitte
+    // des uebrigen Platzes. Gesetzt werden koennen sie weiterhin ueberall.
+    for (const m of this.model.tubeFittingSpots(this.fittingKind, geometry().connectorSize)) {
+      if (sel && !amKnoten(m.tubeId)) continue;
+      if (!frei(m)) continue;
+      this.scene.addHandle(m.pos, { fittingMount: m }, "dir");
     }
   }
 
@@ -1282,8 +1295,11 @@ export class Builder {
     const pick = this.scene.pickBuild(e.clientX, e.clientY);
     if (!pick) return;
     if (pick.data.kind === "clamp") {
-      this.recordHistory(() => this.model.removeClamp(pick.data.id));
-      this.onNotice(t("notice_clamp_removed"));
+      // Erneuter Klick DREHT ihn um 45 Grad weiter -- geloescht wird im
+      // Auswahl-Modus, wie bei allen anderen Teilen auch.
+      let turned = false;
+      this.recordHistory(() => { turned = this.model.rotateClamp(pick.data.id); });
+      if (!turned) this.onNotice(t("notice_fitting_fixed"));
       this.refresh();
       return;
     }
@@ -1330,7 +1346,22 @@ export class Builder {
       this.recordHistory(() => { turned = this.model.rotateFitting(p.data.id); });
       if (!turned) this.onNotice(t("notice_fitting_fixed"));
       this.refresh();
+      return;
     }
+    this._pickFittingNode(p);
+  }
+
+  /**
+   * Klick auf eine Kupplung waehlt sie aus: danach zeigt nur noch sie ihre
+   * Ankerpunkte. Ein Klick ins Leere hebt die Wahl wieder auf.
+   */
+  _pickFittingNode(pick) {
+    if (pick && pick.data.kind === "node") {
+      this.selectedNodeId = pick.data.id === this.selectedNodeId ? null : pick.data.id;
+      this.refresh();
+      return;
+    }
+    if (!pick && this.selectedNodeId) { this.selectedNodeId = null; this.refresh(); }
   }
 
   /**
@@ -1365,7 +1396,7 @@ export class Builder {
     }
     const hitTube = this.scene.pickTube ? this.scene.pickTube(e.clientX, e.clientY) : null;
     const tubePick = (pick && pick.data.kind === "tube") ? pick : hitTube;
-    if (!tubePick || !tubePick.point) { this.onNotice(t("notice_clamp_click_tube")); return; }
+    if (!tubePick || !tubePick.point) { this._pickFittingNode(pick); return; }
     const pickData = tubePick.data;
     const tb = this.model.tubes.get(pickData.id);
     if (!tb || tb.arm || tb.link) { this.onNotice(t("notice_clamp_click_tube")); return; }

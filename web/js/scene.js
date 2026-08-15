@@ -29,6 +29,9 @@ const DEFAULT_QUALITY = "medium";
 // Spalt zwischen benachbarten Platten (cm, gesamt -- je Seite die Haelfte).
 const PANEL_GAP = 1.5;
 
+// Laenge des Doppelrohrverbinders entlang der Rohre.
+const CLAMP_LEN = 5;
+
 // Anbauteile: Radgroesse und Radius der gebogenen Wand, aus den Entwurfsdaten
 // (Rad sitzt 5 cm neben der Kupplung, Rundwand 40 cm von Kupplung und Rohr).
 const WHEEL_R = 19;
@@ -586,12 +589,15 @@ export class SceneManager {
     return this._clampGeo;
   }
 
-  // Ein Ring der "8": Loch genau so gross, dass eine Tube hindurchpasst.
-  // Zwei davon nebeneinander ergeben den Doppelrohrverbinder.
+  // Ein Ring der "8": Loch genau so gross, dass eine Tube hindurchpasst. Zwei
+  // davon nebeneinander ergeben den Doppelrohrverbinder -- ein 5 cm langes
+  // Stueck, nicht ein duenner Reif (so sieht das echte Teil aus).
   _clampRingGeometry() {
     if (!this._clampRingGeo) {
-      const r = geometry().tubeRadius;
-      this._clampRingGeo = new THREE.TorusGeometry(r + 0.45, 0.5, 10, 22);
+      const r = geometry().tubeRadius + 0.45;
+      const seg = Math.max(12, this._q().tube);
+      this._clampRingGeo = new THREE.CylinderGeometry(r, r, CLAMP_LEN, seg, 1, true);
+      this._clampRingGeo.rotateX(Math.PI / 2);      // Achse auf +Z, wie zuvor der Ring
     }
     return this._clampRingGeo;
   }
@@ -964,8 +970,10 @@ export class SceneManager {
 
   _clampMaterial() {
     if (!this._materials["clamp"]) {
+      // Das echte Teil ist rot -- und zwar immer, unabhaengig von der Baufarbe.
       this._materials["clamp"] = new THREE.MeshStandardMaterial({
-        color: new THREE.Color(0x33373d), roughness: 0.5, metalness: 0.4,
+        color: new THREE.Color(0xd42e2e), roughness: 0.5, metalness: 0.1,
+        side: THREE.DoubleSide,
       });
     }
     return this._materials["clamp"];

@@ -661,6 +661,25 @@ export class BuildModel {
   }
 
   /**
+   * Vorschlagsstellen fuer ein Rohr-Teil: je Rohr eine, in der Mitte des Platzes,
+   * der uebrig bleibt. Gesetzt werden kann trotzdem ueberall auf dem Rohr -- die
+   * Punkte zeigen nur, welche Rohre in Frage kommen.
+   */
+  tubeFittingSpots(kind, cs = 5) {
+    if (!TUBE_FITTINGS[kind]) return [];
+    const out = [];
+    for (const t of this.tubes.values()) {
+      if (t.arm || t.link) continue;
+      const a = this.nodes.get(t.a), b = this.nodes.get(t.b);
+      if (!a || !b) continue;
+      const mid = [(a.x + b.x) / 2, (a.y + b.y) / 2, (a.z + b.z) / 2];
+      const m = this.tubeFittingMount(t.id, mid, kind, cs);
+      if (m) out.push(m);
+    }
+    return out;
+  }
+
+  /**
    * Liegt auf derselben Achse schon ein Teil so nah, dass sich beide
    * ueberschneiden wuerden? Verglichen wird der Abstand entlang der Achse mit
    * den halben Breiten; quer dazu zaehlt nur, was ueberhaupt in der Naehe liegt.
@@ -1261,6 +1280,28 @@ export class BuildModel {
 
   removeClamp(id) {
     this.clamps.delete(id);
+  }
+
+  /**
+   * Doppelrohrverbinder um 45 Grad um sein Rohr weiterdrehen. Er sitzt mit dem
+   * einen Loch auf dem Rohr, das andere zeigt zur Seite -- gedreht wird also der
+   * Versatz zwischen beiden Loechern.
+   */
+  rotateClamp(id) {
+    const c = this.clamps.get(id);
+    if (!c || !c.dir || !c.off) return false;
+    const u = c.dir, o = c.off;
+    const co = Math.SQRT1_2, si = Math.SQRT1_2;
+    const cr = cross3(u, o), d = dot3(u, o) * (1 - co);
+    const no = [o[0] * co + cr[0] * si + u[0] * d, o[1] * co + cr[1] * si + u[1] * d,
+      o[2] * co + cr[2] * si + u[2] * d];
+    // Die Mitte liegt zwischen beiden Loechern: das Rohr bleibt, wo es ist.
+    const axis = [c.x - o[0] / 2, c.y - o[1] / 2, c.z - o[2] / 2];
+    const pos = [axis[0] + no[0] / 2, axis[1] + no[1] / 2, axis[2] + no[2] / 2];
+    if (this.isBelowGround(pos[1])) return false;
+    c.off = no.map(round);
+    c.x = round(pos[0]); c.y = round(pos[1]); c.z = round(pos[2]);
+    return true;
   }
 
   // Klemm-Kupplungen haengen an ihrem umschlossenen Rohr: faellt es weg,
