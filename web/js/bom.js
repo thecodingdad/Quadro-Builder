@@ -139,6 +139,7 @@ export function infeasibleConnectors(model) {
 // Knoten ist die Basiskupplung selbst; das Schraegrohr dockt ~9 cm versetzt an,
 // daher reicht das Flag und kein geometrischer 45-Grad-Arm am Knoten ist noetig.
 export function inferConnectorType(model, node) {
+  if (node.part) return node.part;
   const dirs = neighborDirs(model, node);
   if (dirs.length === 0) return null;
   if (node.c45) return "diagonal";
@@ -152,6 +153,9 @@ export function inferConnectorType(model, node) {
 // alle Arme zusammen als eine normale Kupplung. Ein reines, freies Rohrende
 // ("end") liefert eine leere Liste.
 export function connectorsForNode(model, node) {
+  // Klemm-Kupplungen (Lochzapfen-, Lagerkupplung) sind ein festes Katalogteil:
+  // sie sitzen auf einem Rohr und zaehlen unabhaengig von ihren Armen.
+  if (node.part) return [node.part];
   const dirs = neighborDirs(model, node);
   if (dirs.length === 0) return [];
   // Adapter-Koerper (c45body): genau HIER sitzt die 45-Grad-Winkelkupplung --

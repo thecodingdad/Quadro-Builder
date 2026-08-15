@@ -146,6 +146,7 @@ export class BuildModel {
     }
     this.nodes.delete(id);
     this._prunePanels();
+    this._pruneClamps();
   }
 
   degree(nodeId) {
@@ -227,6 +228,7 @@ export class BuildModel {
   removeTube(id) {
     this.tubes.delete(id);
     this._prunePanels();
+    this._pruneClamps();
     this._pruneOrphanedC45Bodies();
   }
 
@@ -581,6 +583,100 @@ export class BuildModel {
     return out;
   }
 
+  // --- Klemm-Kupplungen (sitzen auf einem Rohr, nicht im Raster) -----------
+  /**
+   * Lochzapfenkupplung und Lagerkupplung umschliessen ein Rohr an einer
+   * BELIEBIGEN Stelle und bieten quer dazu einen offenen Anschluss. Sie sind
+   * deshalb Knoten (dort steckt ein Rohr) mit zwei Zusatzangaben: `clampOn`
+   * haelt Rohr und Stelle darauf, `stub` die Richtung des offenen Endes.
+   * Der Knoten selbst liegt an der Muendung, eine Kupplungslaenge neben der
+   * Rohrachse -- dort faengt das eingesteckte Rohr an.
+   *
+   * `point` ist der Trefferpunkt des Klicks: er bestimmt die Stelle auf dem
+   * Rohr UND (ueber die Seite, auf der er liegt) die Richtung des Anschlusses.
+   */
+  addTubeClamp(tubeId, point, part, cs = 5) {
+    const g = this._clampGeom(tubeId, point);
+    if (!g) return null;
+    const pos = [g.axis[0] + g.stub[0] * cs, g.axis[1] + g.stub[1] * cs, g.axis[2] + g.stub[2] * cs];
+    if (this.isBelowGround(pos[1])) return null;
+    for (const n of this.nodes.values()) {
+      if (n.part === part && Math.hypot(n.x - pos[0], n.y - pos[1], n.z - pos[2]) < 2) return null;
+    }
+    const node = this.addNode(round(pos[0]), round(pos[1]), round(pos[2]));
+    node.part = part;
+    node.clampOn = { tubeId, t: round(g.t) };
+    node.stub = g.stub;
+    return node;
+  }
+
+  /**
+   * Klemm-Kupplung entlang ihres Rohrs verschieben. Alles, was an ihr haengt
+   * (eingestecktes Rohr samt allem dahinter), geht mit -- der Zweig haengt im
+   * Graphen ja nur ueber sie. Das umschlossene Rohr selbst gehoert nicht dazu:
+   * es beruehrt den Knoten nicht.
+   */
+  slideTubeClamp(nodeId, point, cs = 5) {
+    const node = this.nodes.get(nodeId);
+    if (!node || !node.clampOn) return false;
+    const g = this._clampGeom(node.clampOn.tubeId, point, node.stub);
+    if (!g) return false;
+    const pos = [g.axis[0] + node.stub[0] * cs, g.axis[1] + node.stub[1] * cs, g.axis[2] + node.stub[2] * cs];
+    if (this.isBelowGround(pos[1])) return false;
+    const d = [pos[0] - node.x, pos[1] - node.y, pos[2] - node.z];
+    if (Math.hypot(d[0], d[1], d[2]) < 0.01) return false;
+    for (const n of this._branchFrom(nodeId)) {
+      n.x = round(n.x + d[0]); n.y = round(n.y + d[1]); n.z = round(n.z + d[2]);
+    }
+    node.clampOn.t = round(g.t);
+    return true;
+  }
+
+  // Knoten, die nur ueber `startId` zusammenhaengen (der Zweig an der Klemme).
+  _branchFrom(startId) {
+    const seen = new Set([startId]);
+    const stack = [startId];
+    while (stack.length) {
+      const id = stack.pop();
+      for (const t of this.tubes.values()) {
+        const other = t.a === id ? t.b : t.b === id ? t.a : null;
+        if (other && !seen.has(other)) { seen.add(other); stack.push(other); }
+      }
+    }
+    return [...seen].map((id) => this.nodes.get(id)).filter(Boolean);
+  }
+
+  // Stelle auf dem Rohr + Richtung des Anschlusses aus einem Trefferpunkt.
+  _clampGeom(tubeId, point, keepStub = null) {
+    const t = this.tubes.get(tubeId);
+    if (!t) return null;
+    const a = this.nodes.get(t.a), b = this.nodes.get(t.b);
+    if (!a || !b) return null;
+    const ab = [b.x - a.x, b.y - a.y, b.z - a.z];
+    const L = Math.hypot(ab[0], ab[1], ab[2]) || 1;
+    const u = [ab[0] / L, ab[1] / L, ab[2] / L];
+    const rel = [point[0] - a.x, point[1] - a.y, point[2] - a.z];
+    const s = Math.max(0, Math.min(L, rel[0] * u[0] + rel[1] * u[1] + rel[2] * u[2]));
+    const axis = [a.x + u[0] * s, a.y + u[1] * s, a.z + u[2] * s];
+    let stub = keepStub;
+    if (!stub) {
+      const off = [point[0] - axis[0], point[1] - axis[1], point[2] - axis[2]];
+      stub = this._cardinalPerpTo(off, u);
+    }
+    return { axis, dir: u, t: s, stub };
+  }
+
+  // Kardinale Richtung senkrecht zum Rohr, die am ehesten zur Klickseite zeigt.
+  _cardinalPerpTo(off, u) {
+    let best = null, bd = -Infinity;
+    for (const c of CARDINALS) {
+      if (Math.abs(dot3(c, u)) > 0.3) continue;
+      const d = dot3(c, off);
+      if (d > bd) { bd = d; best = c; }
+    }
+    return best || [0, 1, 0];
+  }
+
   /**
    * Gegenrohre fuer ein Gitter. Anders als eine Platte hat das Gitter keine
    * feste Groesse -- die Datei speichert seine Masse -- deshalb passt jeder
@@ -835,6 +931,14 @@ export class BuildModel {
 
   removeClamp(id) {
     this.clamps.delete(id);
+  }
+
+  // Klemm-Kupplungen haengen an ihrem umschlossenen Rohr: faellt es weg,
+  // faellt die Kupplung mit (und mit ihr, was an ihr steckt).
+  _pruneClamps() {
+    for (const n of [...this.nodes.values()]) {
+      if (n.clampOn && !this.tubes.has(n.clampOn.tubeId)) this.removeNode(n.id);
+    }
   }
 
   // Platten und Netze haengen an ihren beiden Tragrohren: faellt eines weg,
@@ -1453,6 +1557,9 @@ export class BuildModel {
         if (n.armDirs) o.armDirs = n.armDirs; // gespeicherte Arm-Richtungen (rotierte Kupplung)
         if (n.arms) o.arms = n.arms; // echte Arm-Stutzen aus variant2 (Darstellung)
         if (n.quat) o.quat = n.quat; // Wuerfel-Orientierung der Kupplung (Three x,y,z,w)
+        if (n.part) o.part = n.part; // festes Katalogteil (Klemm-Kupplungen)
+        if (n.clampOn) o.clampOn = n.clampOn; // umschlossenes Rohr + Stelle darauf
+        if (n.stub) o.stub = n.stub; // Richtung des offenen Anschlusses
         return o;
       }),
       tubes: [...this.tubes.values()].map((t) => {
@@ -1516,7 +1623,9 @@ export class BuildModel {
     this.clear();
     let maxSeq = 0;
     for (const n of data.nodes) {
-      this.nodes.set(n.id, { id: n.id, x: n.x, y: n.y, z: n.z, c45: !!n.c45, c45body: !!n.c45body, c45axis: n.c45axis || null, armDirs: n.armDirs || null, arms: n.arms || null, quat: n.quat || null });
+      this.nodes.set(n.id, { id: n.id, x: n.x, y: n.y, z: n.z, c45: !!n.c45, c45body: !!n.c45body,
+        c45axis: n.c45axis || null, armDirs: n.armDirs || null, arms: n.arms || null, quat: n.quat || null,
+        part: n.part || null, clampOn: n.clampOn || null, stub: n.stub || null });
       maxSeq = Math.max(maxSeq, parseSeq(n.id));
     }
     for (const t of data.tubes || []) {

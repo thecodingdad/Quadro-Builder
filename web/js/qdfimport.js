@@ -66,7 +66,6 @@ const FITTING_KINDS = {
   "roof-large2":     { renderBase: 4 },   // grosses Dach
   "lattice2":        { renderBase: 8, sized: true },  // Gitter
   "bag2":            { renderBase: 4 },   // Spielsack
-  "hole-connector4": { renderBase: 9, masked: true }, // Lochzapfenkupplung
   "open-connector2": { renderBase: 4 },   // offener Anschluss
 };
 
@@ -194,7 +193,8 @@ export function parseQDF(text, opts = {}) {
   const panels = [];           // { id, nodes:[4 ids], panelId, color }
   const clamps = [];           // { id, x, y, z, connectorId } (clamp2 = Doppelrohrverbinder)
   const textiles = [];         // { id, nodes:[4 ids], w, h, color } (textil2 = Netz/Stoff)
-  const slides = [];           // { id, x, y, z, dir, kind } (slide*/roof2, dekorativ)
+  const slides = [];
+  const holeClamps = [];       // Lochzapfenkupplungen (Rohr + Stelle folgt spaeter)           // { id, x, y, z, dir, kind } (slide*/roof2, dekorativ)
   const fittings = [];         // { id, kind, x, y, z, quat, color, w?, h?, mask? }
   const skipped = {};
   let seq = 1;
@@ -413,6 +413,20 @@ export function parseQDF(text, opts = {}) {
       const mat = typeof p.rest[0] === "number" ? p.rest[0] : null;
       const color = materials.get(mat) || FALLBACK_COLOR;
       tubes.push({ id: "t" + seq++, a: a.id, b: b.id, tubeId: def.id, color, length: def.length_cm });
+    } else if (p.name === "hole-connector4") {
+      // Lochzapfenkupplung: sie umschliesst ein Rohr und bietet quer dazu einen
+      // offenen Anschluss. Der Punkt ist die Muendung dieses Anschlusses, das
+      // eingesteckte Rohr laeuft in lokaler -Y-Richtung (26 von 26 Faellen im
+      // Bestand). Welches Rohr sie umschliesst, steht erst nach Durchlauf 3
+      // fest -- deshalb hier nur merken.
+      if (!p.tuple || p.tuple.length < 7) { skipped[p.name] = (skipped[p.name] || 0) + 1; continue; }
+      if (hasRenderRange(p.rest, 9)) continue;
+      const q = decodeQuat([p.tuple[0], p.tuple[1], p.tuple[2], p.tuple[3]]);
+      const ey = rotateByQuat(q, [0, 1, 0]);
+      holeClamps.push({
+        x: round(p.tuple[4] / 10), y: round(p.tuple[5] / 10), z: round(p.tuple[6] / 10),
+        stub: nearestCardinal([-ey[0], -ey[1], -ey[2]]),
+      });
     } else if (FITTING_KINDS[p.name]) {
       // Anbauteile: Raeder, Radkappen, Lenkrollen, Lager, Lochzapfen- und
       // offene Kupplungen, Rundwaende, grosse Daecher, Gitter, Saecke. Alle
@@ -761,6 +775,36 @@ export function parseQDF(text, opts = {}) {
     for (let i = nodes.length - 1; i >= 0; i--) if (!referenced.has(nodes[i].id)) nodes.splice(i, 1);
   }
 
+  // Lochzapfenkupplungen: Knoten an der Muendung, dazu das umschlossene Rohr.
+  // Die Huelse sitzt eine Kupplungslaenge hinter der Muendung, auf der Achse
+  // des Rohrs -- dort wird gesucht.
+  const clampNodes = new Map(nodes.map((n) => [n.id, n]));
+  for (const h of holeClamps) {
+    const axis = [h.x - h.stub[0] * conn, h.y - h.stub[1] * conn, h.z - h.stub[2] * conn];
+    let onTube = null, best = 6;   // Toleranz: die Huelse sitzt auf der Rohrachse
+    for (const t of tubes) {
+      if (t.bow) continue;
+      const a = clampNodes.get(t.a), b = clampNodes.get(t.b);
+      if (!a || !b) continue;
+      const ab = [b.x - a.x, b.y - a.y, b.z - a.z];
+      const L = Math.hypot(ab[0], ab[1], ab[2]) || 1;
+      const u = [ab[0] / L, ab[1] / L, ab[2] / L];
+      const rel = [axis[0] - a.x, axis[1] - a.y, axis[2] - a.z];
+      const s2 = rel[0] * u[0] + rel[1] * u[1] + rel[2] * u[2];
+      if (s2 < -1 || s2 > L + 1) continue;
+      const d = Math.hypot(rel[0] - u[0] * s2, rel[1] - u[1] * s2, rel[2] - u[2] * s2);
+      if (d < best) { best = d; onTube = { id: t.id, t: round(Math.max(0, Math.min(L, s2))) }; }
+    }
+    // NICHT auf eine vorhandene Kupplung schnappen: die Klemm-Kupplung ist ein
+    // eigenes Teil, auch wenn sie dicht neben einer Kupplung sitzt. Sonst
+    // verschwindet beim Export die Kupplung, an deren Stelle sie geschnappt ist.
+    const nd = { id: "n" + seq++, x: h.x, y: h.y, z: h.z };
+    nodes.push(nd);
+    nd.part = "hole_1";
+    nd.stub = h.stub;
+    if (onTube) nd.clampOn = onTube;
+  }
+
   return {
     format: 1,
     nodes: nodes.map((n) => {
@@ -771,6 +815,9 @@ export function parseQDF(text, opts = {}) {
       if (n.armDirs) o.armDirs = n.armDirs; // rotierte Arm-Richtungen (45-gedrehte Kupplung)
       if (n.arms) o.arms = n.arms; // variant2: echte Arm-Stutzen (inkl. offener Arme)
       if (n.quat) o.quat = n.quat; // Wuerfel-Orientierung der Kupplung (Three x,y,z,w)
+      if (n.part) o.part = n.part; // festes Katalogteil (Klemm-Kupplung)
+      if (n.clampOn) o.clampOn = n.clampOn; // umschlossenes Rohr + Stelle darauf
+      if (n.stub) o.stub = n.stub; // Richtung des offenen Anschlusses
       return o;
     }),
     tubes,

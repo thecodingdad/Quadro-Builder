@@ -1393,6 +1393,44 @@ export class SceneManager {
     return this._materials["ghost"];
   }
 
+  /**
+   * Klemm-Kupplung zeichnen: eine Huelse, die das Rohr umschliesst, und der
+   * offene Anschluss quer dazu. Der Knoten selbst liegt an der Muendung, eine
+   * Kupplungslaenge neben der Rohrachse -- dort beginnt das eingesteckte Rohr.
+   */
+  _addTubeClamp(model, n, mat, st) {
+    const g = geometry();
+    const cs = g.connectorSize;
+    const stub = n.stub || [0, 1, 0];
+    const axis = new THREE.Vector3(n.x - stub[0] * cs, n.y - stub[1] * cs, n.z - stub[2] * cs);
+    const tube = n.clampOn ? model.tubes.get(n.clampOn.tubeId) : null;
+    // Ohne bekanntes Rohr (importierte Kupplungen sitzen manchmal frei) liegt
+    // die Huelse quer zum Anschluss.
+    let dir = new THREE.Vector3(Math.abs(stub[1]) > 0.5 ? 1 : 0, Math.abs(stub[1]) > 0.5 ? 0 : 1, 0);
+    if (tube) {
+      const a = model.nodes.get(tube.a), b = model.nodes.get(tube.b);
+      if (a && b) dir.set(b.x - a.x, b.y - a.y, b.z - a.z).normalize();
+    }
+    const seg = Math.max(10, this._q().tube);
+    const sleeveR = g.tubeRadius * 1.3;
+    const sleeve = new THREE.Mesh(
+      this._cachedGeo(`clampSleeve${seg}`, () => new THREE.CylinderGeometry(sleeveR, sleeveR, cs + 2, seg)), mat);
+    sleeve.quaternion.setFromUnitVectors(UP, dir);
+    sleeve.position.copy(axis);
+    sleeve.userData = { kind: "node", id: n.id };
+    this.buildGroup.add(sleeve);
+    if (st !== "future") this.pickNodes.push(sleeve);
+    const sockR = g.tubeRadius * 1.18;
+    const socket = new THREE.Mesh(
+      this._cachedGeo(`clampSocket${seg}`, () => new THREE.CylinderGeometry(sockR, sockR, cs * 1.4, seg)), mat);
+    const sv = new THREE.Vector3(stub[0], stub[1], stub[2]);
+    socket.quaternion.setFromUnitVectors(UP, sv);
+    socket.position.copy(axis).addScaledVector(sv, cs * 0.7);
+    socket.userData = { kind: "node", id: n.id };
+    this.buildGroup.add(socket);
+    if (st !== "future") this.pickNodes.push(socket);
+  }
+
   // Bau-Anfasser (Handle): 3 feste Varianten nach kind. War fruehers pro addHandle()-
   // Aufruf ein neues Material (-> Leak), da _disposeGroup nur Geometrien freigibt.
   _handleMaterial(kind) {
@@ -1652,7 +1690,11 @@ export class SceneManager {
       // Adapter-Koerper (importierte C45, n.c45body) sind keine eigenstaendige
       // Kupplung -> kein dunkler Wuerfel; sie werden unten in Adapter-Farbe
       // gezeichnet (Huelse + Koerper + 45°-Arm).
-      if (!n.c45body) {
+      if (n.stub && n.part) {
+        // Klemm-Kupplung: Huelse um das umschlossene Rohr, quer dazu der offene
+        // Anschluss. Kein Wuerfel -- das Teil sitzt frei auf dem Rohr.
+        this._addTubeClamp(model, n, matFor(n.id, mat), st);
+      } else if (!n.c45body) {
         const pos = new THREE.Vector3(n.x, n.y, n.z);
         const quat = new THREE.Quaternion();
         // Importierte Kupplung: Wuerfel exakt um ihre Quaternion drehen, damit die

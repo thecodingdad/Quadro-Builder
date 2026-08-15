@@ -7,6 +7,9 @@ import { infeasibleConnectors } from "./bom.js";
 import { t } from "./i18n.js";
 import { round2, panelNormal, modelMiddle } from "./util.js";
 
+// Kupplungen, die auf einem Rohr sitzen statt im Raster: QDF-Art -> Katalogteil.
+const TUBE_CLAMP_PARTS = { "hole-connector4": "hole_1" };
+
 const CLICK_TOLERANCE = 9; // px: groessere Bewegung = Kamera drehen, kein Klick (Touch-tauglich)
 
 // C45_SLEEVE_LEN / C45_ARM_LEN stehen in config.js. Ausgemessen an den Dateien
@@ -308,6 +311,19 @@ export class Builder {
     ];
     const a = d.applied;
     if (want[0] === a[0] && want[1] === a[1] && want[2] === a[2]) return;
+    // Klemm-Kupplung: sie kann ihr Rohr nicht verlassen -- der Zeiger wird auf
+    // die Rohrachse projiziert, statt frei im Raster zu schieben.
+    const clamp = this._draggedClamp();
+    if (clamp) {
+      this.model.loadJSON(JSON.parse(d.before));
+      const target = [d.origin.x + want[0], d.origin.y + want[1], d.origin.z + want[2]];
+      if (this.model.slideTubeClamp(clamp, target, geometry().connectorSize)) {
+        d.applied = want;
+        d.result = { merged: 0, detached: 0 };
+      }
+      this.refresh();
+      return;
+    }
     // Jeder Schritt setzt auf der AUSGANGSLAGE auf, nicht auf dem vorigen
     // Schritt. Nur so bleibt das Ziehen umkehrbar: Trennen und Zusammenlegen
     // veraendern die Topologie und liessen sich sonst nicht zuruecknehmen.
@@ -322,6 +338,15 @@ export class Builder {
       if (a[0] || a[1] || a[2]) this._move(a[0], a[1], a[2]);
     }
     this.refresh();
+  }
+
+  // Ist genau EINE Klemm-Kupplung ausgewaehlt? Dann bestimmt ihr Rohr den Weg.
+  _draggedClamp() {
+    if (this.selection.size !== 1) return null;
+    const [id, kind] = [...this.selection][0];
+    if (kind !== "node") return null;
+    const n = this.model.nodes.get(id);
+    return n && n.clampOn ? id : null;
   }
 
   _endMoveDrag() {
@@ -631,7 +656,10 @@ export class Builder {
     const isC45 = useDiag && !isSlope; // C45-Adapter nur an einer NICHT-schraegen Kupplung
     // Schräg-Konnektor: nur seine eigene gedrehte 90°-Arm-Basis (Schräge + Quer
     // in der Ebene + die zwei Kardinalen senkrecht dazu), NICHT beliebige Diagonalen.
-    const dirs = hasArmDirs ? node.armDirs
+    // Klemm-Kupplung: sie hat genau EIN offenes Ende, dorthin geht das Rohr.
+    const dirs = node.stub
+      ? DIRECTIONS.filter((d) => d.vec[0] * node.stub[0] + d.vec[1] * node.stub[1] + d.vec[2] * node.stub[2] > 0.9)
+      : hasArmDirs ? node.armDirs
       : isSlope ? (this._slopeArmDirs(node) || DIAGONAL_DIRECTIONS)
       : (this.diagonal ? DIAGONAL_DIRECTIONS : DIRECTIONS);
     for (const d of dirs) {
@@ -788,7 +816,8 @@ export class Builder {
   // Anbauteile: an jeder Montagestelle des gewaehlten Teils ein Ankerpunkt.
   // Wo dasselbe Teil schon steckt, wird keiner gezeigt -- gestapelt wird nicht.
   _buildFittingHandles() {
-    if (this.fittingKind === "lattice2") return;   // Gitter laeuft ueber zwei Rohre
+    if (this.fittingKind === "lattice2") return;      // Gitter laeuft ueber zwei Rohre
+    if (TUBE_CLAMP_PARTS[this.fittingKind]) return;   // Klemm-Kupplung sitzt frei auf dem Rohr
     for (const m of this.model.fittingMounts(this.fittingKind)) {
       let taken = false;
       for (const f of this.model.fittings.values()) {
@@ -1034,6 +1063,16 @@ export class Builder {
         const tb = this.model.tubes.get(p.data.id);
         obj = tb && !tb.arm && !tb.link && !tb.bow ? p.object : null;
       }
+    } else if (this.mode === "fitting" && TUBE_CLAMP_PARTS[this.fittingKind]) {
+      // Klemm-Kupplung: Rohre sind anklickbar, gesetzte Kupplungen ebenso.
+      const p = this.scene.pickForDelete(x, y);
+      const kind = p && p.data.kind;
+      if (kind === "tube") {
+        const tb = this.model.tubes.get(p.data.id);
+        obj = tb && !tb.arm && !tb.link ? p.object : null;
+      } else if (kind === "node") {
+        obj = this.model.nodes.get(p.data.id)?.clampOn ? p.object : null;
+      }
     } else if (this.mode === "fitting") {
       // Ankerpunkte setzen, ein Klick auf ein gesetztes Anbauteil entfernt es.
       const h = this.scene.pickHandle(x, y);
@@ -1161,6 +1200,7 @@ export class Builder {
    */
   _clickFitting(e) {
     if (this.fittingKind === "lattice2") { this._clickLattice(e); return; }
+    if (TUBE_CLAMP_PARTS[this.fittingKind]) { this._clickTubeClamp(e); return; }
     const h = this.scene.pickHandle(e.clientX, e.clientY);
     const p = this.scene.pickForDelete(e.clientX, e.clientY);
     if (h && h.data && h.data.fittingMount && (!p || h.distance <= p.distance)) {
@@ -1176,6 +1216,33 @@ export class Builder {
       this.recordHistory(() => this.model.removeFitting(p.data.id));
       this.refresh();
     }
+  }
+
+  /**
+   * Klemm-Kupplung (Lochzapfen-, Lagerkupplung): auf ein beliebiges Rohr
+   * klicken -- sie sitzt genau dort, mit dem offenen Anschluss zur Klickseite.
+   * Ein Klick auf eine gesetzte Kupplung nimmt sie weg.
+   */
+  _clickTubeClamp(e) {
+    const pick = this.scene.pickForDelete(e.clientX, e.clientY);
+    if (!pick) return;
+    const part = TUBE_CLAMP_PARTS[this.fittingKind];
+    if (pick.data.kind === "node") {
+      const n = this.model.nodes.get(pick.data.id);
+      if (n && n.clampOn) {
+        this.recordHistory(() => this.model.removeNode(n.id));
+        this.refresh();
+        return;
+      }
+    }
+    if (pick.data.kind !== "tube" || !pick.point) { this.onNotice(t("notice_clamp_click_tube")); return; }
+    const tb = this.model.tubes.get(pick.data.id);
+    if (!tb || tb.arm || tb.link) { this.onNotice(t("notice_clamp_click_tube")); return; }
+    let added = null;
+    const hit = [pick.point.x, pick.point.y, pick.point.z];
+    this.recordHistory(() => { added = this.model.addTubeClamp(pick.data.id, hit, part, geometry().connectorSize); });
+    if (!added) this.onNotice(t("notice_fitting_exists"));
+    this.refresh();
   }
 
   /**
