@@ -79,6 +79,9 @@ const COLOR_BY_NAME = {
 };
 const FALLBACK_COLOR = "blue";
 
+// Abstand vom gespeicherten Punkt des Spielsacks zur Mitte seines Feldes (cm).
+const BAG_OFFSET = 20;
+
 // Eine QDF-Zeile in { name, tuple:number[], rest:(number|string)[] } zerlegen.
 function parseLine(line) {
   const m = line.match(/^\s*([A-Za-z][\w-]*)\s*\{(.*)\}\s*;?\s*$/);
@@ -460,6 +463,16 @@ export function parseQDF(text, opts = {}) {
         quat: [r4(q[1] / qn), r4(q[2] / qn), r4(q[3] / qn), r4(q[0] / qn)],
         color: materials.get(mat) || null,
       };
+      // Der Spielsack haengt zwischen zwei Rohren; der Punkt in der Datei liegt
+      // aber auf dem EINEN Rohr -- die Mitte des Feldes liegt 200 mm weiter in
+      // der lokalen +Z-Richtung (an allen fuenf Vorkommen steht dort das zweite
+      // Rohr). Wir merken uns die Mitte, so wie bei selbst gesetzten Saecken.
+      if (p.name === "bag2") {
+        const ez = rotateByQuat(q, [0, 0, 1]);
+        f.x = round(f.x + ez[0] * BAG_OFFSET);
+        f.y = round(f.y + ez[1] * BAG_OFFSET);
+        f.z = round(f.z + ez[2] * BAG_OFFSET);
+      }
       // Das Gitter bringt seine Masse mit. Anders als bei Rohren und Platten
       // ist es das ECHTE Mass der Flaeche, nicht das Teilemass ohne Kupplung:
       // 1550 x 775 spannt gemessen genau von -775 bis +775 um den Mittelpunkt.

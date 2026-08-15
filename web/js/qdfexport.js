@@ -363,15 +363,22 @@ export function buildQDF(model) {
       ? encodeQuat([f.quat[3], f.quat[0], f.quat[1], f.quat[2]])
       : IDENTITY;
     const mat = f.color ? tubeMat(f.color) : CONNECTOR_MAT;
+    // Der Spielsack wird an dem Rohr gespeichert, an dem er haengt -- unsere
+    // Mitte liegt 20 cm weiter in der lokalen +Z-Richtung, also zurueckrechnen.
+    let fx = f.x, fy = f.y, fz = f.z;
+    if (f.kind === "bag2" && f.quat) {
+      const ez = rotateByQuat([f.quat[3], f.quat[0], f.quat[1], f.quat[2]], [0, 0, 1]);
+      fx -= ez[0] * 20; fy -= ez[1] * 20; fz -= ez[2] * 20;
+    }
     if (f.kind === "lattice2" && f.w != null && f.h != null) {
-      lines.push(`lattice2{${mat}, ${tuple(q, f.x, f.y, f.z)}, 1, ${mm(f.w)}, 0., ${mm(f.h)}, 0., 0}`);
+      lines.push(`lattice2{${mat}, ${tuple(q, fx, fy, fz)}, 1, ${mm(f.w)}, 0., ${mm(f.h)}, 0., 0}`);
     } else if (f.kind === "hole-connector4") {
       const mask = f.mask || 0;
-      lines.push(`hole-connector4{${CONNECTOR_MAT}, ${tuple(q, f.x, f.y, f.z)}, 0, 0, ${mask}, ${mask - 3}, 3840, 0, 0}`);
+      lines.push(`hole-connector4{${CONNECTOR_MAT}, ${tuple(q, fx, fy, fz)}, 0, 0, ${mask}, ${mask - 3}, 3840, 0, 0}`);
     } else if (f.kind === "bearing2") {
-      lines.push(`bearing2{${CONNECTOR_MAT}, ${tuple(q, f.x, f.y, f.z)}, 1, ${mm(cs50)}, 0., 0}`);
+      lines.push(`bearing2{${CONNECTOR_MAT}, ${tuple(q, fx, fy, fz)}, 1, ${mm(cs50)}, 0., 0}`);
     } else {
-      lines.push(`${f.kind}{${mat}, ${tuple(q, f.x, f.y, f.z)}, 1, 0}`);
+      lines.push(`${f.kind}{${mat}, ${tuple(q, fx, fy, fz)}, 1, 0}`);
     }
     stats.fittings++;
   }
