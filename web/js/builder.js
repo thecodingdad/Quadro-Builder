@@ -1371,11 +1371,12 @@ export class Builder {
     if (!tb || tb.arm || tb.link) { this.onNotice(t("notice_clamp_click_tube")); return; }
     const hit = [tubePick.point.x, tubePick.point.y, tubePick.point.z];
     const mount = this.model.tubeFittingMount(pickData.id, hit, this.fittingKind);
+    if (!mount) { this.onNotice(t("notice_fitting_no_room")); return; }
     let added = null;
-    if (mount) this.recordHistory(() => {
+    this.recordHistory(() => {
       added = this.model.addFittingAt(this.fittingKind, mount, this.colorFor("fitting"));
     });
-    if (!added) this.onNotice(t("notice_fitting_exists"));
+    if (!added) this.onNotice(t("notice_fitting_no_room"));
     this.refresh();
   }
 

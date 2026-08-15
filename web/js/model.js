@@ -56,6 +56,16 @@ const LATTICE_GAPS = [40, 80, 120, 160];
 const LATTICE_STEP = 40;
 const LATTICE_MAX = 160;
 
+// Breite der Teile entlang ihrer Achse (cm) -- so breit wie in scene.js
+// gezeichnet. Gebraucht wird sie, um zu pruefen, ob ein Rad auf sein Rohr passt
+// und ob es an ein anderes Teil stoesst.
+const FITTING_WIDTH = {
+  "multi-wheel2": 2.4, "floating-wheel2": 14, "hub-cap2": 5, "open-connector2": 1,
+  "bearing2": 5, "casters2": 5, "adapter2": 5, "steering-lock2": 2.4,
+};
+
+const WHEEL_KINDS = new Set(["multi-wheel2", "floating-wheel2"]);
+
 const CARDINALS = [[1, 0, 0], [-1, 0, 0], [0, 1, 0], [0, -1, 0], [0, 0, 1], [0, 0, -1]];
 
 // Laenge des Radlagers (Feld 50. in allen 125 bearing2-Zeilen des Bestands).
@@ -635,9 +645,40 @@ export class BuildModel {
     const ab = [b.x - a.x, b.y - a.y, b.z - a.z];
     const L = Math.hypot(ab[0], ab[1], ab[2]) || 1;
     const u = [ab[0] / L, ab[1] / L, ab[2] / L];
+    // Das Teil muss GANZ auf dem Rohr sitzen: die Stelle wird so weit
+    // hereingezogen, dass keine Haelfte ueber ein Ende hinausragt. Passt es
+    // ueberhaupt nicht auf das Rohr, gibt es keine Montagestelle.
+    const half = (FITTING_WIDTH[kind] || 0) / 2;
+    if (L < 2 * half) return null;
     const rel = [point[0] - a.x, point[1] - a.y, point[2] - a.z];
-    const s = Math.max(0, Math.min(L, rel[0] * u[0] + rel[1] * u[1] + rel[2] * u[2]));
-    return { pos: [a.x + u[0] * s, a.y + u[1] * s, a.z + u[2] * s], dir: u, tubeId };
+    const raw = rel[0] * u[0] + rel[1] * u[1] + rel[2] * u[2];
+    const s = Math.max(half, Math.min(L - half, raw));
+    const pos = [a.x + u[0] * s, a.y + u[1] * s, a.z + u[2] * s];
+    // Stoesst es an ein anderes Teil auf demselben Rohr?
+    if (this._fittingBlocked(kind, pos, u, half)) return null;
+    return { pos, dir: u, tubeId };
+  }
+
+  /**
+   * Liegt auf derselben Achse schon ein Teil so nah, dass sich beide
+   * ueberschneiden wuerden? Verglichen wird der Abstand entlang der Achse mit
+   * den halben Breiten; quer dazu zaehlt nur, was ueberhaupt in der Naehe liegt.
+   */
+  _fittingBlocked(kind, pos, axis, half) {
+    // Geprueft wird Rad gegen Rad. Kappen, Arretierungen und Lager gehoeren zu
+    // ihrem Rad und duerfen es beruehren -- sie halten es ja fest.
+    if (!WHEEL_KINDS.has(kind)) return false;
+    for (const f of this.fittings.values()) {
+      if (!WHEEL_KINDS.has(f.kind)) continue;
+      const w = (FITTING_WIDTH[f.kind] || 0) / 2;
+      if (!w) continue;
+      const d = [f.x - pos[0], f.y - pos[1], f.z - pos[2]];
+      const along = Math.abs(dot3(d, axis));
+      const quer = Math.hypot(d[0], d[1], d[2]) ** 2 - along ** 2;
+      if (Math.sqrt(Math.max(0, quer)) > 8) continue;      // sitzt woanders
+      if (along < half + w - 0.2) return true;
+    }
+    return false;
   }
 
   /**
@@ -1039,6 +1080,8 @@ export class BuildModel {
       if (!blocken.includes(f.kind)) continue;
       if (Math.hypot(f.x - mount.pos[0], f.y - mount.pos[1], f.z - mount.pos[2]) < 3) return null;
     }
+    const half = (FITTING_WIDTH[kind] || 0) / 2;
+    if (half && this._fittingBlocked(kind, mount.pos, mount.dir || [1, 0, 0], half)) return null;
     const f = this.addFitting(kind, mount.pos[0], mount.pos[1], mount.pos[2],
       { quat: mount.quat || quatFromXAxis(mount.dir), color: color || null });
     // Eine Laufrolle sitzt immer auf ihrem Adapter -- der kommt deshalb im
