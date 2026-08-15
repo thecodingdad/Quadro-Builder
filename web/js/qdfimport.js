@@ -312,6 +312,10 @@ export function parseQDF(text, opts = {}) {
       if (!p.tuple || p.tuple.length < 7) continue;
       const x = p.tuple[4] / 10, y = p.tuple[5] / 10, z = p.tuple[6] / 10;
       const nd = nodeAt(round(x), round(y), round(z));
+      // Sie steht als eigene Zeile in der Datei: ein gekauftes Teil, das bleibt
+      // -- auch wenn gerade kein Rohr an ihr steckt (etwa das Deckenraster eines
+      // Zimmeraufbaus). Weggeraeumt wird nur, was wir selbst angelegt haben.
+      nd.fromFile = true;
       if (!connectorNodes.includes(nd)) connectorNodes.push(nd);
       // connector45_2 ist die ECK-Kupplung, an der eine 45-Grad-Winkelkupplung
       // (C45) sitzt. Der eigentliche Adapter-Koerper samt Diagonalrohr sitzt
@@ -802,7 +806,9 @@ export function parseQDF(text, opts = {}) {
     // hier, wurden deren Ecken als "frei schwebend" geloescht und das Netz zeigte
     // danach auf Knoten, die es nicht mehr gibt.
     for (const tx of textiles) for (const id of tx.nodes) referenced.add(id);
-    for (let i = nodes.length - 1; i >= 0; i--) if (!referenced.has(nodes[i].id)) nodes.splice(i, 1);
+    for (let i = nodes.length - 1; i >= 0; i--) {
+      if (!referenced.has(nodes[i].id) && !nodes[i].fromFile) nodes.splice(i, 1);
+    }
   }
 
   // Lochzapfenkupplungen: Knoten an der Muendung, dazu das umschlossene Rohr.
