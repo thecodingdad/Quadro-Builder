@@ -64,11 +64,12 @@ const STRAIGHT_SLIDE_DROP = new THREE.Vector3(0, -80, 120);
 const CURVED_SLIDE_EXIT = new THREE.Vector3(1, 0, 0);
 // Höhe der Rutschbahn des Auslaufs über seinem Bezugspunkt (halbe Kupplung).
 const SLIDE_END_LIFT = 2.5;
-// Auslauf: waagerechtes Stück, dann eine nach unten geneigte Lippe. Zusammen
-// reichen sie 47,5 cm nach vorn -- so lang ist das Teil.
-const SLIDE_END_LIP = 5;                          // cm Lippenlänge
-const SLIDE_END_LIP_ANGLE = 30 * Math.PI / 180;   // Neigung der Lippe
-const SLIDE_END_FLAT = 47.5 - SLIDE_END_LIP * Math.cos(SLIDE_END_LIP_ANGLE);
+// Auslauf: waagerechtes Stück, dann die Lippe -- ein abgerundeter Viertelkreis,
+// der um 90 Grad nach unten kippt (nur die Rutschfläche, ohne Wangen). Zusammen
+// reichen sie 47,5 cm nach vorn, so lang ist das Teil.
+const SLIDE_END_LIP = 5;                                     // cm Bogenlänge der Lippe
+const SLIDE_END_LIP_R = SLIDE_END_LIP / (Math.PI / 2);       // Radius des Viertelkreises
+const SLIDE_END_FLAT = 47.5 - SLIDE_END_LIP_R;
 // Flaechige Anbauteile verschwinden im Verstaerken- und Kollisions-Modus, wie
 // Platten und Netze auch.
 const FLAT_FITTINGS = new Set(["lattice2", "textil-round2", "roof-large2"]);
@@ -1148,8 +1149,8 @@ export class SceneManager {
   // LETZTE Querschnitt des Vorgaengerteils), damit zwei Rutschenteile am gemeinsamen
   // Punkt OHNE Spalt/Knick im Querschnitt ineinander uebergehen ("Übergänge"-Fix).
   // Rueckgabe: {W,Nrm} des LETZTEN Querschnitts, fuer das naechste Teil der Kette.
-  _addSlideAlongCurve(mat, st, id, bez, SEG, startFrame) {
-    const halfW = 35 / 2, wallH = 11;
+  _addSlideAlongCurve(mat, st, id, bez, SEG, startFrame, wallOf = null) {
+    const halfW = 35 / 2, WALL = 11;
     const N = SEG + 1, eps = 0.5 / SEG;
     const verts = [];
     let prevW = startFrame ? startFrame.W.clone() : null;
@@ -1171,6 +1172,9 @@ export class SceneManager {
         Nrm = new THREE.Vector3().crossVectors(W, T).normalize();
       }
       prevW = W; lastW = W; lastNrm = Nrm;
+      // Wangenhöhe darf entlang der Bahn auslaufen -- die Lippe des Auslaufs
+      // ist nur noch Rutschfläche, ohne Ränder.
+      const wallH = WALL * (wallOf ? wallOf(t) : 1);
       const fl = c.clone().addScaledVector(W, -halfW);
       const fr = c.clone().addScaledVector(W, halfW);
       verts.push(fl.clone().addScaledVector(Nrm, wallH), fl, fr, fr.clone().addScaledVector(Nrm, wallH));
@@ -2515,16 +2519,26 @@ export class SceneManager {
     // erst SLIDE_END_FLAT waagerecht, dann SLIDE_END_LIP schräg abwärts. Der
     // Rutschenkörper davor endet ebenfalls waagerecht, der Übergang bleibt also
     // knickfrei.
-    const lippeVor = SLIDE_END_LIP * Math.cos(SLIDE_END_LIP_ANGLE);
-    const lippeAb = SLIDE_END_LIP * Math.sin(SLIDE_END_LIP_ANGLE);
     const front = new THREE.Vector3(P0.x + fwd.x * SLIDE_END_FLAT, P0.y, P0.z + fwd.z * SLIDE_END_FLAT);
-    const lippe = new THREE.Vector3(front.x + fwd.x * lippeVor, front.y - lippeAb, front.z + fwd.z * lippeVor);
-    const anteil = SLIDE_END_FLAT / (SLIDE_END_FLAT + SLIDE_END_LIP);
-    const bez = (t) => (t <= anteil
-      ? P0.clone().lerp(front, t / anteil)
-      : front.clone().lerp(lippe, (t - anteil) / (1 - anteil)));
+    // Lippe: Viertelkreis um einen Punkt senkrecht unter dem Ende des flachen
+    // Stücks -- die Fläche kippt auf ihrer Länge um volle 90 Grad nach unten.
+    const mitte = front.clone().addScaledVector(UP, -SLIDE_END_LIP_R);
+    // Parameter-Aufteilung, nicht Längen-Aufteilung: die kurze Lippe bekommt so
+    // genug Stützstellen für ihre Rundung, das flache Stück braucht kaum welche.
+    const anteil = 0.55;
+    const bez = (t) => {
+      if (t <= anteil) return P0.clone().lerp(front, t / anteil);
+      const phi = ((t - anteil) / (1 - anteil)) * Math.PI / 2;
+      return mitte.clone()
+        .addScaledVector(fwd, SLIDE_END_LIP_R * Math.sin(phi))
+        .addScaledVector(UP, SLIDE_END_LIP_R * Math.cos(phi));
+    };
+    // Die Wangen enden mit dem flachen Stück; auf der Lippe bleibt nur die
+    // Rutschfläche.
+    const wallOf = (t) => (t <= anteil ? 1
+      : Math.max(0, 1 - ((t - anteil) / (1 - anteil)) * 4));
     const hint = this._slideChainNextId === sl.id ? this._slideChainFrame : null;
-    this._slideChainFrame = this._addSlideAlongCurve(mat, st, sl.id, bez, 10, hint);
+    this._slideChainFrame = this._addSlideAlongCurve(mat, st, sl.id, bez, 14, hint, wallOf);
     this._slideChainNextId = null; // Endstück: Kette stoppt hier.
   }
 
