@@ -12,6 +12,7 @@ const FITTING_MOUNTS = {
   "casters2":        { at: "node", offset: 0 },   // Laufrolle; der Adapter kommt mit
   "open-connector2": { at: "node", offset: 0 },
   "hole-connector4": { at: "node", offset: 5 },   // 50 mm neben der Kupplung
+  "steering-lock2":  { at: "node", offset: 0 },   // Multirad-Arretierung, sitzt am Ende des Stutzens
   "bag2":            { at: "tube", offset: 20 },  // 200 mm vom Rohrende
 };
 
@@ -37,7 +38,7 @@ export const TUBE_FITTINGS = {
 export const PLACEABLE_FITTINGS = [...new Set([
   ...Object.keys(FITTING_MOUNTS),
   ...Object.keys(TUBE_FITTINGS),
-  "steering-lock2", "hub-cap2",   // in der Radmitte bzw. am Rohrende
+  "hub-cap2",                     // am offenen Rohrende, siehe _wheelCapMounts
   "bearing-clamp",                // Lagerkupplung: klemmt um ein Rohr (kein eigenes QDF-Element)
   "lattice2", "textil-round2", "roof-large2",
 ])];
@@ -594,7 +595,6 @@ export class BuildModel {
    */
   fittingMounts(kind) {
     if (kind === "multi-wheel2") return this._wheelMounts();
-    if (kind === "steering-lock2") return this._wheelLockMounts("multi-wheel2");
     if (kind === "hub-cap2" || kind === "open-connector2") return this._wheelCapMounts();
     if (kind === "textil-round2") return this._roundCoverMounts();
     if (kind === "roof-large2") return this._roofMounts();
@@ -610,7 +610,7 @@ export class BuildModel {
   tubeFittingMount(tubeId, point, kind) {
     const where = TUBE_FITTINGS[kind];
     if (!where) return null;
-    if (where === "end") return this.tubeEndMount(tubeId, point);
+    if (where === "end") return this.tubeEndMount(tubeId, point, true);
     const t = this.tubes.get(tubeId);
     const a = t && this.nodes.get(t.a), b = t && this.nodes.get(t.b);
     if (!a || !b) return null;
@@ -627,7 +627,7 @@ export class BuildModel {
    * angeklickten Rohrs. Genommen wird das naehere der beiden Enden, die Achse
    * zeigt vom Rohr weg.
    */
-  tubeEndMount(tubeId, point) {
+  tubeEndMount(tubeId, point, freeOnly = false) {
     const t = this.tubes.get(tubeId);
     if (!t) return null;
     const a = this.nodes.get(t.a), b = this.nodes.get(t.b);
@@ -635,6 +635,9 @@ export class BuildModel {
     const da = Math.hypot(point[0] - a.x, point[1] - a.y, point[2] - a.z);
     const db = Math.hypot(point[0] - b.x, point[1] - b.y, point[2] - b.z);
     const end = da <= db ? a : b, other = da <= db ? b : a;
+    // Die Radkappe verschliesst ein Rohrende -- an einer Kupplung mit weiteren
+    // Rohren gibt es nichts zu verschliessen.
+    if (freeOnly && this.degree(end.id) !== 1) return null;
     const d = [end.x - other.x, end.y - other.y, end.z - other.z];
     const L = Math.hypot(d[0], d[1], d[2]) || 1;
     return { pos: [end.x, end.y, end.z], dir: [d[0] / L, d[1] / L, d[2] / L], nodeId: end.id };
@@ -711,21 +714,6 @@ export class BuildModel {
       if (Math.hypot(f.x - node.x, f.y - node.y, f.z - node.z) < 3) return true;
     }
     return false;
-  }
-
-  /**
-   * Radarretierung und Radkappe sitzen in der MITTE eines gesetzten Rades und
-   * halten es fest -- die Arretierung am schmalen Rad, die Kappe am Schwimmrad.
-   * Es gibt sie also nur dort, wo das passende Rad steckt, und sie uebernehmen
-   * dessen Achse.
-   */
-  _wheelLockMounts(wheelKind) {
-    const out = [];
-    for (const f of this.fittings.values()) {
-      if (f.kind !== wheelKind) continue;
-      out.push({ pos: [f.x, f.y, f.z], dir: [1, 0, 0], quat: f.quat ? f.quat.slice() : null });
-    }
-    return out;
   }
 
   /**

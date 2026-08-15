@@ -627,11 +627,11 @@
     {
       "id": "steering_lock",
       "code": "",
-      "name": "Radarretierung",
-      "name_en": "Wheel lock",
+      "name": "Multirad Arretierung",
+      "name_en": "Multi wheel lock",
       "price": 0,
       "qdf": "steering-lock2",
-      "note": "sitzt in der Radmitte und verbindet das Rad fest mit der Kupplung · Preis noch offen"
+      "note": "sitzt am Ende eines Kupplungs-Stutzens und haelt das Multirad · Preis noch offen"
     },
     {
       "id": "wheel_adapter",

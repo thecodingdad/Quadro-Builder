@@ -773,10 +773,10 @@ export class SceneManager {
         geo = this._cachedGeo("wheellock", () => {
           const g = new THREE.CylinderGeometry(6, 6, 2.4, Math.max(16, this._q().tube * 2));
           g.rotateZ(Math.PI / 2);
-          // Sie steht 1 cm ueber die Aussenflaeche des Rades hinaus (Rad 2,4 cm
-          // dick, beide um denselben Punkt): 1,2 + 1 - 1,2 = 1 cm Versatz nach
-          // aussen, also entlang der eigenen +X-Achse.
-          g.translate(1, 0, 0);
+          // Sie sitzt am Ende des Kupplungs-Stutzens, also eine Kupplungslaenge
+          // von der Kupplung entfernt -- genau dort, wo das Multirad auf seinem
+          // Radlager sitzt -- und steht 1 cm ueber dessen Aussenflaeche hinaus.
+          g.translate(6, 0, 0);
           return g;
         });
         mat = this._fittingMaterial(0xd42e2e, false);
