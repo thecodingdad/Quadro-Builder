@@ -422,6 +422,19 @@ export function buildQDF(model) {
   };
 
   for (const p of model.panels.values()) {
+    // Baellebad: die Datei fuehrt EINE Zeile, wir zeigen vier Waende und einen
+    // Boden. Also die Original-Zeile zurueckschreiben und die abgeleiteten
+    // Flaechen auslassen -- sonst stuenden fuenf Platten statt eines Pools da.
+    if (p.poolPart) {
+      if (p.pool && p.pool.p) {
+        const q = p.pool.quat && p.pool.quat.length === 4
+          ? encodeQuat([p.pool.quat[3], p.pool.quat[0], p.pool.quat[1], p.pool.quat[2]])
+          : IDENTITY;
+        lines.push(`${p.pool.kind}{${panelMat(p.color)}, ${tuple(q, p.pool.p[0], p.pool.p[1], p.pool.p[2])}, 1, 0}`);
+        stats.panels++;
+      }
+      continue;
+    }
     const def = getPanel(p.panelId);
     const line = rectLine("panel2", model.panelCorners(p), panelMat(p.color), def ? [def.w, def.h] : null, p.side);
     if (line) { lines.push(line); stats.panels++; }

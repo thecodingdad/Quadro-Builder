@@ -627,8 +627,13 @@ export function parseQDF(text, opts = {}) {
       if (!nodesFound) { skipped[p.name] = (skipped[p.name] || 0) + 1; continue; }
       const mat = typeof p.rest[0] === "number" ? p.rest[0] : null;
       const color = materials.get(mat) || FALLBACK_COLOR;
-      // Front-Wand
-      panels.push({ id: "p" + seq++, nodes: nodesFound.map((n) => n.id), panelId, color });
+      // Front-Wand. Sie traegt die Original-Zeile des Baellebads: die Datei
+      // fuehrt EIN pool2-Element, wir zeigen vier Waende und einen Boden --
+      // beim Export wird daraus wieder die eine Zeile.
+      const poolLine = { kind: p.name, quat: [q[1], q[2], q[3], q[0]],
+        p: [round(p.tuple[4] / 10), round(p.tuple[5] / 10), round(p.tuple[6] / 10)] };
+      panels.push({ id: "p" + seq++, nodes: nodesFound.map((n) => n.id), panelId, color,
+        pool: poolLine, poolPart: true });
       // Restliche 3 Wände aus Kupplungsnetz ableiten
       const [nA, nB, nC, nD] = nodesFound;
       const e1 = [nB.x - nA.x, nB.y - nA.y, nB.z - nA.z]; // horizontal
@@ -674,12 +679,12 @@ export function parseQDF(text, opts = {}) {
       if (bestBack) {
         const [bA, bB, bC, bD] = bestBack;
         const sideId = panelIdForDims(bestDepth, span1) || panelId;
-        panels.push({ id: "p" + seq++, nodes: [bA.id, bB.id, bC.id, bD.id], panelId, color }); // Rückwand
-        panels.push({ id: "p" + seq++, nodes: [nA.id, bA.id, bD.id, nD.id], panelId: sideId, color }); // linke Seitenwand
-        panels.push({ id: "p" + seq++, nodes: [nB.id, bB.id, bC.id, nC.id], panelId: sideId, color }); // rechte Seitenwand
+        panels.push({ id: "p" + seq++, nodes: [bA.id, bB.id, bC.id, bD.id], panelId, color, poolPart: true }); // Rückwand
+        panels.push({ id: "p" + seq++, nodes: [nA.id, bA.id, bD.id, nD.id], panelId: sideId, color, poolPart: true }); // linke Seitenwand
+        panels.push({ id: "p" + seq++, nodes: [nB.id, bB.id, bC.id, nC.id], panelId: sideId, color, poolPart: true }); // rechte Seitenwand
         // Boden: 4 untere Ecken (alle y=0); scene.js rendert darüber das Wasser-Volumen.
         // Node-Reihenfolge: nA→nB (Breite), nA→bA (Tiefe) -> scene.js BoxGeometry passt.
-        panels.push({ id: "p" + seq++, nodes: [nA.id, nB.id, bB.id, bA.id], panelId: "pool_floor", color });
+        panels.push({ id: "p" + seq++, nodes: [nA.id, nB.id, bB.id, bA.id], panelId: "pool_floor", color, poolPart: true });
       }
     }
   }

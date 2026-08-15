@@ -1942,7 +1942,10 @@ export class BuildModel {
   _panelRecord(p) {
     const side = p.side < 0 ? -1 : 1;
     if (p.a && p.b) {
-      return { id: p.id, a: p.a, b: p.b, t0: p.t0 || 0, len: p.len || 0, color: p.color, side };
+      const r = { id: p.id, a: p.a, b: p.b, t0: p.t0 || 0, len: p.len || 0, color: p.color, side };
+      if (p.pool) r.pool = p.pool;
+      if (p.poolPart) r.poolPart = true;
+      return r;
     }
     if (!p.nodes || p.nodes.length !== 4) return null;
     const ns = p.nodes.map((id) => this.nodes.get(id));
@@ -2041,6 +2044,8 @@ export class BuildModel {
       panels: [...this.panels.values()].map((p) => {
         const o = { id: p.id, a: p.a, b: p.b, t0: round(p.t0), len: round(p.len), panelId: p.panelId, color: p.color };
         if ((p.side || 1) < 0) o.side = -1;   // Standard ist oben/aussen
+        if (p.pool) o.pool = p.pool;          // Original-Zeile des Baellebads
+        if (p.poolPart) o.poolPart = true;    // Wand/Boden eines Baellebads
         return o;
       }),
       clamps: [...this.clamps.values()].map((c) => {
@@ -2115,6 +2120,8 @@ export class BuildModel {
       const rec = this._panelRecord(p);
       if (!rec) continue;
       rec.panelId = p.panelId;
+      if (p.pool) rec.pool = p.pool;
+      if (p.poolPart) rec.poolPart = true;
       this.panels.set(p.id, rec);
       maxSeq = Math.max(maxSeq, parseSeq(p.id));
     }
