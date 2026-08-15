@@ -593,7 +593,7 @@ export class BuildModel {
   fittingMounts(kind) {
     if (kind === "multi-wheel2") return this._wheelMounts();
     if (kind === "steering-lock2") return this._wheelLockMounts("multi-wheel2");
-    if (kind === "hub-cap2") return this._wheelLockMounts("floating-wheel2");
+    if (kind === "hub-cap2") return this._wheelCapMounts();
     if (kind === "textil-round2") return this._roundCoverMounts();
     if (kind === "roof-large2") return this._roofMounts();
     const spec = FITTING_MOUNTS[kind];
@@ -651,6 +651,30 @@ export class BuildModel {
       const ax = rotateX(f.quat);
       out.push({ pos: [round(f.x + ax[0] * BEARING_LEN), round(f.y + ax[1] * BEARING_LEN),
         round(f.z + ax[2] * BEARING_LEN)], dir: ax, quat: f.quat.slice() });
+    }
+    return out;
+  }
+
+  /**
+   * Radkappe: sitzt auf einer EINARMIGEN Kupplung, also am Ende eines Rohrs --
+   * und ersetzt sie dort. Sinn ergibt das mit einem Schwimmrad auf demselben
+   * Rohr, gesetzt wird sie aber an der Kupplung.
+   */
+  _wheelCapMounts() {
+    const out = [];
+    for (const n of this.nodes.values()) {
+      if (n.c45body || n.part) continue;
+      const arms = [];
+      for (const t of this.tubes.values()) {
+        if (t.arm || t.link) continue;
+        const other = t.a === n.id ? this.nodes.get(t.b) : t.b === n.id ? this.nodes.get(t.a) : null;
+        if (other) arms.push(other);
+      }
+      if (arms.length !== 1) continue;                 // nur freie Rohrenden
+      const o = arms[0];
+      const d = [n.x - o.x, n.y - o.y, n.z - o.z];
+      const L = Math.hypot(d[0], d[1], d[2]) || 1;
+      out.push({ pos: [n.x, n.y, n.z], dir: [d[0] / L, d[1] / L, d[2] / L], nodeId: n.id });
     }
     return out;
   }

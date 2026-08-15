@@ -711,10 +711,13 @@ export class SceneManager {
         // Gleiche Aufgabe wie die Radarretierung, nur groesser und gewoelbt --
         // und weiter aussen, weil das Schwimmrad 14 cm dick ist. Sie steht wie
         // die Arretierung 1 cm ueber die Aussenflaeche des Rades hinaus.
+        // Sie sitzt auf der einarmigen Kupplung am Rohrende und greift von dort
+        // nach INNEN ueber die Aussenflaeche des Schwimmrads -- deshalb liegt
+        // ihr Koerper vor dem Ankerpunkt, nicht dahinter.
         geo = this._cachedGeo("hubcap", () => {
-          const g = new THREE.CylinderGeometry(5.5, 7, 3, Math.max(16, this._q().tube * 2));
+          const g = new THREE.CylinderGeometry(5.5, 7, 5, Math.max(16, this._q().tube * 2));
           g.rotateZ(-Math.PI / 2);          // Achse auf +X, schmale Seite aussen
-          g.translate(6.5, 0, 0);
+          g.translate(-2.5, 0, 0);
           return g;
         });
         mat = this._fittingMaterial(0xd42e2e, false);
