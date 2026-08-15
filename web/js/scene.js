@@ -869,12 +869,24 @@ export class SceneManager {
       }
       case "bag2": {                    // Spielsack: offener Kasten aus Tuch
         // Er haengt zwischen zwei Rohren: oben offen, an allen vier Seiten rund
-        // 17 cm tief, mit Boden. Lokales X liegt quer zu den Rohren, Y laengs,
-        // Z zeigt nach oben -- der Sack haengt also in -Z.
+        // 17 cm tief, mit Boden. Er haengt IMMER nach unten -- die Drehung um die
+        // Hochachse kommt aus dem Teil, die Neigung nicht. Importierte Saecke
+        // tragen eine beliebige Lage, die sie sonst schraeg stellen wuerde.
         const w = f.w || 35;
-        geo = this._cachedGeo(`bag${w}`, () => this._bagGeometry(w, BAG_DEPTH));
-        mat = this._fittingMaterial(hex, false);
-        break;
+        const bagMesh = new THREE.Mesh(
+          this._cachedGeo(`bag${w}`, () => this._bagGeometry(w, BAG_DEPTH)),
+          this._fittingMaterial(hex, false));
+        const ax = new THREE.Vector3(1, 0, 0).applyQuaternion(q);
+        ax.y = 0;
+        if (ax.lengthSq() < 0.01) ax.set(1, 0, 0);
+        ax.normalize();
+        const up = new THREE.Vector3(0, 1, 0);
+        const side = new THREE.Vector3().crossVectors(up, ax).normalize();
+        bagMesh.quaternion.setFromRotationMatrix(new THREE.Matrix4().makeBasis(ax, side, up));
+        bagMesh.position.set(f.x, f.y, f.z);
+        bagMesh.castShadow = true;
+        bagMesh.receiveShadow = true;
+        return [bagMesh];
       }
       default:
         return [];
