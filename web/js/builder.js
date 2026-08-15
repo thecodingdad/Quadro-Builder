@@ -722,6 +722,16 @@ export class Builder {
       this.scene.addHandle([0, cs / 2, 0], { origin: true }, "origin");
       return;
     }
+    // Freie Oeffnung eines Doppelrohrverbinders/einer Rohrklammer: dort gehoert
+    // ein GERADES Rohr hinein -- mit einem Bogenrohr in der Hand nicht.
+    if (!isCurvedTube(this.tubeId)) {
+      for (const c of this.model.clamps.values()) {
+        if (!c.dir || !c.off) continue;
+        const center = [c.x + c.off[0] / 2, c.y + c.off[1] / 2, c.z + c.off[2] / 2];
+        if (this._openingOccupied(center, c.dir)) continue;
+        this.scene.addHandle(center, { clampOpening: true, center, dir: c.dir }, "dir");
+      }
+    }
     const node = this.selectedNodeId ? this.model.nodes.get(this.selectedNodeId) : null;
     if (!node) return;
     // Die 45-Grad-Winkelkupplung gibt es nur einarmig: Huelse auf das Rohrende,
@@ -966,12 +976,7 @@ export class Builder {
     for (const m of this._tubeMidpoints(sel, amKnoten)) {
       this.scene.addHandle(m.pos, { clampTube: m }, "dir");
     }
-    for (const c of this.model.clamps.values()) {
-      if (!c.dir || !c.off) continue;
-      const center = [c.x + c.off[0] / 2, c.y + c.off[1] / 2, c.z + c.off[2] / 2];
-      if (this._openingOccupied(center, c.dir)) continue;
-      this.scene.addHandle(center, { clampOpening: true, center, dir: c.dir }, "dir");
-    }
+
   }
 
   // Laeuft schon eine (parallele) Tube durch die Oeffnung?
@@ -1318,12 +1323,11 @@ export class Builder {
     this.refresh();
   }
 
-  // Klick auf ein Rohr setzt einen Doppelrohrverbinder (Klemme) an den Treffpunkt.
-  // Klick auf eine bestehende Klemme entfernt sie wieder.
+  // Klick auf ein Rohr setzt einen Doppelrohrverbinder oder eine Rohrklammer an
+  // den Treffpunkt; ein Klick auf eine bestehende dreht sie weiter. Das Rohr in
+  // ihre freie Oeffnung kommt im BAU-Modus dazu, nicht hier.
   _clickClamp(e) {
-    // Grüner Punkt in der leeren Öffnung? -> zweite parallele Tube setzen.
     const h = this.scene.pickHandle(e.clientX, e.clientY);
-    if (h && h.data.clampOpening) { this._placeSecondTube(h.data.center, h.data.dir); return; }
     if (h && h.data.clampTube) { this._placeClampOnTube(h.data.clampTube.tubeId, {
       x: h.data.clampTube.pos[0], y: h.data.clampTube.pos[1] + 3, z: h.data.clampTube.pos[2] }); return; }
     const pick = this.scene.pickBuild(e.clientX, e.clientY);
@@ -1650,6 +1654,7 @@ export class Builder {
       return;
     }
     if (h) {
+      if (h.data.clampOpening) { this._placeSecondTube(h.data.center, h.data.dir); return; }
       if (h.data.origin) {
         this.recordHistory(() => {
           const cs = geometry().connectorSize;
