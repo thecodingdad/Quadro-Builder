@@ -556,7 +556,9 @@
       "code": "TCP",
       "name": "Rohrkappe",
       "price": 2.49,
-      "note": "Endkappe fuer offenes Rohrende"
+      "note": "runde Kappe, verschliesst ein offenes Rohrende",
+      "name_en": "Tube cap",
+      "qdf": "open-connector2"
     },
     {
       "id": "safety_clamp",
@@ -578,15 +580,6 @@
       "name": "Rohrklammer",
       "price": 2.49,
       "note": ""
-    },
-    {
-      "id": "open_connector",
-      "code": "",
-      "name": "Offener Anschluss",
-      "name_en": "Open connector",
-      "price": 0,
-      "qdf": "open-connector2",
-      "note": "Sitzt zusaetzlich an einer vorhandenen Kupplung; Bezeichnung und Preis noch offen"
     },
     {
       "id": "wheel",
