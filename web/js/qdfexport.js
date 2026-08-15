@@ -257,9 +257,15 @@ export function buildQDF(model) {
       const l = toLocal(t.bow && t.bowCenter ? bowStubDir(n, other, t.bowCenter) : dirOf(n, other));
       for (const [bit, v] of ARM_BITS) if (dot(l, v) > 0.9) mask |= bit;
     }
-    const kind = (n.c45 || carriesAdapter) ? "connector45_2" : "connector3";
+    const c45 = n.c45 || carriesAdapter;
     const q = quat ? encodeQuat(quat) : IDENTITY;
-    lines.push(`${kind}{${CONNECTOR_MAT}, ${tuple(q, n.x, n.y, n.z)}, 1, 0, ${mask}, ${63 - mask}, ${RENDER_MASK}, 0}`);
+    // Die Eck-Kupplung der 45-Grad-Winkelkupplung fuehrt NUR drei Felder hinter
+    // dem Tupel -- in allen 732 Vorkommen der Herstellerdateien. Schreibt man
+    // ihr die sechs Felder einer connector3 (Arm-Maske, Sichtbarkeit), lehnt die
+    // Herstellersoftware die Datei ab.
+    lines.push(c45
+      ? `connector45_2{${CONNECTOR_MAT}, ${tuple(q, n.x, n.y, n.z)}, 1, 0, 0}`
+      : `connector3{${CONNECTOR_MAT}, ${tuple(q, n.x, n.y, n.z)}, 1, 0, ${mask}, ${63 - mask}, ${RENDER_MASK}, 0}`);
     stats.connectors++;
   }
 
