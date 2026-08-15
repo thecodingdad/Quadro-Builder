@@ -44,7 +44,8 @@ const MATERIALS = [
 // ersten Satzes zurueck.
 const TUBE_MAT = { black: 1, red: 2, green: 3, blue: 4, yellow: 5 };
 const PANEL_MAT = { red: 6, green: 7, blue: 8, yellow: 9, black: 1, white: 14 };
-const ALU_MAT = 13;
+// Verstaerkungsprofil: Material 11 in 166 von 174 Vorkommen der Herstellerdateien.
+const ALU_MAT = 11;
 const CONNECTOR_MAT = 1;
 
 // Sichtbarkeitsmaske der Kupplungsflaechen (0xFFF), wie in den Originaldateien.
@@ -186,6 +187,53 @@ function panelMat(color) { return PANEL_MAT[color] || PANEL_MAT.blue; }
  *
  * Liefert { text, stats }.
  */
+/**
+ * Verstaerkungsprofile aus den verstaerkten Rohren ableiten.
+ *
+ * Das Profil steckt nicht IN einem Rohr, es ueberbrueckt die STOSSSTELLE: in
+ * den Herstellerdateien liegt jede alu2-Zeile mittig ueber der Kupplung
+ * zwischen zwei kollinearen verstaerkten Rohren und reicht hoechstens 40 cm
+ * nach jeder Seite (daher die beiden vorkommenden Laengen 800 mm bei 75er
+ * Rohren und 600 mm bei 25ern).
+ */
+function reinforcementProfiles(model) {
+  const nodeOf = (id) => model.nodes.get(id);
+  const list = [...model.tubes.values()].filter((t) => t.reinforced && !t.arm && !t.link
+    && nodeOf(t.a) && nodeOf(t.b));
+  const abstand = (a, b) => Math.hypot(b.x - a.x, b.y - a.y, b.z - a.z);
+  const richtung = (a, b) => { const l = abstand(a, b) || 1;
+    return [(b.x - a.x) / l, (b.y - a.y) / l, (b.z - a.z) / l]; };
+  const byNode = new Map();
+  for (const t of list) for (const id of [t.a, t.b]) {
+    if (!byNode.has(id)) byNode.set(id, []);
+    byNode.get(id).push(t);
+  }
+  const out = [];
+  const gedeckt = new Set();
+  for (const [id, group] of byNode) {
+    const joint = nodeOf(id);
+    for (let i = 0; i < group.length; i++) for (let j = i + 1; j < group.length; j++) {
+      const t1 = group[i], t2 = group[j];
+      const d1 = richtung(joint, nodeOf(t1.a === id ? t1.b : t1.a));
+      const d2 = richtung(joint, nodeOf(t2.a === id ? t2.b : t2.a));
+      if (d1[0] * d2[0] + d1[1] * d2[1] + d1[2] * d2[2] > -0.999) continue;   // nicht gerade durch
+      const half = Math.min(40, abstand(joint, nodeOf(t1.a === id ? t1.b : t1.a)),
+        abstand(joint, nodeOf(t2.a === id ? t2.b : t2.a)));
+      out.push({ from: [joint.x + d2[0] * half, joint.y + d2[1] * half, joint.z + d2[2] * half],
+        dir: d1, len: 2 * half });
+      gedeckt.add(t1.id).add(t2.id);
+    }
+  }
+  // Ein verstaerktes Rohr ohne geraden Nachbarn (Ecke, Einzelstueck) bekommt
+  // sein eigenes Profil -- sonst ginge die Verstaerkung beim Speichern verloren.
+  for (const t of list) {
+    if (gedeckt.has(t.id)) continue;
+    const a = nodeOf(t.a), b = nodeOf(t.b);
+    out.push({ from: [a.x, a.y, a.z], dir: richtung(a, b), len: Math.min(80, abstand(a, b)) });
+  }
+  return out;
+}
+
 export function buildQDF(model) {
   const conn = geometry().connectorSize;
   const lines = ["0, 0;", ...MATERIALS, ...CAMERAS];
@@ -323,11 +371,17 @@ export function buildQDF(model) {
     const q = encodeQuat(quatFromX(dirOf(a, b)));
     lines.push(`tube2{${mat}, ${tuple(q, a.x, a.y, a.z)}, 1, ${mm(len)}, 0., 0}`);
     stats.tubes++;
-    if (t.reinforced) {
-      // Verstaerkungsprofil liegt im Rohr; der Import ordnet es ueber die Lage zu.
-      lines.push(`alu2{${ALU_MAT}, ${tuple(q, a.x, a.y, a.z)}, 1, ${mm(len)}, 0., 0}`);
-      stats.alu++;
-    }
+  }
+
+  // --- Verstaerkungsprofile ----------------------------------------------
+  // Die Datei fuehrt nicht die einzelnen 40-cm-Stangen, sondern den fertigen
+  // LAUF: kollineare verstaerkte Rohre ergeben eine Zeile ueber die ganze
+  // Strecke. In den Herstellerdateien kommen genau zwei Laengen vor,
+  // 800 mm (160x) und 600 mm (14x) -- beides der Abstand der Endkupplungen.
+  for (const p of reinforcementProfiles(model)) {
+    const q = encodeQuat(quatFromX(p.dir));
+    lines.push(`alu2{${ALU_MAT}, ${tuple(q, p.from[0], p.from[1], p.from[2])}, 1, ${mm(p.len)}, 0., 0}`);
+    stats.alu++;
   }
 
   // --- Platten und Netze --------------------------------------------------
