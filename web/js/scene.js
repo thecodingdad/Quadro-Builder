@@ -1163,8 +1163,13 @@ export class SceneManager {
   // Punkt OHNE Spalt/Knick im Querschnitt ineinander uebergehen ("Übergänge"-Fix).
   // Rueckgabe: {W,Nrm} des LETZTEN Querschnitts, fuer das naechste Teil der Kette.
   _addSlideAlongCurve(mat, st, id, bez, SEG, startFrame, wallOf = null) {
-    const halfW = 35 / 2, WALL = 11;
+    const halfW = 35 / 2, WALL = 11, DICKE = 1.2;
     const N = SEG + 1, eps = 0.5 / SEG;
+    // Je Stützstelle acht Punkte: der Querschnitt innen (Wange links oben,
+    // Boden links, Boden rechts, Wange rechts oben) und derselbe Querschnitt
+    // außen, um die Wandstärke versetzt. Daraus entsteht ein KÖRPER statt einer
+    // Fläche: Innenseite, Außenseite, die beiden oberen Ränder und je ein
+    // Deckel an Anfang und Ende.
     const verts = [];
     let prevW = startFrame ? startFrame.W.clone() : null;
     let lastW = prevW, lastNrm = startFrame ? startFrame.Nrm.clone() : null;
@@ -1190,15 +1195,33 @@ export class SceneManager {
       const wallH = WALL * (wallOf ? wallOf(t) : 1);
       const fl = c.clone().addScaledVector(W, -halfW);
       const fr = c.clone().addScaledVector(W, halfW);
-      verts.push(fl.clone().addScaledVector(Nrm, wallH), fl, fr, fr.clone().addScaledVector(Nrm, wallH));
+      const tl = fl.clone().addScaledVector(Nrm, wallH);
+      const tr = fr.clone().addScaledVector(Nrm, wallH);
+      // außen: Boden nach unten, Wangen zur Seite
+      const flA = fl.clone().addScaledVector(Nrm, -DICKE).addScaledVector(W, -DICKE);
+      const frA = fr.clone().addScaledVector(Nrm, -DICKE).addScaledVector(W, DICKE);
+      const tlA = tl.clone().addScaledVector(W, -DICKE);
+      const trA = tr.clone().addScaledVector(W, DICKE);
+      verts.push(tl, fl, fr, tr, tlA, flA, frA, trA);
     }
     const positions = [];
     for (const v of verts) positions.push(v.x, v.y, v.z);
     const idx = [];
+    const quad = (a, b, c, d) => { idx.push(a, b, c, a, c, d); };
     for (let i = 0; i < N - 1; i++) {
-      const r0 = i * 4, r1 = r0 + 4;
+      const r0 = i * 8, r1 = r0 + 8;
       for (let k = 0; k < 3; k++) {
-        idx.push(r0 + k, r1 + k, r0 + k + 1,  r0 + k + 1, r1 + k, r1 + k + 1);
+        quad(r0 + k, r1 + k, r1 + k + 1, r0 + k + 1);            // Innenseite
+        quad(r0 + 4 + k + 1, r1 + 4 + k + 1, r1 + 4 + k, r0 + 4 + k); // Außenseite
+      }
+      quad(r0 + 4, r1 + 4, r1, r0);          // oberer Rand links
+      quad(r0 + 3, r1 + 3, r1 + 7, r0 + 7);  // oberer Rand rechts
+    }
+    // Deckel: der Querschnitt ist ein Ring aus innen + außen.
+    for (const [r, dreh] of [[0, false], [(N - 1) * 8, true]]) {
+      for (let k = 0; k < 3; k++) {
+        if (dreh) quad(r + k, r + k + 1, r + 4 + k + 1, r + 4 + k);
+        else quad(r + 4 + k, r + 4 + k + 1, r + k + 1, r + k);
       }
     }
     const geo = new THREE.BufferGeometry();
@@ -1211,6 +1234,7 @@ export class SceneManager {
     if (st !== "future") this.pickSlides.push(mesh);
     return { W: lastW.clone(), Nrm: lastNrm.clone() };
   }
+
 
   // FESTE Austrittsrichtung einer Bogenrutsche (identisch zur Berechnung in
   // _addCurvedSlide): nach der 90°-Drehung in der PERPENDIKULAEREN kardinalen
