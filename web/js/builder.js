@@ -1,9 +1,9 @@
 // Bau-Interaktion: Auswahl, Anbau ueber Richtungs-Handles, Loeschen.
 
 import { DIRECTIONS, DIAGONAL_DIRECTIONS, DIR_ALIGN_TOL, ARM_ALIGN_TOL, CLAMP_LINK_DIST, C45_SLEEVE_LEN, C45_ARM_LEN } from "./config.js";
-import { geometry, getTube, spacingFor, getPanel, defaultPanel, diagonalTubeId, slideKindLabel, isCurvedTube, gridSpacing, tubeColors } from "./catalog.js";
+import { geometry, getTube, spacingFor, getPanel, defaultPanel, diagonalTubeId, slideKindLabel, slideKindName, isCurvedTube, gridSpacing, tubeColors, partName, partForFitting, getPartById, getConnector } from "./catalog.js";
 import { computeBuildPlan, connectorLabelInfo } from "./buildplan.js";
-import { infeasibleConnectors } from "./bom.js";
+import { infeasibleConnectors, inferConnectorType } from "./bom.js";
 import { t } from "./i18n.js";
 import { round2, panelNormal, modelMiddle } from "./util.js";
 import { TUBE_FITTINGS } from "./model.js";
@@ -605,6 +605,47 @@ export class Builder {
     this.refresh();
   }
 
+  /**
+   * Volle Bezeichnung eines Teils -- die des Katalogs, keine Kurzform. Wird
+   * angezeigt, sobald im Auswahl-Modus genau ein Teil gewaehlt ist.
+   */
+  _partLabel(id, kind) {
+    const m = this.model;
+    if (kind === "tube") {
+      const t = m.tubes.get(id);
+      const def = t && getTube(t.tubeId);
+      return def ? partName(def) : null;
+    }
+    if (kind === "panel" || kind === "textile") {
+      const p = (m.panels.get(id) || m.textiles.get(id));
+      const def = p && getPanel(p.panelId);
+      return def ? partName(def) : null;
+    }
+    if (kind === "clamp") {
+      const c = m.clamps.get(id);
+      const def = c && getPartById(c.connectorId || "double_tube");
+      return def ? partName(def) : null;
+    }
+    if (kind === "fitting") {
+      const f = m.fittings.get(id);
+      const def = f && partForFitting(f.kind, f.mask);
+      return def ? partName(def) : null;
+    }
+    if (kind === "slide") {
+      const sl = m.slides.get(id);
+      return sl ? slideKindName(sl.kind) : null;
+    }
+    if (kind === "node") {
+      const n = m.nodes.get(id);
+      if (!n) return null;
+      if (n.part) { const def = getPartById(n.part); return def ? partName(def) : null; }
+      const type = inferConnectorType(m, n);
+      const def = type && getConnector(type);
+      return def ? partName(def) : null;
+    }
+    return null;
+  }
+
   selectNode(id) {
     this.selectedNodeId = id;
     this.refresh();
@@ -622,6 +663,8 @@ export class Builder {
     const labelFor = withLabels ? (node) => connectorLabelInfo(this.model, node) : null;
     const slideNameFor = withLabels ? (sl) => slideKindLabel(sl.kind) : null;
     const labelIds = (soloId != null && !this.showLabels) ? new Set([soloId]) : null;
+    const soloLabel = soloId != null
+      ? { id: soloId, text: this._partLabel(soloId, this.selection.get(soloId)) } : null;
     const suggest = (this.showHints || this.mode === "reinforce")
       ? this.model.reinforcementSuggestions() : null;
     const reinforce = this.mode === "reinforce";
@@ -631,7 +674,7 @@ export class Builder {
     const selected = (this.mode === "select" || this.mode === "assembly") && this.selection.size
       ? this.selection : null;
     this.scene.renderModel(this.model, this.selectedNodeId,
-      { labelFor, slideNameFor, labelIds, soloId, assembly, suggest, reinforce, collide,
+      { labelFor, slideNameFor, labelIds, soloId, soloLabel, assembly, suggest, reinforce, collide,
         hintDim: this.showHints,
         selected, highlight: this.highlight });
     this._buildHandles();

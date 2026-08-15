@@ -1506,6 +1506,27 @@ export class SceneManager {
     if (st !== "future") this.pickNodes.push(socket);
   }
 
+  /**
+   * Wo haengt die Beschriftung eines gewaehlten Teils, das von sich aus keine
+   * bekommt? Kupplungen, Rohre und Rutschen beschriften sich selbst -- fuer die
+   * liefert das hier nichts.
+   */
+  _soloAnchor(model, id) {
+    const f = model.fittings && model.fittings.get(id);
+    if (f) return new THREE.Vector3(f.x, f.y + 10, f.z);
+    const c = model.clamps && model.clamps.get(id);
+    if (c) return new THREE.Vector3(c.x, c.y + 8, c.z);
+    for (const map of [model.panels, model.textiles]) {
+      const p = map && map.get(id);
+      if (!p) continue;
+      const corners = model.panelCorners(p);
+      if (!corners) continue;
+      const m = corners.reduce((s2, q) => [s2[0] + q[0] / 4, s2[1] + q[1] / 4, s2[2] + q[2] / 4], [0, 0, 0]);
+      return new THREE.Vector3(m[0], m[1] + 8, m[2]);
+    }
+    return null;
+  }
+
   // Bau-Anfasser (Handle): 3 feste Varianten nach kind. War fruehers pro addHandle()-
   // Aufruf ein neues Material (-> Leak), da _disposeGroup nur Geometrien freigibt.
   _handleMaterial(kind) {
@@ -1682,6 +1703,8 @@ export class SceneManager {
     const armRadius = geometry().armRadius; // C45-Arm: ~42 mm, duenner als das Rohr
     const asm = opts.assembly || null;
     const labelFor = opts.labelFor || null;
+    // Genau ein gewaehltes Teil: seine volle Bezeichnung, egal welcher Art.
+    const soloLabel = opts.soloLabel || null;
     const slideNameFor = opts.slideNameFor || null;
     // Nur diese ids beschriften (Cursor-Modus mit genau einem gewaehlten Teil).
     // null = alle, die labelFor/slideNameFor liefern.
@@ -1920,7 +1943,7 @@ export class SceneManager {
       const showLabel = labelFor && wantsLabel(n.id) &&
         (n.id === soloId || (asm ? st === "current" : st !== "future"));
       if (showLabel) {
-        const info = labelFor(n);
+        const info = (soloLabel && n.id === soloLabel.id) ? soloLabel.text : labelFor(n);
         const text = typeof info === "string" ? info : info && info.text;
         if (text) {
           const category = info && typeof info === "object" ? info.category : null;
@@ -2030,7 +2053,8 @@ export class SceneManager {
       if (showTubeLabel) {
         const cm = t.length != null ? t.length : Math.round(len - cs);
         const category = t.tubeId === "T75" ? "tube75" : null;
-        const sprite = this._makeLabelSprite(`${cm} cm`, st === "current", category);
+        const text = (soloLabel && t.id === soloLabel.id) ? soloLabel.text : `${cm} cm`;
+        const sprite = this._makeLabelSprite(text, st === "current", category);
         sprite.position.set(mid.x, mid.y + tubeRadius + 4, mid.z);
         this.labelGroup.add(sprite);
         this.labelMeshes.push(sprite);
@@ -2171,7 +2195,7 @@ export class SceneManager {
 
       // Beschriftung: Name des Rutschenenteils/Dachs wenn Labels aktiv.
       if (slideNameFor && wantsLabel(sl.id) && st !== "future") {
-        const name = slideNameFor(sl);
+        const name = (soloLabel && sl.id === soloLabel.id) ? soloLabel.text : slideNameFor(sl);
         if (name) {
           const sprite = this._makeLabelSprite(name, st === "current", null);
           sprite.position.set(sl.x, sl.y + 30, sl.z);
@@ -2189,6 +2213,18 @@ export class SceneManager {
       // roof2 (Dach-Tuch): als GIEBEL ueber das Dach (von den C45-Traufen die
       // Dachschraegen hoch, 90°-Knick am First, andere Schraege runter).
       if (sl.kind === "roof2") { this._addRoof(sl, model, mat, st); continue; }
+    }
+
+    // Beschriftung fuer Teile, die selbst keine tragen (Platten, Anbauteile,
+    // Doppelrohrverbinder, Netze): nur fuer das eine gewaehlte Teil.
+    if (soloLabel) {
+      const at = this._soloAnchor(model, soloLabel.id);
+      if (at) {
+        const sprite = this._makeLabelSprite(soloLabel.text, false, null);
+        sprite.position.copy(at);
+        this.labelGroup.add(sprite);
+        this.labelMeshes.push(sprite);
+      }
     }
 
     // Gesammelte Kupplungen, Arm-Stutzen und Rohre als InstancedMesh anlegen.
