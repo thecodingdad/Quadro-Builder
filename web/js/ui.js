@@ -58,7 +58,7 @@ function renderHelpTable() {
 }
 
 export function initUI({ scene, model, builder }) {
-  const slideButtons = [];
+  let slideGroupBtn = null;
   let renderFittingButton = () => {};
   const inventory = loadInv();
 
@@ -398,14 +398,12 @@ export function initUI({ scene, model, builder }) {
     tubeBtn.classList.toggle("active", inAdd && !curved);
     if (bowBtn) bowBtn.classList.toggle("active", inAdd && curved);
     panelBtn.classList.toggle("active", inPanel);
-    for (const b of slideButtons) {
-      b.classList.toggle("active", builder.mode === "slide" && builder.slideKind === b.dataset.slide);
-      // Beschriftung kommt aus dem Katalog, nicht aus data-i18n -- beim
-      // Sprachwechsel deshalb hier nachziehen.
-      const name = slideKindName(b.dataset.slide);
-      b.title = name;
-      const span = b.querySelector("span");
-      if (span && span.textContent !== name) span.textContent = name;
+    if (slideGroupBtn) {
+      slideGroupBtn.classList.toggle("active", builder.mode === "slide");
+      // Beschriftung nach einem Sprachwechsel nachziehen; im Titel steht, welches
+      // Teil gerade gewaehlt ist.
+      slideGroupBtn.lastChild.textContent = t("grp_slides");
+      slideGroupBtn.title = `${t("grp_slides")}: ${slideKindName(builder.slideKind)}`;
     }
     renderFittingButton();
     $("btn-diagonal").classList.toggle("active", inAdd && builder.diagonal);
@@ -701,34 +699,41 @@ export function initUI({ scene, model, builder }) {
   // --- Rutschen-Button ---------------------------------------------------
   // Rutschen sind keine Rohre/Platten: sie werden an zwei senkrechten,
   // parallelen Rohren eingehaengt. Der Modus zeigt die passenden Felder an.
+  // --- Rutschen: eine Gruppe mit Klappliste (wie die Anbauteile) ---------
   // Vier Teile: Integralrutsche (steht fuer sich), Modular- und Bogenrutschen-
   // Koerper (lassen sich aneinanderhaengen) und der Auslauf, der eine Kette
-  // abschliesst. Ein Klick waehlt das Teil UND schaltet in den Rutschen-Modus;
-  // ein Klick auf das schon gewaehlte Teil schaltet zurueck aufs Bauen.
+  // abschliesst.
   {
-    const formen = {
+    const SLIDE_KINDS = ["slide-new2", "slide2", "curved-slide2", "slide-end2"];
+    const items = SLIDE_KINDS.map((k) => {
+      const def = partForFitting(k);
+      return def ? { ...def, id: k, qdf: k } : null;
+    }).filter(Boolean);
+    // Je Teil ein eigenes Sinnbild: durchgehende Rutsche, gewellter Modul-
+    // koerper, Viertelbogen, Auslauf mit Schnabel.
+    const FORMEN = {
       "slide-new2": `<path d="M3 13 C7 13 5 4 13 3" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/>`,
       "slide2": `<path d="M3 12 C6 12 6 6 9 6 C11 6 11 4 13 4" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/>`,
       "curved-slide2": `<path d="M13 3 C13 9 9 13 3 13" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/>`,
-      "slide-end2": `<path d="M2 11 C6 11 8 6 13 6" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/><path d="M2 11 L2 14" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/>`,
+      "slide-end2": `<path d="M2 11 C6 11 8 6 13 6" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/>` +
+        `<path d="M2 11 L2 14" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/>`,
     };
-    for (const kind of ["slide-new2", "slide2", "curved-slide2", "slide-end2"]) {
-      const b = el("button", "btn part");
-      b.dataset.slide = kind;
-      const name = slideKindName(kind);
-      b.title = name;
-      b.innerHTML =
-        `<svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true">${formen[kind]}</svg>` +
-        `<span>${name}</span>`;
-      b.addEventListener("click", () => {
-        const schonAktiv = builder.mode === "slide" && builder.slideKind === kind;
-        builder.slideKind = kind;
-        setMode(schonAktiv ? "add" : "slide");
-        syncPartButtons();
+    const icon = (item) => `<svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true">` +
+      `${FORMEN[(item && item.qdf) || builder.slideKind] || FORMEN["slide-new2"]}</svg>`;
+    const btn = el("button", "btn part");
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      showPartPopup(btn, items, builder.slideKind, icon, (p) => {
+        builder.slideKind = p.qdf;
+        setMode("slide");
+        syncPartHighlights();
       });
-      $("slide-buttons").appendChild(b);
-      slideButtons.push(b);
-    }
+    });
+    btn.innerHTML = icon() + `<span></span>`;
+    btn.lastChild.textContent = t("grp_slides");
+    btn.title = t("grp_slides");
+    $("slide-buttons").appendChild(btn);
+    slideGroupBtn = btn;
   }
 
   // --- Anbauteile: drei Gruppen mit je einer Klappliste -------------------
