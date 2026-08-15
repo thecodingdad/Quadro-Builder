@@ -26,6 +26,7 @@ const FITTING_MOUNTS = {
 export const TUBE_FITTINGS = {
   "multi-wheel2":    "anywhere",   // Multirad: auf einem Rohr ODER auf einem Radlager
   "floating-wheel2": "anywhere",   // Schwimmrad, knapp 15 cm dick
+  "hub-cap2":        "end",        // Radkappe: am Rohrende ANSTELLE der Kupplung
 };
 
 // Welche Anbauteile sich setzen lassen: die an einer Kupplung (FITTING_MOUNTS),
@@ -652,6 +653,18 @@ export class BuildModel {
         round(f.z + ax[2] * BEARING_LEN)], dir: ax, quat: f.quat.slice() });
     }
     return out;
+  }
+
+  /**
+   * Sitzt an diesem Knoten eine Radkappe? Dann ersetzt sie dort die Kupplung --
+   * das Rohrende steckt in der Kappe, eine Kupplung gibt es nicht mehr.
+   */
+  hasWheelCap(node) {
+    for (const f of this.fittings.values()) {
+      if (f.kind !== "hub-cap2") continue;
+      if (Math.hypot(f.x - node.x, f.y - node.y, f.z - node.z) < 3) return true;
+    }
+    return false;
   }
 
   /**

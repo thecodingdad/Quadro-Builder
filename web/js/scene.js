@@ -1781,7 +1781,9 @@ export class SceneManager {
       // braucht keinen Wuerfel; die Lagerkupplung traegt eine ganze Kupplung --
       // die wird unten zusaetzlich gezeichnet.
       if (n.stub && n.part) this._addTubeClamp(model, n, matFor(n.id, mat), st);
-      if (!n.c45body && n.part !== "hole_1") {
+      // Wo eine Radkappe sitzt, gibt es keine Kupplung mehr -- die Kappe
+      // schliesst das Rohrende selbst ab.
+      if (!n.c45body && n.part !== "hole_1" && !(model.hasWheelCap && model.hasWheelCap(n))) {
         const pos = new THREE.Vector3(n.x, n.y, n.z);
         const quat = new THREE.Quaternion();
         // Importierte Kupplung: Wuerfel exakt um ihre Quaternion drehen, damit die

@@ -153,6 +153,8 @@ export function inferConnectorType(model, node) {
 // alle Arme zusammen als eine normale Kupplung. Ein reines, freies Rohrende
 // ("end") liefert eine leere Liste.
 export function connectorsForNode(model, node) {
+  // Eine Radkappe am Rohrende ERSETZT die Kupplung -- dort steckt keine mehr.
+  if (model.hasWheelCap && model.hasWheelCap(node)) return [];
   // Klemm-Kupplungen sind ein festes Katalogteil. Die Lochzapfenkupplung nimmt
   // das Rohr selbst auf -- sie zaehlt allein. Die Lagerkupplung traegt eine
   // ganze Kupplung, die zusaetzlich in die Liste gehoert.

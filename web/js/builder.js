@@ -840,7 +840,8 @@ export class Builder {
     if (TUBE_CLAMP_PARTS[this.fittingKind]) return;   // Klemm-Kupplung sitzt frei auf dem Rohr
     // Raeder auf einem Rohr brauchen keinen Ankerpunkt -- das Multirad bekommt
     // aber welche auf den Radlagern, dort sitzt es genauso.
-    if (TUBE_FITTINGS[this.fittingKind] && this.fittingKind !== "multi-wheel2") return;
+    if (TUBE_FITTINGS[this.fittingKind]
+        && this.fittingKind !== "multi-wheel2" && this.fittingKind !== "hub-cap2") return;
     for (const m of this.model.fittingMounts(this.fittingKind)) {
       let taken = false;
       for (const f of this.model.fittings.values()) {
