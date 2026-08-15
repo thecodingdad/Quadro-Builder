@@ -62,8 +62,11 @@ const STRAIGHT_SLIDE_DROP = new THREE.Vector3(0, -80, 120);
 // Dahinter sitzt der flach liegende Auslauf -- käme der Bogen schräg an, gäbe
 // es dort einen Knick.
 const CURVED_SLIDE_EXIT = new THREE.Vector3(1, 0, 0);
-// Höhe der Rutschbahn des Auslaufs über seinem Bezugspunkt (halbe Kupplung).
+// Höhe der Rutschbahn über dem Bezugspunkt eines Teils: der Auslauf liegt eine
+// halbe Kupplung darüber, ein Rutschenkörper beginnt OBEN auf dem Rohr, das ihn
+// trägt (5 cm).
 const SLIDE_END_LIFT = 2.5;
+const SLIDE_BODY_LIFT = 5;
 // Auslauf: waagerechtes Stück, dann die Lippe -- ein abgerundeter Viertelkreis,
 // der um 90 Grad nach unten kippt (nur die Rutschfläche, ohne Wangen). Zusammen
 // reichen sie 47,5 cm nach vorn, so lang ist das Teil.
@@ -1128,6 +1131,16 @@ export class SceneManager {
   // Der Rutschenkoerper (Bogen/gerade) ENDET hier, der Auslauf BEGINNT hier -> kein
   // Versatz, gleicher Punkt = sauberer Uebergang. Der Auslauf faellt von hier auf
   // Bodenhoehe ab und flacht aus.
+  /**
+   * Punkt der RUTSCHFLÄCHE eines Teils: sein Bezugspunkt plus die Höhe, in der
+   * die Bahn dort liegt. So treffen sich zwei Kettenglieder ohne Stufe.
+   */
+  _slideSurfacePoint(sl) {
+    if (sl.kind === "slide-end2") return this._slideEndConnectPoint(sl);
+    const lift = (sl.kind === "slide2" || sl.kind === "curved-slide2") ? SLIDE_BODY_LIFT : 0;
+    return new THREE.Vector3(sl.x, sl.y + lift, sl.z);
+  }
+
   _slideEndConnectPoint(se) {
     // Anschlusspunkt = Lage aus der Datei plus die halbe Kupplungslänge: die
     // Rutschbahn des Auslaufs liegt so hoch über seinem Bezugspunkt. Die früher
@@ -1220,7 +1233,7 @@ export class SceneManager {
   // +Z-Richtung abwaerts wieder herauskommt. Kubische Bézier P0 -> C1 -> C2 -> P3,
   // alle vier Punkte aus dem eigenen Quaternion des Teils.
   _addCurvedSlide(sl, model, mat, st) {
-    const P0 = new THREE.Vector3(sl.x, sl.y, sl.z);
+    const P0 = this._slideSurfacePoint(sl);
     const q = this._slideQuat(sl);
     // Die Bogenrutsche ist ein FESTES Teil: gemessen an allen zehn Vorkommen im
     // Bestand liegt das Folgeteil IMMER auf demselben lokalen Versatz
@@ -1237,16 +1250,15 @@ export class SceneManager {
       const d = (s2.x - sl.x) ** 2 + (s2.y - sl.y) ** 2 + (s2.z - sl.z) ** 2;
       if (d < bestD) { bestD = d; target = s2; }
     }
-    // Endpunkt: der Bogen hoert dort auf, wo das Folgeteil ANFAENGT. Das
-    // Endstueck beginnt nicht auf seinem QDF-Punkt, sondern 12 cm darueber
-    // (_slideEndConnectPoint) -- ohne das blieb eine Stufe zwischen beiden
-    // Teilen. Sitzt das Folgeteil nicht dort, wo es laut Versatz sitzen muesste,
-    // bleibt es beim festen Endpunkt (die Form kippt dann nicht weg).
-    let P3 = CURVED_SLIDE_DROP.clone().applyQuaternion(q).add(P0);
+    // Endpunkt: der Bogen hört dort auf, wo die Bahn des Folgeteils ANFÄNGT
+    // (_slideSurfacePoint) -- sonst bliebe dort eine Stufe. Sitzt das Folgeteil
+    // nicht da, wo es laut Versatz sitzen müsste, bleibt es beim festen
+    // Endpunkt (die Form kippt dann nicht weg). Gerechnet wird ab dem
+    // Bezugspunkt, P0 liegt ja schon auf der Rohroberkante.
+    let P3 = CURVED_SLIDE_DROP.clone().applyQuaternion(q)
+      .add(new THREE.Vector3(sl.x, sl.y + SLIDE_END_LIFT, sl.z));
     if (target) {
-      const entry = target.kind === "slide-end2"
-        ? this._slideEndConnectPoint(target)
-        : new THREE.Vector3(target.x, target.y, target.z);
+      const entry = this._slideSurfacePoint(target);
       if (entry.distanceTo(P3) < 40) P3 = entry;
     }
     const C1 = P0.clone().addScaledVector(CURVED_SLIDE_ENTRY.clone().applyQuaternion(q), 33);
@@ -2360,14 +2372,17 @@ export class SceneManager {
   // an ihr Ende -> die feste ~140cm-Form ergibt sich aus der Distanz. Ersetzt die
   // fehlplatzierte Viewer-Transformation (fester Block + rotateY45 + Offsets).
   _addStraightSlide(sl, model, mat, st) {
-    let P0 = new THREE.Vector3(sl.x, sl.y, sl.z);
+    let P0 = this._slideSurfacePoint(sl);
     // Auch die gerade Rutsche ist ein festes Teil: bei 73 von 76 Vorkommen im
     // Bestand sitzt das Folgeteil auf dem lokalen Versatz (0, -800, 1200) -- drei
     // Felder in Laufrichtung (lokales +Z), zwei Ebenen tiefer. Gesucht wird das
     // Teil DORT, nicht mehr das naechstgelegene tiefere: in Abenteuerschloss
     // liegt die Rutsche einer anderen Kette naeher, und die obere Rutsche lief
     // dadurch quer durch das Geruest zu ihr hinueber.
-    const P1exp = STRAIGHT_SLIDE_DROP.clone().applyQuaternion(this._slideQuat(sl)).add(P0);
+    // Gesucht wird über die BEZUGSPUNKTE (so stehen sie in der Datei), gezeichnet
+    // über die Flächenpunkte -- P0 liegt bereits auf der Rohroberkante.
+    const roh = new THREE.Vector3(sl.x, sl.y, sl.z);
+    const P1exp = STRAIGHT_SLIDE_DROP.clone().applyQuaternion(this._slideQuat(sl)).add(roh);
     let target = null, bestD = Infinity;
     for (const s2 of model.slides.values()) {
       if (s2 === sl) continue;
@@ -2395,13 +2410,14 @@ export class SceneManager {
       return;
     }
     if (target) {
-      P1 = target.kind === "slide-end2" ? this._slideEndConnectPoint(target) : new THREE.Vector3(target.x, target.y, target.z);
+      P1 = this._slideSurfacePoint(target);
     } else if (sl.kind === "slide2" && sl.quat && sl.quat.length === 4) {
-      // Modularrutschen-Koerper ohne Folgeteil: er ist ein festes Teil und
-      // laeuft seine eigenen (0, -80, 120) ab -- der Punkt ist der EINSTIEG.
+      // Modularrutschen-Körper ohne Folgeteil: er ist ein festes Teil und läuft
+      // seine eigenen (0, -80, 120) ab -- der Punkt ist der EINSTIEG. Das Ende
+      // liegt so hoch, wie das nächste Teil dort ansetzen würde.
       // (Die Integralrutsche unten ist etwas anderes: dort liegt der Punkt am
-      // Fuss, deshalb der Suchlauf nach dem Einhaengepunkt.)
-      P1 = P1exp.clone();
+      // Fuß, deshalb der Suchlauf nach dem Einhängepunkt.)
+      P1 = P1exp.clone().setY(P1exp.y + SLIDE_BODY_LIFT);
     } else {
       // Einzelne Rutsche ohne Folgeteil: Die QDF-Position ist dann der FUSS
       // (Auslauf am Boden), nicht der Einstieg -- alle Rutschen-Records einer
