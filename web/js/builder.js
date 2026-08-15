@@ -359,14 +359,15 @@ export class Builder {
     this._afterMove(d.before, d.result || { merged: 0, detached: 0 });
   }
 
-  // Anbauteil loeschen -- die Laufrolle geht mit ihrem Adapter, sie sitzt auf ihm
-  // und ist ohne ihn nicht zu gebrauchen.
+  // Anbauteil loeschen -- Laufrolle und ihr Adapter gehoeren zusammen und gehen
+  // gemeinsam, egal welches der beiden ausgewaehlt war.
   _removeFittingWithRider(id) {
     const f = this.model.fittings.get(id);
     if (!f) return;
-    if (f.kind === "adapter2") {
+    const partner = f.kind === "casters2" ? "adapter2" : f.kind === "adapter2" ? "casters2" : null;
+    if (partner) {
       for (const o of [...this.model.fittings.values()]) {
-        if (o.kind === "casters2" && Math.hypot(o.x - f.x, o.y - f.y, o.z - f.z) < 2) {
+        if (o.kind === partner && Math.hypot(o.x - f.x, o.y - f.y, o.z - f.z) < 2) {
           this.model.removeFitting(o.id);
         }
       }
@@ -843,7 +844,7 @@ export class Builder {
         if (Math.hypot(f.x - m.pos[0], f.y - m.pos[1], f.z - m.pos[2]) < 2) { taken = true; break; }
       }
       if (taken) continue;
-      this.scene.addHandle(m.pos, { fittingMount: m }, "dir");
+      this.scene.addHandle(m.handle || m.pos, { fittingMount: m }, "dir");
     }
   }
 
@@ -1222,7 +1223,9 @@ export class Builder {
     if (TUBE_CLAMP_PARTS[this.fittingKind]) { this._clickTubeClamp(e); return; }
     const h = this.scene.pickHandle(e.clientX, e.clientY);
     const p = this.scene.pickForDelete(e.clientX, e.clientY);
-    if (h && h.data && h.data.fittingMount && (!p || h.distance <= p.distance)) {
+    // Der Ankerpunkt hat Vorrang: er liegt dicht an der Kupplung, und die waere
+    // sonst als naeheres Teil im Weg.
+    if (h && h.data && h.data.fittingMount) {
       let added = null;
       this.recordHistory(() => {
         added = this.model.addFittingAt(this.fittingKind, h.data.fittingMount, this.colorFor("fitting"));

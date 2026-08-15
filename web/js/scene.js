@@ -740,9 +740,11 @@ export class SceneManager {
         mat = this._fittingMaterial(0x2b2b2b, false);
         break;
       }
-      case "steering-lock2": {          // Radarretierung: kleine Scheibe in der Nabe
+      case "steering-lock2": {          // Radarretierung: runde Scheibe in der Nabe
+        // Sie liegt in derselben Ebene wie das Rad (Achse = lokales +X) und ist
+        // immer rot -- unabhaengig von der Baufarbe.
         geo = this._cachedGeo("wheellock", () => {
-          const g = new THREE.CylinderGeometry(3.4, 3.4, 1.6, Math.max(10, this._q().tube));
+          const g = new THREE.CylinderGeometry(6, 6, 2.4, Math.max(16, this._q().tube * 2));
           g.rotateZ(Math.PI / 2);
           return g;
         });

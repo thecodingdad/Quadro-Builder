@@ -9,7 +9,7 @@ import { round2 as round, quatFromXAxis, quatFromBasis } from "./util.js";
 // cm entlang der gewaehlten Achse. Die Achse ist immer die lokale +X des Teils.
 const FITTING_MOUNTS = {
   "bearing2":        { at: "node", offset: 0 },   // Lagerkupplung sitzt auf der Kupplung
-  "adapter2":        { at: "node", offset: 0 },
+  "casters2":        { at: "node", offset: 0 },   // Laufrolle; der Adapter kommt mit
   "open-connector2": { at: "node", offset: 0 },
   "hole-connector4": { at: "node", offset: 5 },   // 50 mm neben der Kupplung
   "multi-wheel2":    { at: "node", offset: 5 },   // Rad auf der Lagerachse
@@ -54,7 +54,7 @@ export function clampOffset(part, cs = 5) {
 // Anbauteile, die sich per Klick weiterdrehen lassen: sie sitzen an einer
 // Kupplung und haben eine Achse, fuer die es mehrere Richtungen gibt.
 const ROTATABLE_FITTINGS = new Set([
-  "bearing2", "adapter2", "open-connector2", "multi-wheel2", "hub-cap2",
+  "bearing2", "casters2", "open-connector2", "multi-wheel2", "hub-cap2",
 ]);
 
 const norm3 = (v) => { const L = Math.hypot(v[0], v[1], v[2]) || 1; return [v[0] / L, v[1] / L, v[2] / L]; };
@@ -500,9 +500,9 @@ export class BuildModel {
       }
       if (taken) continue;
       const quat = quatFromXAxis(m.dir);
-      // Die Laufrolle sitzt auf ihrem Adapter -- sie dreht mit.
-      const rider = f.kind === "adapter2"
-        ? [...this.fittings.values()].find((o) => o.kind === "casters2"
+      // Der Adapter unter der Laufrolle dreht mit.
+      const rider = f.kind === "casters2"
+        ? [...this.fittings.values()].find((o) => o.kind === "adapter2"
             && Math.hypot(o.x - f.x, o.y - f.y, o.z - f.z) < 2)
         : null;
       for (const part of [f, rider]) {
@@ -692,7 +692,12 @@ export class BuildModel {
         if (taken.has(cardinalName(dir))) continue;
         const pos = [n.x + dir[0] * spec.offset, n.y + dir[1] * spec.offset, n.z + dir[2] * spec.offset];
         if (this.isBelowGround(pos[1])) continue;
-        out.push({ pos, dir, nodeId: n.id });
+        // Der Ankerpunkt liegt weiter aussen als das Teil selbst: Teile, die
+        // direkt auf der Kupplung sitzen (Abstand 0), haetten ihren Punkt sonst
+        // mitten im Kupplungswuerfel -- unsichtbar und nicht anklickbar.
+        const gap = Math.max(spec.offset, 7);
+        out.push({ pos, dir, nodeId: n.id,
+          handle: [n.x + dir[0] * gap, n.y + dir[1] * gap, n.z + dir[2] * gap] });
       }
     }
     return out;
@@ -901,10 +906,10 @@ export class BuildModel {
     }
     const f = this.addFitting(kind, mount.pos[0], mount.pos[1], mount.pos[2],
       { quat: mount.quat || quatFromXAxis(mount.dir), color: color || null });
-    // An einen Laufrollen-Adapter passt genau eine Laufrolle -- sie kommt
-    // deshalb im selben Zug mit. In der Stueckliste bleiben es zwei Teile.
-    if (f && kind === "adapter2") {
-      this.addFitting("casters2", mount.pos[0], mount.pos[1], mount.pos[2],
+    // Eine Laufrolle sitzt immer auf ihrem Adapter -- der kommt deshalb im
+    // selben Zug mit. In der Stueckliste bleiben es zwei Teile.
+    if (f && kind === "casters2") {
+      this.addFitting("adapter2", mount.pos[0], mount.pos[1], mount.pos[2],
         { quat: mount.quat || quatFromXAxis(mount.dir) });
     }
     return f;
