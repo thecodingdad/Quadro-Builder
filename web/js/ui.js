@@ -59,7 +59,6 @@ function renderHelpTable() {
 
 export function initUI({ scene, model, builder }) {
   let slideBtn = null;
-  let fittingBtn = null;
   let renderFittingButton = () => {};
   const inventory = loadInv();
 
@@ -400,7 +399,7 @@ export function initUI({ scene, model, builder }) {
     if (bowBtn) bowBtn.classList.toggle("active", inAdd && curved);
     panelBtn.classList.toggle("active", inPanel);
     if (slideBtn) slideBtn.classList.toggle("active", builder.mode === "slide");
-    if (fittingBtn) { renderFittingButton(); fittingBtn.classList.toggle("active", builder.mode === "fitting"); }
+    renderFittingButton();
     $("btn-diagonal").classList.toggle("active", inAdd && builder.diagonal);
     syncPartColors();
   }
@@ -707,42 +706,55 @@ export function initUI({ scene, model, builder }) {
     slideBtn = b;
   }
 
-  // --- Anbauteile (Raeder, Lager, Rollen, Sonderkupplungen) ---------------
-  // Ein Button mit Klappliste wie bei Rohren und Platten; das gewaehlte Teil
-  // bestimmt, welche Ankerpunkte der Anbauteil-Modus anbietet.
-  // Die Liste kommt aus den setzbaren Arten, nicht aus einer Katalog-Rubrik:
-  // Lagerkupplung und Lochzapfenkupplung stehen bei den Kupplungen, Rad und
-  // Rolle beim Zubehoer. id = QDF-Art, damit das Popup die aktive Zeile findet.
-  const fittingList = PLACEABLE_FITTINGS
-    .map((k) => { const p = partForFitting(k); return p ? { ...p, id: k, qdf: k } : null; })
-    // Die Laufrolle kommt mit ihrem Adapter mit, sie hat keinen eigenen Eintrag.
-    .filter(Boolean);
-  if (fittingList.length) {
-    const fittingIcon = () =>
-      `<svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true">` +
+  // --- Anbauteile: drei Gruppen mit je einer Klappliste -------------------
+  // Geordnet wie am Bauteil gedacht: alles rund ums Rad, alles was Rohre
+  // verbindet, und der Rest. Der Doppelrohrverbinder ist kein Anbauteil, er hat
+  // einen eigenen Modus -- in der Liste steht er trotzdem bei den Verbindungen.
+  const CLAMP_ENTRY = "double_tube";
+  const FITTING_GROUPS = [
+    ["grp_wheels", ["multi-wheel2", "floating-wheel2", "casters2", "bearing2", "hub-cap2", "steering-lock2"],
       `<circle cx="8" cy="8" r="5.4" fill="none" stroke="currentColor" stroke-width="1.6"/>` +
-      `<circle cx="8" cy="8" r="1.6" fill="currentColor"/></svg>`;
-    fittingBtn = el("button", "btn part");
-    fittingBtn.addEventListener("click", (e) => {
+      `<circle cx="8" cy="8" r="1.6" fill="currentColor"/>`],
+    ["grp_joints", ["bearing-clamp", "hole-connector4", CLAMP_ENTRY, "open-connector2"],
+      `<line x1="2.5" y1="6" x2="13.5" y2="6" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/>` +
+      `<line x1="2.5" y1="11" x2="13.5" y2="11" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/>` +
+      `<rect x="6" y="3" width="4" height="11" rx="1.4" fill="none" stroke="currentColor" stroke-width="1.3"/>`],
+    ["grp_other", ["bag2", "lattice2", "textil-round2", "roof-large2"],
+      `<rect x="2.5" y="2.5" width="11" height="11" rx="2" fill="none" stroke="currentColor" stroke-width="1.5"/>` +
+      `<line x1="2.5" y1="8" x2="13.5" y2="8" stroke="currentColor" stroke-width="1.3"/>`],
+  ];
+  const fittingGroupBtns = [];
+  for (const [key, kinds, path] of FITTING_GROUPS) {
+    const items = kinds.map((k) => {
+      const def = k === CLAMP_ENTRY ? allConnectors().find((c) => c.id === CLAMP_ENTRY) : partForFitting(k);
+      return def ? { ...def, id: k, qdf: k } : null;
+    }).filter(Boolean);
+    if (!items.length) continue;
+    const icon = () => `<svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true">${path}</svg>`;
+    const btn = el("button", "btn part");
+    btn.addEventListener("click", (e) => {
       e.stopPropagation();
-      if (builder.mode !== "fitting") setMode("fitting");
-      showPartPopup(fittingBtn, fittingList, builder.fittingKind, fittingIcon, (p) => {
+      showPartPopup(btn, items, builder.mode === "clamp" ? CLAMP_ENTRY : builder.fittingKind, icon, (p) => {
+        if (p.qdf === CLAMP_ENTRY) { setMode("clamp"); return; }
         builder.setFitting(p.qdf);
         setMode("fitting");
       });
     });
-    $("fitting-buttons").appendChild(fittingBtn);
-    function currentFitting() {
-      return fittingList.find((a) => a.qdf === builder.fittingKind) || fittingList[0];
-    }
-    renderFittingButton = () => {
-      const a = currentFitting();
-      fittingBtn.innerHTML = fittingIcon() + `<span></span>`;
-      fittingBtn.lastChild.textContent = partName(a);
-      fittingBtn.title = `${t("part_fitting")}: ${partName(a)}`;
-    };
-    renderFittingButton();
+    btn.innerHTML = icon() + `<span></span>`;
+    btn.lastChild.textContent = t(key);
+    btn.title = t(key);
+    $("fitting-buttons").appendChild(btn);
+    fittingGroupBtns.push({ btn, kinds, key });
   }
+  renderFittingButton = () => {
+    for (const g of fittingGroupBtns) {
+      const aktiv = (builder.mode === "fitting" && g.kinds.includes(builder.fittingKind))
+        || (builder.mode === "clamp" && g.kinds.includes(CLAMP_ENTRY));
+      g.btn.classList.toggle("active", aktiv);
+      g.btn.lastChild.textContent = t(g.key);
+    }
+  };
+  renderFittingButton();
 
   // --- Aktionen ----------------------------------------------------------
   $("btn-undo").addEventListener("click", () => builder.undo());
