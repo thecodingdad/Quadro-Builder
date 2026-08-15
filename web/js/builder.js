@@ -286,6 +286,12 @@ export class Builder {
     return !!t && !t.arm && !t.link;
   }
 
+  /** Ein GERADES echtes Rohr -- Klemmen und Raeder sitzen nur auf solchen. */
+  _straightTube(id) {
+    const t = this.model.tubes.get(id);
+    return !!t && !t.arm && !t.link && !t.bow;
+  }
+
   /**
    * Taugt dieses Rohr als Tragrohr fuer die gewaehlte Platte bzw. das Gitter?
    * Ist schon eines gewaehlt, zaehlen nur noch die hervorgehobenen Gegenrohre --
@@ -1014,7 +1020,8 @@ export class Builder {
   // Oeffnung, Richtung Klickseite, auf Kardinale gerundet) merken -> "8".
   _placeClampOnTube(tubeId, hit) {
     const tb = this.model.tubes.get(tubeId);
-    if (!tb) return;
+    // Auch sie greifen nur um ein gerades Rohr.
+    if (!tb || tb.bow || tb.arm || tb.link) { this.onNotice(t("notice_clamp_click_tube")); return; }
     const a = this.model.nodes.get(tb.a), b = this.model.nodes.get(tb.b);
     if (!a || !b) return;
     const cs = geometry().connectorSize;
@@ -1211,8 +1218,7 @@ export class Builder {
         const p = this.scene.pickForDelete(x, y);
         const kind = p && p.data.kind;
         if (kind === "tube") {
-          const tb = this.model.tubes.get(p.data.id);
-          obj = tb && !tb.arm && !tb.link ? p.object : null;
+          obj = this._straightTube(p.data.id) ? p.object : null;
         } else if (kind === "node") {
           const nd = this.model.nodes.get(p.data.id);
           obj = nd && (nd.clampOn || (this._fittingMountNodes && this._fittingMountNodes.has(nd.id)))
@@ -1224,7 +1230,7 @@ export class Builder {
         // Rohr hinter einem fremden Anbauteil: dorthin laesst sich trotzdem setzen.
         if (!obj && TUBE_FITTINGS[this.fittingKind]) {
           const tp = this.scene.pickTube(x, y);
-          if (tp) { const tb = this.model.tubes.get(tp.data.id); if (tb && !tb.arm && !tb.link) obj = tp.object; }
+          if (tp && this._straightTube(tp.data.id)) obj = tp.object;
         }
       }
     } else if (this.mode === "fitting") {
@@ -1236,7 +1242,7 @@ export class Builder {
       else obj = null;
     } else if (this.mode === "clamp") {
       const p = build(["tube", "clamp"]);
-      const echt = p && (p.data.kind === "clamp" || this._realTube(p.data.id));
+      const echt = p && (p.data.kind === "clamp" || this._straightTube(p.data.id));
       obj = handle() || (echt ? p.object : null);
     } else if (this.mode === "reinforce") {
       const p = build(["tube"]);
@@ -1437,7 +1443,7 @@ export class Builder {
     if (!tubePick || !tubePick.point) { this._pickFittingNode(pick); return; }
     const pickData = tubePick.data;
     const tb = this.model.tubes.get(pickData.id);
-    if (!tb || tb.arm || tb.link) { this.onNotice(t("notice_clamp_click_tube")); return; }
+    if (!tb || tb.arm || tb.link || tb.bow) { this.onNotice(t("notice_clamp_click_tube")); return; }
     const hit = [tubePick.point.x, tubePick.point.y, tubePick.point.z];
     const mount = this.model.tubeFittingMount(pickData.id, hit, this.fittingKind,
       geometry().connectorSize);
@@ -1484,7 +1490,7 @@ export class Builder {
     }
     if (pick.data.kind !== "tube" || !pick.point) { this.onNotice(t("notice_clamp_click_tube")); return; }
     const tb = this.model.tubes.get(pick.data.id);
-    if (!tb || tb.arm || tb.link) { this.onNotice(t("notice_clamp_click_tube")); return; }
+    if (!tb || tb.arm || tb.link || tb.bow) { this.onNotice(t("notice_clamp_click_tube")); return; }
     let added = null;
     const hit = [pick.point.x, pick.point.y, pick.point.z];
     this.recordHistory(() => { added = this.model.addTubeClamp(pick.data.id, hit, part, geometry().connectorSize); });

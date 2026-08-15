@@ -650,6 +650,7 @@ export class BuildModel {
     if (!where) return null;
     if (where === "end") return this.tubeEndMount(tubeId, point, true);
     const t = this.tubes.get(tubeId);
+    if (t && (t.bow || t.arm || t.link)) return null;   // Raeder nur auf geraden Rohren
     const a = t && this.nodes.get(t.a), b = t && this.nodes.get(t.b);
     if (!a || !b) return null;
     const ab = [b.x - a.x, b.y - a.y, b.z - a.z];
@@ -679,7 +680,7 @@ export class BuildModel {
     if (!TUBE_FITTINGS[kind]) return [];
     const out = [];
     for (const t of this.tubes.values()) {
-      if (t.arm || t.link) continue;
+      if (t.arm || t.link || t.bow) continue;
       const a = this.nodes.get(t.a), b = this.nodes.get(t.b);
       if (!a || !b) continue;
       const mid = [(a.x + b.x) / 2, (a.y + b.y) / 2, (a.z + b.z) / 2];
@@ -995,7 +996,8 @@ export class BuildModel {
   // Stelle auf dem Rohr + Richtung des Anschlusses aus einem Trefferpunkt.
   _clampGeom(tubeId, point, keepStub = null) {
     const t = this.tubes.get(tubeId);
-    if (!t) return null;
+    // Klemmen sitzen nur auf GERADEN Rohren -- um einen Bogen greifen sie nicht.
+    if (!t || t.bow || t.arm || t.link) return null;
     const a = this.nodes.get(t.a), b = this.nodes.get(t.b);
     if (!a || !b) return null;
     const ab = [b.x - a.x, b.y - a.y, b.z - a.z];
