@@ -123,13 +123,22 @@ export function getConnector(id) {
   return catalog().connectors.find((c) => c.id === id) || null;
 }
 
+// Schwarz gibt es nicht als Rohrfarbe, aber als Farbe von Platten, Raedern und
+// anderen Anbauteilen -- und in den Herstellerdateien als Material 1.
+const EXTRA_COLORS = [{ id: "black", name: "Schwarz", name_en: "Black", hex: "#2b2b2b" }];
+
+function colorDef(colorId) {
+  return tubeColors().find((x) => x.id === colorId)
+    || EXTRA_COLORS.find((x) => x.id === colorId) || null;
+}
+
 export function colorHex(colorId) {
-  const c = tubeColors().find((x) => x.id === colorId);
+  const c = colorDef(colorId);
   return c ? c.hex : "#888888";
 }
 
 export function colorName(colorId) {
-  const c = tubeColors().find((x) => x.id === colorId);
+  const c = colorDef(colorId);
   if (!c) return colorId;
   return (getLang() === "en" && c.name_en) ? c.name_en : c.name;
 }

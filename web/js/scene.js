@@ -720,9 +720,11 @@ export class SceneManager {
         mat = this._fittingMaterial(hex, false);
         break;
       }
-      case "floating-wheel2": {         // Schwimmrad: grau, knapp 15 cm dick
+      case "floating-wheel2": {         // Schwimmrad, knapp 15 cm dick
+        // Es gibt es in mehreren Farben -- gesetzte Raeder tragen die Baufarbe,
+        // importierte ohne Farbangabe bleiben grau.
         geo = this._wheelGeometry(WHEEL_R, 14, false);
-        mat = this._fittingMaterial(0x8f9296, false);
+        mat = this._fittingMaterial(f.color ? hex : 0x8f9296, false);
         break;
       }
       case "hub-cap2": {                // Radkappe: haelt das Schwimmrad fest

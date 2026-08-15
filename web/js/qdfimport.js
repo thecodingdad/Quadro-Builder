@@ -72,6 +72,9 @@ const FITTING_KINDS = {
 // Farbnamen aus material3 auf unsere Farb-IDs abbilden.
 const COLOR_BY_NAME = {
   red: "red", green: "green", blue: "blue", yellow: "yellow",
+  // Schwarz gibt es als Bauteilfarbe (Platten, Raeder): ohne diesen Eintrag
+  // wurde es zu Blau, und ein schwarzes Schwimmrad kam blau zurueck.
+  black: "black",
 };
 const FALLBACK_COLOR = "blue";
 
