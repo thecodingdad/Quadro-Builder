@@ -815,11 +815,17 @@ export function initUI({ scene, model, builder }) {
     "hole-connector4": `<line x1="1.5" y1="10.5" x2="14.5" y2="10.5" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/>` +
       `<rect x="5.4" y="7.4" width="5.2" height="6.2" rx="1.2" fill="none" stroke="currentColor" stroke-width="1.3"/>` +
       `<circle cx="8" cy="4" r="2.4" fill="none" stroke="currentColor" stroke-width="1.4"/>`,
-    "double_tube": `<line x1="1.5" y1="5.5" x2="14.5" y2="5.5" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/>` +
-      `<line x1="1.5" y1="10.5" x2="14.5" y2="10.5" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/>` +
-      `<rect x="5.6" y="2.6" width="4.8" height="10.8" rx="2.2" fill="none" stroke="currentColor" stroke-width="1.3"/>`,
-    "tube_clamp": `<line x1="1.5" y1="8" x2="14.5" y2="8" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/>` +
-      `<circle cx="8" cy="8" r="3.4" fill="none" stroke="currentColor" stroke-width="1.4"/>`,
+    // Doppelrohrverbinder: eine "8" mit den beiden Rohren mittendurch.
+    "double_tube": `<line x1="1" y1="5.2" x2="15" y2="5.2" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/>` +
+      `<line x1="1" y1="10.8" x2="15" y2="10.8" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/>` +
+      `<circle cx="8" cy="5.2" r="3.1" fill="none" stroke="currentColor" stroke-width="1.4"/>` +
+      `<circle cx="8" cy="10.8" r="3.1" fill="none" stroke="currentColor" stroke-width="1.4"/>`,
+    // Rohrklammer: dieselbe "8", aber oben und unten offen -- zwei "C", die mit
+    // dem Rücken aneinanderliegen.
+    "tube_clamp": `<line x1="1" y1="5.2" x2="15" y2="5.2" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/>` +
+      `<line x1="1" y1="10.8" x2="15" y2="10.8" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/>` +
+      `<path d="M5.4 3.5 A3.1 3.1 0 1 0 10.6 3.5" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>` +
+      `<path d="M5.4 12.5 A3.1 3.1 0 1 1 10.6 12.5" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>`,
     "open-connector2": `<line x1="1.5" y1="8" x2="9.5" y2="8" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/>` +
       `<ellipse cx="11.4" cy="8" rx="2.2" ry="3.4" fill="currentColor"/>`,
     // Sonstiges
