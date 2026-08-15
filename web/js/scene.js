@@ -758,11 +758,14 @@ export class SceneManager {
       case "bearing2": {                // Radlager: schwarzes 5-cm-Rohrstueck
         // Es steckt auf einem Stutzen der Kupplung und traegt das Multirad an
         // seinem aeusseren Ende. Laenge 5 cm -- so steht es im Datensatz.
+        // Es steckt auf dem STUTZEN der Kupplung und beginnt deshalb erst an
+        // deren Wuerfelflaeche -- sonst laege es ueber dem Kern der Kupplung.
         const rb = geometry().tubeRadius;
+        const start = geometry().connectorSize / 2;
         geo = this._cachedGeo("bearingstub", () => {
           const g = new THREE.CylinderGeometry(rb, rb, 5, Math.max(10, this._q().tube));
           g.rotateZ(Math.PI / 2);
-          g.translate(2.5, 0, 0);
+          g.translate(start + 2.5, 0, 0);
           return g;
         });
         mat = this._fittingMaterial(0x1c1c1c, false);
