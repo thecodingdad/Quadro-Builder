@@ -267,9 +267,10 @@ export function buildQDF(model) {
     // dem Tupel -- in allen 732 Vorkommen der Herstellerdateien. Schreibt man
     // ihr die sechs Felder einer connector3 (Arm-Maske, Sichtbarkeit), lehnt die
     // Herstellersoftware die Datei ab.
-    lines.push(c45
-      ? `connector45_2{${CONNECTOR_MAT}, ${tuple(q, n.x, n.y, n.z)}, 1, 0, 0}`
-      : `connector3{${CONNECTOR_MAT}, ${tuple(q, n.x, n.y, n.z)}, 1, 0, ${mask}, ${63 - mask}, ${RENDER_MASK}, 0}`);
+    // Die Winkelkupplung ERSETZT die Kupplung nicht, sie steckt auf ihr: in den
+    // Herstellerdateien steht an derselben Lage beides, 726 von 732 Vorkommen.
+    lines.push(`connector3{${CONNECTOR_MAT}, ${tuple(q, n.x, n.y, n.z)}, 1, 0, ${mask}, ${63 - mask}, ${RENDER_MASK}, 0}`);
+    if (c45) lines.push(`connector45_2{${CONNECTOR_MAT}, ${tuple(q, n.x, n.y, n.z)}, 1, 0, 0}`);
     stats.connectors++;
   }
 
