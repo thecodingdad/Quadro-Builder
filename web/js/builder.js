@@ -963,9 +963,9 @@ export class Builder {
   // Doppelrohrverbinder auf ein Rohr setzen: Achse (Rohr) + Versatz (zur leeren
   // Oeffnung, Richtung Klickseite, auf Kardinale gerundet) merken -> "8".
   _placeClampOnTube(tubeId, hit) {
-    const t = this.model.tubes.get(tubeId);
-    if (!t) return;
-    const a = this.model.nodes.get(t.a), b = this.model.nodes.get(t.b);
+    const tb = this.model.tubes.get(tubeId);
+    if (!tb) return;
+    const a = this.model.nodes.get(tb.a), b = this.model.nodes.get(tb.b);
     if (!a || !b) return;
     const cs = geometry().connectorSize;
     const ab = [b.x - a.x, b.y - a.y, b.z - a.z];
@@ -1370,7 +1370,8 @@ export class Builder {
     const tb = this.model.tubes.get(pickData.id);
     if (!tb || tb.arm || tb.link) { this.onNotice(t("notice_clamp_click_tube")); return; }
     const hit = [tubePick.point.x, tubePick.point.y, tubePick.point.z];
-    const mount = this.model.tubeFittingMount(pickData.id, hit, this.fittingKind);
+    const mount = this.model.tubeFittingMount(pickData.id, hit, this.fittingKind,
+      geometry().connectorSize);
     if (!mount) { this.onNotice(t("notice_fitting_no_room")); return; }
     let added = null;
     this.recordHistory(() => {

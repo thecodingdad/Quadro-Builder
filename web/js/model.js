@@ -635,7 +635,7 @@ export class BuildModel {
    * Montagestelle eines Rohr-Teils aus dem Trefferpunkt: entweder genau dort
    * (Raeder) oder am naeheren Rohrende (Nabenkappe).
    */
-  tubeFittingMount(tubeId, point, kind) {
+  tubeFittingMount(tubeId, point, kind, cs = 5) {
     const where = TUBE_FITTINGS[kind];
     if (!where) return null;
     if (where === "end") return this.tubeEndMount(tubeId, point, true);
@@ -645,14 +645,15 @@ export class BuildModel {
     const ab = [b.x - a.x, b.y - a.y, b.z - a.z];
     const L = Math.hypot(ab[0], ab[1], ab[2]) || 1;
     const u = [ab[0] / L, ab[1] / L, ab[2] / L];
-    // Das Teil muss GANZ auf dem Rohr sitzen: die Stelle wird so weit
-    // hereingezogen, dass keine Haelfte ueber ein Ende hinausragt. Passt es
-    // ueberhaupt nicht auf das Rohr, gibt es keine Montagestelle.
+    // Das Teil muss GANZ auf dem SICHTBAREN Rohr sitzen. Das Rohr steckt an
+    // beiden Enden eine halbe Kupplungslaenge in der Kupplung -- so weit reicht
+    // es also nicht, wie der Abstand der Knoten vermuten laesst.
     const half = (FITTING_WIDTH[kind] || 0) / 2;
-    if (L < 2 * half) return null;
+    const rand = half + cs / 2;
+    if (L < 2 * rand) return null;
     const rel = [point[0] - a.x, point[1] - a.y, point[2] - a.z];
     const raw = rel[0] * u[0] + rel[1] * u[1] + rel[2] * u[2];
-    const s = Math.max(half, Math.min(L - half, raw));
+    const s = Math.max(rand, Math.min(L - rand, raw));
     const pos = [a.x + u[0] * s, a.y + u[1] * s, a.z + u[2] * s];
     // Stoesst es an ein anderes Teil auf demselben Rohr?
     if (this._fittingBlocked(kind, pos, u, half)) return null;
