@@ -48,6 +48,7 @@ const de = {
   asm_order_zm: 'von vorne nach hinten',
   notice_slide_exists: 'Hier hängt schon eine Rutsche.',
   notice_fitting_exists: 'Hier sitzt schon dieses Anbauteil.',
+  notice_fitting_fixed: 'Dieses Teil lässt sich nicht drehen. Löschen im Auswahl-Modus.',
   btn_undo: '↶ Zurück',
   btn_undo_short: 'Zurück',
   btn_undo_title: 'Rückgängig (Strg/Cmd+Z)',
@@ -186,7 +187,7 @@ const de = {
   status_reinforce: 'Verstärken: Rohr anklicken, um ein Alu-Profil ein-/auszuschieben (metallisch = verstärkt, orange = empfohlen).',
   status_collision: 'Kollision: rot markierte Rohre überlagern sich (gleiche Achse oder Kreuzung im Rohrinneren).',
   status_clamp: 'Doppelrohr: auf ein Rohr klicken, um einen Doppelrohrverbinder zu setzen (bestehenden anklicken = entfernen).',
-  status_fitting: 'Anbauteil: einen Ankerpunkt anklicken, um das gewählte Teil zu setzen (gesetztes Teil anklicken = entfernen).',
+  status_fitting: 'Anbauteil: einen Ankerpunkt anklicken, um das gewählte Teil zu setzen (gesetztes Teil anklicken = weiterdrehen).',
   status_assembly: 'Aufbau: mit ‹ › oder Pfeiltasten Schritt für Schritt durch den Bauplan.',
   status_select: 'Auswahl: Teile anklicken (Strg/Shift = mehrere) oder mit Strg ein Rechteck aufziehen – das ergänzt. Klick ins Leere hebt auf.',
 
@@ -349,6 +350,7 @@ const en = {
   asm_order_zm: 'front to back',
   notice_slide_exists: 'A slide is already mounted here.',
   notice_fitting_exists: 'This accessory is already mounted here.',
+  notice_fitting_fixed: 'This part cannot be turned. Delete it in select mode.',
   btn_undo: '↶ Undo',
   btn_undo_short: 'Undo',
   btn_undo_title: 'Undo (Ctrl/Cmd+Z)',
@@ -486,7 +488,7 @@ const en = {
   status_reinforce: 'Reinforce: click a tube to insert/remove an aluminium profile (metallic = reinforced, orange = recommended).',
   status_collision: 'Collision: tubes marked red overlap (same axis or crossing inside a tube).',
   status_clamp: 'Double tube: click a tube to place a double-tube connector (click existing = remove).',
-  status_fitting: 'Accessory: click an anchor point to place the selected part (click a placed part = remove).',
+  status_fitting: 'Accessory: click an anchor point to place the selected part (click a placed part = turn it).',
   status_assembly: 'Assembly: use ‹ › or arrow keys to step through the build plan.',
   status_select: 'Select: click parts (Ctrl/Shift = multiple) or hold Ctrl and drag a rectangle – it adds. Click empty space to clear.',
 

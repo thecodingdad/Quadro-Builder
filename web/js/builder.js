@@ -1228,7 +1228,11 @@ export class Builder {
       return;
     }
     if (p && p.data.kind === "fitting") {
-      this.recordHistory(() => this.model.removeFitting(p.data.id));
+      // Klick auf ein gesetztes Teil DREHT es weiter (wie beim Bogenrohr) --
+      // geloescht wird im Auswahl-Modus. Teile ohne Wahlmoeglichkeit bleiben.
+      let turned = false;
+      this.recordHistory(() => { turned = this.model.rotateFitting(p.data.id); });
+      if (!turned) this.onNotice(t("notice_fitting_fixed"));
       this.refresh();
     }
   }
@@ -1245,7 +1249,11 @@ export class Builder {
     if (pick.data.kind === "node") {
       const n = this.model.nodes.get(pick.data.id);
       if (n && n.clampOn) {
-        this.recordHistory(() => this.model.removeNode(n.id));
+        // Weiterdrehen statt loeschen: der Anschluss rueckt um 90 Grad um das
+        // Rohr weiter, das Eingesteckte dreht mit.
+        let turned = false;
+        this.recordHistory(() => { turned = this.model.rotateTubeClamp(n.id, geometry().connectorSize); });
+        if (!turned) this.onNotice(t("notice_fitting_fixed"));
         this.refresh();
         return;
       }
@@ -1272,11 +1280,8 @@ export class Builder {
     if (!pick) { this._clearPanelRail(); return; }
     if (pick.data.kind === "fitting" && !this.panelRail) {
       const f = this.model.fittings.get(pick.data.id);
-      if (f && f.kind === "lattice2") {
-        this.recordHistory(() => this.model.removeFitting(f.id));
-        this.refresh();
-        return;
-      }
+      // Ein Gitter laesst sich nicht drehen -- es haengt an seinen zwei Rohren.
+      if (f && f.kind === "lattice2") { this.onNotice(t("notice_fitting_fixed")); return; }
     }
     if (pick.data.kind !== "tube") { this._clearPanelRail(); return; }
     const tube = this.model.tubes.get(pick.data.id);

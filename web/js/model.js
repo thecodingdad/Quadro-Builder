@@ -41,6 +41,12 @@ const LATTICE_MAX = 160;
 
 const CARDINALS = [[1, 0, 0], [-1, 0, 0], [0, 1, 0], [0, -1, 0], [0, 0, 1], [0, 0, -1]];
 
+// Anbauteile, die sich per Klick weiterdrehen lassen: sie sitzen an einer
+// Kupplung und haben eine Achse, fuer die es mehrere Richtungen gibt.
+const ROTATABLE_FITTINGS = new Set([
+  "bearing2", "adapter2", "open-connector2", "multi-wheel2", "hub-cap2",
+]);
+
 const norm3 = (v) => { const L = Math.hypot(v[0], v[1], v[2]) || 1; return [v[0] / L, v[1] / L, v[2] / L]; };
 const dot3 = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
 const cross3 = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
@@ -451,6 +457,81 @@ export class BuildModel {
 
   removeFitting(id) {
     this.fittings.delete(id);
+  }
+
+  /**
+   * Anbauteil weiterdrehen: es springt auf die naechste freie Achsrichtung
+   * seiner Kupplung -- so wie ein Bogenrohr per Klick weiterrueckt. Teile ohne
+   * Wahlmoeglichkeit (Radarretierung in der Nabe, Flaechenteile, Teile auf einem
+   * Rohr) bleiben, wo sie sind.
+   */
+  rotateFitting(id) {
+    const f = this.fittings.get(id);
+    if (!f || !ROTATABLE_FITTINGS.has(f.kind)) return false;
+    let anchor = null, nd = 16;
+    for (const n of this.nodes.values()) {
+      const d = Math.hypot(n.x - f.x, n.y - f.y, n.z - f.z);
+      if (d < nd) { nd = d; anchor = n; }
+    }
+    if (!anchor) return false;
+    const mounts = this.fittingMounts(f.kind).filter((m) => m.nodeId === anchor.id);
+    if (mounts.length < 2) return false;
+    const at = (m) => Math.hypot(m.pos[0] - f.x, m.pos[1] - f.y, m.pos[2] - f.z);
+    let cur = 0, best = Infinity;
+    mounts.forEach((m, i) => { const d = at(m); if (d < best) { best = d; cur = i; } });
+    // Belegte Stellen ueberspringen -- dort steckt schon dasselbe Teil.
+    for (let k = 1; k <= mounts.length; k++) {
+      const m = mounts[(cur + k) % mounts.length];
+      if (at(m) < 0.01) continue;
+      let taken = false;
+      for (const o of this.fittings.values()) {
+        if (o.id === f.id || o.kind !== f.kind) continue;
+        if (Math.hypot(o.x - m.pos[0], o.y - m.pos[1], o.z - m.pos[2]) < 2) { taken = true; break; }
+      }
+      if (taken) continue;
+      const quat = quatFromXAxis(m.dir);
+      // Die Laufrolle sitzt auf ihrem Adapter -- sie dreht mit.
+      const rider = f.kind === "adapter2"
+        ? [...this.fittings.values()].find((o) => o.kind === "casters2"
+            && Math.hypot(o.x - f.x, o.y - f.y, o.z - f.z) < 2)
+        : null;
+      for (const part of [f, rider]) {
+        if (!part) continue;
+        part.x = round(m.pos[0]); part.y = round(m.pos[1]); part.z = round(m.pos[2]);
+        part.quat = quat.slice();
+      }
+      return true;
+    }
+    return false;
+  }
+
+  /**
+   * Klemm-Kupplung weiterdrehen: der offene Anschluss rueckt um 90 Grad um das
+   * umschlossene Rohr weiter, alles daran Steckende dreht mit.
+   */
+  rotateTubeClamp(nodeId, cs = 5) {
+    const node = this.nodes.get(nodeId);
+    if (!node || !node.clampOn || !node.stub) return false;
+    const t = this.tubes.get(node.clampOn.tubeId);
+    const a = t && this.nodes.get(t.a), b = t && this.nodes.get(t.b);
+    if (!a || !b) return false;
+    const ab = [b.x - a.x, b.y - a.y, b.z - a.z];
+    const L = Math.hypot(ab[0], ab[1], ab[2]) || 1;
+    const u = [ab[0] / L, ab[1] / L, ab[2] / L];
+    const axis = [node.x - node.stub[0] * cs, node.y - node.stub[1] * cs, node.z - node.stub[2] * cs];
+    // 90 Grad um die Rohrachse (Rodrigues, cos = 0, sin = 1).
+    const turn = (p) => {
+      const r = [p[0] - axis[0], p[1] - axis[1], p[2] - axis[2]];
+      const c = cross3(u, r);
+      const d = dot3(u, r);
+      return [axis[0] + c[0] + u[0] * d, axis[1] + c[1] + u[1] * d, axis[2] + c[2] + u[2] * d];
+    };
+    const branch = this._branchFrom(nodeId).map((n) => ({ n, p: turn([n.x, n.y, n.z]) }));
+    if (branch.some((e) => this.isBelowGround(e.p[1]))) return false;
+    for (const e of branch) { e.n.x = round(e.p[0]); e.n.y = round(e.p[1]); e.n.z = round(e.p[2]); }
+    const s = cross3(u, node.stub);
+    node.stub = [round(s[0]), round(s[1]), round(s[2])];
+    return true;
   }
 
   /**
