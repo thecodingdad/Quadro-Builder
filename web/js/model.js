@@ -2068,6 +2068,7 @@ export class BuildModel {
         if (s.quat) o.quat = s.quat;
         if (s.hook) o.hook = s.hook; // manuell gesetzt: Einhaengepunkt am Rohrpaar
         if (s.color) o.color = s.color; // Three-Quaternion x,y,z,w (vor Rz90)
+        if (s.foot) o.foot = s.foot;   // Lage des Fussrohrs, gehoert zur Rutsche
         return o;
       }),
     };
@@ -2140,7 +2141,8 @@ export class BuildModel {
       maxSeq = Math.max(maxSeq, parseSeq(f.id));
     }
     for (const s of data.slides || []) {
-      this.slides.set(s.id, { id: s.id, x: s.x, y: s.y, z: s.z, quat: s.quat || null, hook: s.hook || null, color: s.color || null, kind: s.kind });
+      this.slides.set(s.id, { id: s.id, x: s.x, y: s.y, z: s.z, quat: s.quat || null, hook: s.hook || null,
+        color: s.color || null, foot: s.foot || null, kind: s.kind });
       maxSeq = Math.max(maxSeq, parseSeq(s.id));
     }
     this._seq = maxSeq + 1;

@@ -476,6 +476,14 @@ export function buildQDF(model) {
       : IDENTITY;
     lines.push(`${s.kind || "slide-new2"}{${tubeMat(s.color)}, ${tuple(q, s.x, s.y, s.z)}, 1, 0}`);
     stats.slides++;
+    // Fussrohr: Unter jeder Rutsche liegt in den Herstellerdateien ein 35er
+    // Rohr, mittig auf dem Rutschenpunkt. Es gehoert zum Rutschenbauteil --
+    // das Modell fuehrt es nicht, die Datei braucht es. Geschrieben wird die
+    // Lage, die beim Einlesen dort stand.
+    if (s.foot && s.foot.p0 && s.foot.dir) {
+      const g = s.foot;
+      lines.push(`tube2{${tubeMat(g.color || s.color)}, ${tuple(encodeQuat(quatFromX(g.dir)), g.p0[0], g.p0[1], g.p0[2])}, 1, ${mm(g.len)}, 0., 0}`);
+    }
   }
 
   return { text: lines.join(EOL) + EOL, stats };

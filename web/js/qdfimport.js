@@ -798,7 +798,12 @@ export function parseQDF(text, opts = {}) {
       const a = nodeById.get(t.a), b = nodeById.get(t.b);
       if (!a || !b) continue;
       const mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2, mz = (a.z + b.z) / 2;
-      if (slides.some((s) => Math.hypot(s.x - mx, s.y - my, s.z - mz) <= FOOT_TOL)) {
+      const slide = slides.find((s) => Math.hypot(s.x - mx, s.y - my, s.z - mz) <= FOOT_TOL);
+      if (slide) {
+        // Lage des Fussrohrs merken: der Export schreibt es wieder mit, sonst
+        // fehlt es in der Datei und die Herstellersoftware zeigt die Rutschen-
+        // Auflage nicht.
+        if (t.geom) slide.foot = { ...t.geom, color: t.color };
         tubes.splice(i, 1);
       }
     }
