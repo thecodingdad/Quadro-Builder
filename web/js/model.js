@@ -66,6 +66,11 @@ const FITTING_WIDTH = {
 
 const WHEEL_KINDS = new Set(["multi-wheel2", "floating-wheel2"]);
 
+// Großes Dach: First = ein waagerechtes 75er Rohr (80 cm Rastermaß), das Dach
+// steht an beiden Enden 40 cm über (First insgesamt 160 cm).
+const ROOF_RIDGE_SPAN = 80;
+const ROOF_OVERHANG = 40;
+
 // Kantenmass des Spielsacks (cm) -- er spannt ein Rasterfeld.
 const BAG_SIZE = 35;
 
@@ -907,10 +912,14 @@ export class BuildModel {
   }
 
   /**
-   * Grosses Dach: sitzt als Giebel auf einem waagerechten Rohr. Die lokale
-   * X-Achse laeuft am First entlang, die beiden Schraegen fallen zu beiden
-   * Seiten um 45 Grad ab. Der Bezugspunkt liegt 40 cm vor der Firstmitte --
-   * so weit steht das Dach in den Cover-Entwuerfen nach hinten ueber.
+   * Großes Dach: es sitzt als Giebel MITTIG über einem waagerechten 75er Rohr
+   * -- dem First. Gemessen an allen neun Vorkommen im Bestand: das Dach liegt
+   * genau auf der Achse dieses Rohrs, sein Bezugspunkt 40 cm vor dessen Anfang,
+   * und über dem Rohr steht nichts mehr. Der First ist 160 cm lang, das Dach
+   * steht also an beiden Enden 40 cm über.
+   *
+   * Der Ankerpunkt wird auf der ROHRMITTE gezeigt: dort liegt das Dach, und
+   * damit ist zu sehen, welches Rohr es aufnimmt.
    */
   _roofMounts() {
     const out = [];
@@ -918,13 +927,24 @@ export class BuildModel {
       if (t.arm || t.link || t.bow) continue;
       const a = this.nodes.get(t.a), b = this.nodes.get(t.b);
       if (!a || !b || Math.abs(a.y - b.y) > 0.5) continue;      // nur waagerechte Rohre
+      const L = Math.hypot(b.x - a.x, b.y - a.y, b.z - a.z);
+      if (Math.abs(L - ROOF_RIDGE_SPAN) > 2) continue;          // First ist ein 75er Rohr
+      const mid = [(a.x + b.x) / 2, (a.y + b.y) / 2, (a.z + b.z) / 2];
+      // Nur ganz oben: steht über dem Rohr noch etwas, ist es kein First.
+      let verdeckt = false;
+      for (const n of this.nodes.values()) {
+        if (n.y <= a.y + 1) continue;
+        if (Math.hypot(n.x - mid[0], n.z - mid[2]) < ROOF_RIDGE_SPAN) { verdeckt = true; break; }
+      }
+      if (verdeckt) continue;
       const ex = norm3([b.x - a.x, b.y - a.y, b.z - a.z]);
       const s = cross3(ex, [0, 1, 0]);                          // waagerecht, quer zum First
-      const ey = norm3([s[0], 1 + s[1], s[2]]);                 // Normale der einen Schraege
+      const ey = norm3([s[0], 1 + s[1], s[2]]);                 // Normale der einen Schräge
       const ez = cross3(ex, ey);
-      const mid = [(a.x + b.x) / 2, (a.y + b.y) / 2, (a.z + b.z) / 2];
+      const zurueck = L / 2 + ROOF_OVERHANG;
       out.push({
-        pos: [mid[0] - ex[0] * 40, mid[1] - ex[1] * 40, mid[2] - ex[2] * 40],
+        pos: [mid[0] - ex[0] * zurueck, mid[1] - ex[1] * zurueck, mid[2] - ex[2] * zurueck],
+        handle: mid,
         dir: ex, quat: quatFromBasis(ex, ey, ez), tubeId: t.id,
       });
     }

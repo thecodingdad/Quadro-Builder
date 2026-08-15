@@ -7,6 +7,9 @@ import { panelNormal, modelMiddle } from "./util.js";
 import { clampOffset } from "./model.js";
 
 const UP = new THREE.Vector3(0, 1, 0);
+// So viel darf ein Bauteil vor einem Ankerpunkt liegen, ohne ihn zu verdecken
+// (Rohrhalbmesser + halbe Kupplung).
+const HANDLE_CLEAR = 6;
 const ONE = new THREE.Vector3(1, 1, 1);
 
 // Render-Qualitaet: steuert nur die Aufloesung der gecachten Geometrien, nicht
@@ -2988,6 +2991,17 @@ export class SceneManager {
 
   pickHandle(clientX, clientY) {
     const hit = this.raycastObjects(clientX, clientY, this.handleMeshes.filter((h) => h.visible));
+    // Verdeckte Ankerpunkte gelten nicht: liegt ein Bauteil deutlich davor,
+    // sieht man den Punkt nicht und darf dort auch nichts setzen -- sonst baut
+    // man durch das Modell hindurch. HANDLE_CLEAR Zentimeter Spiel, weil viele
+    // Punkte bewusst IN ihrem Teil liegen (Ankerpunkt auf der Rohrachse, Punkt
+    // dicht an der Kupplung).
+    if (hit) {
+      const davor = this.raycastObjects(clientX, clientY,
+        [...this.pickNodes, ...this.pickTubes, ...this.pickPanels, ...this.pickClamps,
+         ...this.pickTextiles, ...this.pickSlides, ...this.pickFittings]);
+      if (davor && davor.distance < hit.distance - HANDLE_CLEAR) return null;
+    }
     // distance: Abstand zur Kamera -- damit laesst sich ein Griff gegen ein
     // Bauteil abwaegen, das davor liegt.
     return hit ? { object: hit.object, data: hit.object.userData, distance: hit.distance } : null;
