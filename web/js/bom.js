@@ -283,11 +283,13 @@ export function computeBOM(model) {
   const connMap = new Map();
   let openEnds = 0;
   for (const n of model.nodes.values()) {
-    // Eine Radkappe schliesst das Rohrende ab -- es ist dann nicht mehr offen.
-    if (model.hasWheelCap && model.hasWheelCap(n)) continue;
     const types = connectorsForNode(model, n);
     if (types.length === 0) {
-      if (model.degree(n.id) >= 1) openEnds++;
+      // Radkappe und offener Anschluss schliessen das Rohrende ab -- es ist
+      // dann nicht mehr offen. Die Kupplung selbst zaehlt weiter (nur die
+      // Radkappe ersetzt sie, das steht in connectorsForNode).
+      const zu = model.hasEndPiece && model.hasEndPiece(n);
+      if (model.degree(n.id) >= 1 && !zu) openEnds++;
       continue;
     }
     for (const type of types) connMap.set(type, (connMap.get(type) || 0) + 1);

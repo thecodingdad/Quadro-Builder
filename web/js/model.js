@@ -686,8 +686,21 @@ export class BuildModel {
    * das Rohrende steckt in der Kappe, eine Kupplung gibt es nicht mehr.
    */
   hasWheelCap(node) {
+    return this._fittingAt(node, "hub-cap2");
+  }
+
+  /**
+   * Steckt an diesem Knoten ein Abschluss? Radkappe und offener Anschluss
+   * schliessen ein Rohrende ab -- es zaehlt dann nicht mehr als offenes Ende.
+   * Die Kappe ERSETZT die Kupplung, der offene Anschluss sitzt auf ihr.
+   */
+  hasEndPiece(node) {
+    return this._fittingAt(node, "hub-cap2") || this._fittingAt(node, "open-connector2");
+  }
+
+  _fittingAt(node, kind) {
     for (const f of this.fittings.values()) {
-      if (f.kind !== "hub-cap2") continue;
+      if (f.kind !== kind) continue;
       if (Math.hypot(f.x - node.x, f.y - node.y, f.z - node.z) < 3) return true;
     }
     return false;
