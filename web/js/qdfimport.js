@@ -778,6 +778,23 @@ export function parseQDF(text, opts = {}) {
     for (let i = nodes.length - 1; i >= 0; i--) if (!referenced.has(nodes[i].id)) nodes.splice(i, 1);
   }
 
+  // Radarretierung und Radkappe halten ihr Rad, stehen in den Herstellerdateien
+  // aber an der Kupplung -- also HINTER dem Rad. Beim Einlesen ruecken sie in
+  // die Nabe des Rades, zu dem sie gehoeren. Erst dadurch bleiben sie dort
+  // liegen, wenn spaeter das Rad geloescht wird.
+  for (const f of fittings) {
+    const wheelKind = f.kind === "steering-lock2" ? "multi-wheel2"
+      : f.kind === "hub-cap2" ? "floating-wheel2" : null;
+    if (!wheelKind) continue;
+    let best = null, bd = 12;
+    for (const w of fittings) {
+      if (w.kind !== wheelKind) continue;
+      const d = Math.hypot(w.x - f.x, w.y - f.y, w.z - f.z);
+      if (d < bd) { bd = d; best = w; }
+    }
+    if (best) { f.x = best.x; f.y = best.y; f.z = best.z; f.quat = best.quat ? best.quat.slice() : f.quat; }
+  }
+
   // Lochzapfenkupplungen: Knoten an der Muendung, dazu das umschlossene Rohr.
   // Die Huelse sitzt eine Kupplungslaenge hinter der Muendung, auf der Achse
   // des Rohrs -- dort wird gesucht.

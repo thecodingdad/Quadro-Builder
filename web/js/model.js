@@ -24,6 +24,7 @@ const FITTING_MOUNTS = {
  * 15-cm-Rohr, die Nabenkappe an dessen Ende.
  */
 export const TUBE_FITTINGS = {
+  "multi-wheel2":    "anywhere",   // Multirad: auf einem Rohr ODER auf einem Radlager
   "floating-wheel2": "anywhere",   // Schwimmrad, knapp 15 cm dick
 };
 
@@ -34,7 +35,6 @@ export const PLACEABLE_FITTINGS = [
   ...Object.keys(FITTING_MOUNTS),
   ...Object.keys(TUBE_FITTINGS),
   "steering-lock2", "hub-cap2",   // in der Radmitte, siehe _wheelLockMounts
-  "multi-wheel2",                 // auf einem Radlager, siehe _wheelMounts
   "lattice2", "textil-round2", "roof-large2",
 ];
 

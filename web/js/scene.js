@@ -681,26 +681,6 @@ export class SceneManager {
   }
 
   /**
-   * Radarretierung und Radkappe halten ihr Rad -- gezeichnet werden sie deshalb
-   * in dessen Nabe, auch wenn sie in der Datei an der Kupplung stehen (dort
-   * sitzen sie in den Herstellerdateien, also HINTER dem Rad). Gesucht wird das
-   * passende Rad auf derselben Achse in Reichweite; sonst bleibt alles, wie es
-   * gespeichert ist.
-   */
-  _atItsWheel(model, f) {
-    const wheelKind = f.kind === "steering-lock2" ? "multi-wheel2"
-      : f.kind === "hub-cap2" ? "floating-wheel2" : null;
-    if (!wheelKind || !model.fittings) return f;
-    let best = null, bd = 12;
-    for (const w of model.fittings.values()) {
-      if (w.kind !== wheelKind) continue;
-      const d = Math.hypot(w.x - f.x, w.y - f.y, w.z - f.z);
-      if (d < bd) { bd = d; best = w; }
-    }
-    return best ? { ...f, x: best.x, y: best.y, z: best.z, quat: best.quat || f.quat } : f;
-  }
-
-  /**
    * Geometrie eines Anbauteils. Die Formen stammen aus den Bildschirmfotos der
    * Herstellersoftware; Lage und Ausrichtung aus den Entwurfsdateien. Die lokale
    * +X-Achse ist bei allen Teilen die Bezugsrichtung (Radachse, Rollenachse,
@@ -2146,7 +2126,7 @@ export class SceneManager {
       if (hideFlat && FLAT_FITTINGS.has(f.kind)) continue;
       const st = stateOf(f.id);
       if (st === "future") continue;
-      for (const mesh of this._fittingMeshes(this._atItsWheel(model, f))) {
+      for (const mesh of this._fittingMeshes(f)) {
         mesh.userData = { kind: "fitting", id: f.id };
         const base = mesh.material;
         mesh.material = matFor(f.id, (suggest && suggest.has(f.id)) ? this._suggestMaterial(base)

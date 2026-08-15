@@ -838,7 +838,9 @@ export class Builder {
   _buildFittingHandles() {
     if (this.fittingKind === "lattice2") return;      // Gitter laeuft ueber zwei Rohre
     if (TUBE_CLAMP_PARTS[this.fittingKind]) return;   // Klemm-Kupplung sitzt frei auf dem Rohr
-    if (TUBE_FITTINGS[this.fittingKind]) return;      // Raeder/Nabenkappe sitzen frei auf dem Rohr
+    // Raeder auf einem Rohr brauchen keinen Ankerpunkt -- das Multirad bekommt
+    // aber welche auf den Radlagern, dort sitzt es genauso.
+    if (TUBE_FITTINGS[this.fittingKind] && this.fittingKind !== "multi-wheel2") return;
     for (const m of this.model.fittingMounts(this.fittingKind)) {
       let taken = false;
       for (const f of this.model.fittings.values()) {
@@ -1257,6 +1259,18 @@ export class Builder {
    * drehen gibt.
    */
   _clickTubeFitting(e) {
+    // Das Multirad hat beides: Ankerpunkte auf den Radlagern UND die freie
+    // Stelle auf einem Rohr. Ein getroffener Ankerpunkt geht vor.
+    const h = this.scene.pickHandle(e.clientX, e.clientY);
+    if (h && h.data && h.data.fittingMount) {
+      let added = null;
+      this.recordHistory(() => {
+        added = this.model.addFittingAt(this.fittingKind, h.data.fittingMount, this.colorFor("fitting"));
+      });
+      if (!added) this.onNotice(t("notice_fitting_exists"));
+      this.refresh();
+      return;
+    }
     const pick = this.scene.pickForDelete(e.clientX, e.clientY);
     // Nur ein Teil DERSELBEN Art faengt den Klick ab -- sonst verdeckt das
     // erste gesetzte Rad das Rohr und nichts liesse sich mehr daneben setzen.
