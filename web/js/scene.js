@@ -35,6 +35,9 @@ const CLAMP_LEN = 5;
 // Tiefe des Spielsacks: er haengt an allen vier Seiten rund 17 cm hinunter.
 const BAG_DEPTH = 17;
 
+// So tief liegt der gezeichnete Boden unter der Nullebene (halbe Kupplung).
+const GROUND_DROP = 2.5;
+
 // Anbauteile: Radgroesse und Radius der gebogenen Wand, aus den Entwurfsdaten
 // (Rad sitzt 5 cm neben der Kupplung, Rundwand 40 cm von Kupplung und Rohr).
 const WHEEL_R = 19;
@@ -160,9 +163,11 @@ export class SceneManager {
     // Schattenaufloesung richtet sich nach der Qualitaetsstufe.
     this._applyShadowQuality();
 
-    // Boden-Raster (20 cm Zellen)
+    // Boden-Raster (20 cm Zellen). Er liegt eine halbe Kupplung TIEFER als die
+    // Nullebene: Rohre auf y = 0 sind um ihre Achse zentriert, ihre untere
+    // Haelfte laege sonst unter dem Boden und waere abgeschnitten.
     const grid = new THREE.GridHelper(800, 40, 0xb8c0cc, 0xd6dce4);
-    grid.position.y = 0;
+    grid.position.y = -GROUND_DROP;
     this.scene.add(grid);
     this._grid = grid;
 
@@ -3077,7 +3082,7 @@ export class SceneManager {
       new THREE.MeshLambertMaterial({ map: this._makeGrassTexture() })
     );
     ground.rotation.x = -Math.PI / 2;
-    ground.position.y = -0.4;
+    ground.position.y = -GROUND_DROP - 0.4;
     ground.receiveShadow = true;
     env.add(ground);
 
