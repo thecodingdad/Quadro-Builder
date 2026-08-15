@@ -774,12 +774,6 @@ export function initUI({ scene, model, builder }) {
     builder.refresh();
     toggleFileMenu(false);
   });
-  $("btn-export").addEventListener("click", () => {
-    storage.exportFile(model.toJSON(), "quadro-entwurf.json");
-    flash(t("flash_exported"));
-    toggleFileMenu(false);
-  });
-
   $("btn-export-qdf").addEventListener("click", () => {
     const { text, stats } = buildQDF(model);
     storage.exportText(text, "quadro-entwurf.qdf");

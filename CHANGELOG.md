@@ -11,6 +11,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ## [Unreleased]
 
 ### Geändert · Changed
+- **JSON-Export entfernt** – Entwürfe werden als QDF gesichert, dem Format der Herstellersoftware; alle Teile, die die App kennt, gehen dabei mit. Ältere JSON-Dateien lassen sich weiterhin öffnen, der Knopf heißt nur noch „Import QDF" · **JSON export removed** – designs are saved as QDF; older JSON files can still be opened
 - **Platten werden an zwei Rohren gesetzt** statt auf freie Felder: erst ein Tragrohr anklicken, dann eines der hervorgehobenen Gegenrohre. Möglich ist das nur, wenn die Rohre parallel im Plattenabstand liegen und sich weit genug überdecken; ist die Lücke länger als die Platte, entscheidet die Klickstelle am ersten Rohr über den Abschnitt (Raster = Plattenlänge). Intern hängt eine Platte jetzt an ihren beiden Rohren statt an vier Kupplungen – alte Entwürfe werden beim Laden umgerechnet · **Panels are placed on two tubes** instead of free fields: click one rail, then one of the highlighted counterparts. Internally a panel hangs on its two tubes instead of four connectors; older designs are converted on load
 
 - **Escape hebt erst Markierungen auf** – Auswahl, Hervorhebung, gewähltes Tragrohr oder Bau-Kupplung; erst ein weiteres Escape wechselt in den Auswahl-Modus · **Escape clears marks first** – selection, highlight, chosen rail or build connector; only a second Escape switches to select mode
