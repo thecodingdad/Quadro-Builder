@@ -836,6 +836,9 @@ export class Builder {
   // Anbauteile: an jeder Montagestelle des gewaehlten Teils ein Ankerpunkt.
   // Wo dasselbe Teil schon steckt, wird keiner gezeigt -- gestapelt wird nicht.
   _buildFittingHandles() {
+    // Merkt sich, an welchen Kupplungen das gewaehlte Teil sitzen darf -- der
+    // Zeiger zeigt dort eine Hand, auch wenn er den Ankerpunkt knapp verfehlt.
+    this._fittingMountNodes = new Set();
     if (this.fittingKind === "lattice2") return;      // Gitter laeuft ueber zwei Rohre
     if (TUBE_CLAMP_PARTS[this.fittingKind]) return;   // Klemm-Kupplung sitzt frei auf dem Rohr
     // Raeder auf einem Rohr brauchen keinen Ankerpunkt -- das Multirad bekommt
@@ -843,6 +846,7 @@ export class Builder {
     if (TUBE_FITTINGS[this.fittingKind]
         && this.fittingKind !== "multi-wheel2" && this.fittingKind !== "hub-cap2") return;
     for (const m of this.model.fittingMounts(this.fittingKind)) {
+      if (m.nodeId) this._fittingMountNodes.add(m.nodeId);
       let taken = false;
       for (const f of this.model.fittings.values()) {
         if (f.kind !== this.fittingKind) continue;
@@ -1089,16 +1093,29 @@ export class Builder {
       }
     } else if (this.mode === "fitting"
         && (TUBE_CLAMP_PARTS[this.fittingKind] || TUBE_FITTINGS[this.fittingKind])) {
-      // Klemm-Kupplung: Rohre sind anklickbar, gesetzte Kupplungen ebenso.
-      const p = this.scene.pickForDelete(x, y);
-      const kind = p && p.data.kind;
-      if (kind === "tube") {
-        const tb = this.model.tubes.get(p.data.id);
-        obj = tb && !tb.arm && !tb.link ? p.object : null;
-      } else if (kind === "node") {
-        obj = this.model.nodes.get(p.data.id)?.clampOn ? p.object : null;
-      } else if (kind === "fitting") {
-        obj = TUBE_FITTINGS[this.fittingKind] ? p.object : null;
+      // Teile auf Rohr/Klemme: Ankerpunkte zuerst, dann Rohre, gesetzte Teile
+      // derselben Art (Klick dreht sie) und Kupplungen, an denen das Teil sitzen
+      // darf. Fremde Anbauteile fangen den Zeiger NICHT ab.
+      const h = this.scene.pickHandle(x, y);
+      if (h) obj = h.object;
+      else {
+        const p = this.scene.pickForDelete(x, y);
+        const kind = p && p.data.kind;
+        if (kind === "tube") {
+          const tb = this.model.tubes.get(p.data.id);
+          obj = tb && !tb.arm && !tb.link ? p.object : null;
+        } else if (kind === "node") {
+          const nd = this.model.nodes.get(p.data.id);
+          obj = nd && (nd.clampOn || (this._fittingMountNodes && this._fittingMountNodes.has(nd.id)))
+            ? p.object : null;
+        } else if (kind === "fitting") {
+          obj = this.model.fittings.get(p.data.id)?.kind === this.fittingKind ? p.object : null;
+        }
+        // Rohr hinter einem fremden Anbauteil: dorthin laesst sich trotzdem setzen.
+        if (!obj && TUBE_FITTINGS[this.fittingKind]) {
+          const tp = this.scene.pickTube(x, y);
+          if (tp) { const tb = this.model.tubes.get(tp.data.id); if (tb && !tb.arm && !tb.link) obj = tp.object; }
+        }
       }
     } else if (this.mode === "fitting") {
       // Ankerpunkte setzen, ein Klick auf ein gesetztes Anbauteil entfernt es.
