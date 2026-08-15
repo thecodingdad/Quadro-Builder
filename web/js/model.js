@@ -1471,6 +1471,12 @@ export class BuildModel {
         y: round(hook[1] - drop),
         z: round(hook[2] + normal[2] * run),
         hook: [round(hook[0]), round(hook[1]), round(hook[2])],
+        // Auch die Integralrutsche merkt sich ihre Richtung: der Einhängepunkt
+        // steht nicht in der QDF-Datei, die Drehung schon. Ohne sie stünde die
+        // Rutsche nach Export und Import irgendwo -- die Datei führt ihre
+        // Laufrichtung 90 Grad gegen den Uhrzeigersinn gedreht (so lesen wir
+        // sie auch aus den Herstellerdateien).
+        quat: quatFromXAxis([normal[2], 0, -normal[0]]),
         kind, color,
       };
     if (kette && this._slideAt([slide.x, slide.y, slide.z])) return null;

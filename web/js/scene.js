@@ -73,6 +73,10 @@ const CURVED_SLIDE_EXIT = new THREE.Vector3(1, 0, 0);
 // trägt (5 cm).
 const SLIDE_END_LIFT = 2.5;
 const SLIDE_BODY_LIFT = 5;
+// Integralrutsche: fester Fall und Auslauf ab dem Einhängepunkt (Modell:
+// SLIDE_DROP + SLIDE_HOOK_LIFT und SLIDE_RUN).
+const INTEGRAL_DROP = 85;
+const INTEGRAL_RUN = 120;
 // Auslauf: waagerechtes Stück, dann die Lippe -- ein abgerundeter Viertelkreis,
 // der um 90 Grad nach unten kippt (nur die Rutschfläche, ohne Wangen). Zusammen
 // reichen sie 47,5 cm nach vorn, so lang ist das Teil.
@@ -2471,7 +2475,10 @@ export class SceneManager {
       // mit der Herstellersoftware lag sie sonst quer und auf der falschen Seite
       // des Turms.
       fwd.applyAxisAngle(new THREE.Vector3(0, 1, 0), Math.PI / 2);
-      P1 = P0.clone();                       // Auslauf = QDF-Position
+      // Auslauf = QDF-Position, die Rutschfläche liegt eine halbe Kupplung
+      // darüber -- genauso wie bei der im Editor gesetzten Rutsche, sonst säße
+      // dieselbe Rutsche nach Export und Import tiefer.
+      P1 = P0.clone().setY(P0.y + SLIDE_END_LIFT);
       // Einstieg = die Kupplung, an der die Rutsche oben eingehaengt ist: erhoeht,
       // in Laufrichtung vor dem Fuss und seitlich auf der Rutschenachse. Damit
       // reicht die Rutsche bis an das Geruest, statt frei in der Luft zu enden.
@@ -2489,9 +2496,23 @@ export class SceneManager {
         const off = Math.abs(Math.atan2(n.y - P1.y, along) - IDEAL_SLOPE);
         if (off < bestSlope) { bestSlope = off; hook = { y: n.y, along }; }
       }
-      P0 = hook
-        ? new THREE.Vector3(P1.x + fwd.x * hook.along, hook.y, P1.z + fwd.z * hook.along)
-        : P1.clone().addScaledVector(fwd, SLIDE_RUN).setY(P1.y + SLIDE_RISE);
+      // Mit eigener Drehung ist nichts zu raten: die Integralrutsche ist ein
+      // festes Teil, ihr Einhängepunkt liegt INTEGRAL_RUN vor dem Fuß und
+      // INTEGRAL_DROP darüber. Nur ohne Drehung wird gesucht.
+      if (sl.quat && sl.quat.length === 4) {
+        // Auf die Hauptachse einrasten: eine Rutsche läuft im Raster, und die
+        // Drehungen aus den Dateien sind nicht immer ganz sauber.
+        const kard = Math.abs(fwd.x) >= Math.abs(fwd.z)
+          ? new THREE.Vector3(Math.sign(fwd.x) || 1, 0, 0)
+          : new THREE.Vector3(0, 0, Math.sign(fwd.z) || 1);
+        P0 = new THREE.Vector3(sl.x + kard.x * INTEGRAL_RUN, sl.y + INTEGRAL_DROP, sl.z + kard.z * INTEGRAL_RUN);
+      } else {
+        // Der Einstieg liegt auf dem Rohr an der gefundenen Kupplung -- eine
+        // halbe Kupplung höher, wie der Einhängepunkt einer gesetzten Rutsche.
+        P0 = hook
+          ? new THREE.Vector3(P1.x + fwd.x * hook.along, hook.y + SLIDE_BODY_LIFT, P1.z + fwd.z * hook.along)
+          : P1.clone().addScaledVector(fwd, SLIDE_RUN).setY(P1.y + SLIDE_RISE);
+      }
     }
     if (P0.distanceTo(P1) < 1) { this._slideChainFrame = null; this._slideChainNextId = null; return; }
     // Die Bahn läuft am Ende WAAGERECHT aus: der Rutschenauslauf liegt flach,
