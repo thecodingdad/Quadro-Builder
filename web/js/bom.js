@@ -283,6 +283,8 @@ export function computeBOM(model) {
   const connMap = new Map();
   let openEnds = 0;
   for (const n of model.nodes.values()) {
+    // Eine Radkappe schliesst das Rohrende ab -- es ist dann nicht mehr offen.
+    if (model.hasWheelCap && model.hasWheelCap(n)) continue;
     const types = connectorsForNode(model, n);
     if (types.length === 0) {
       if (model.degree(n.id) >= 1) openEnds++;
