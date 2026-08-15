@@ -38,6 +38,7 @@ export class Builder {
     this.model = model;
     this.onChange = onChange || (() => {});
     this.onNotice = () => {};        // kurze Hinweis-Meldung an die UI
+    this._tubeHandles = new Map();   // Rohr -> mitwandernder Ankerpunkt
     this.onHistoryChange = () => {}; // Undo-Verfuegbarkeit hat sich geaendert
 
     // "select" (Cursor: vorhandenes auswaehlen) | "add" | "panel" | "slide" |
@@ -724,6 +725,9 @@ export class Builder {
   // --- Handles ------------------------------------------------------------
   _buildHandles() {
     this.scene.clearHandles();
+    // Ankerpunkte von Teilen, die frei auf einem Rohr sitzen -- sie wandern
+    // unter dem Mauszeiger mit (siehe _trackTubeHandles).
+    this._tubeHandles = new Map();
     // Im Platten-Modus gibt es keine Handles: dort klickt man zwei Rohre an.
     if (this.mode === "panel") return;
     if (this.mode === "slide") { this._buildSlideHandles(); return; }
@@ -958,18 +962,56 @@ export class Builder {
       this.scene.addHandle(m.handle || m.pos, { fittingMount: m }, "dir");
     }
     // Teile, die frei auf einem Rohr sitzen: je Rohr ein Vorschlag in der Mitte
-    // des uebrigen Platzes. Gesetzt werden koennen sie weiterhin ueberall.
+    // des uebrigen Platzes. Unter dem Mauszeiger wandert er mit (_trackTubeHandles).
     for (const m of this.model.tubeFittingSpots(this.fittingKind, geometry().connectorSize)) {
       if (sel && !amKnoten(m.tubeId)) continue;
       if (!frei(m)) continue;
-      this.scene.addHandle(m.pos, { fittingMount: m }, "dir");
+      const mesh = this.scene.addHandle(m.pos, { fittingMount: m }, "dir");
+      this._tubeHandles.set(m.tubeId, { mesh, art: "fitting", ruhe: m });
     }
     // Klemm-Kupplungen (Lochzapfen-, Lagerkupplung) klemmen an einer beliebigen
     // Stelle -- ein Punkt je Rohr zeigt, welche Rohre in Frage kommen.
     if (TUBE_CLAMP_PARTS[this.fittingKind]) {
       for (const m of this._tubeMidpoints(sel, amKnoten)) {
-        this.scene.addHandle(m.pos, { clampTube: m }, "dir");
+        const mesh = this.scene.addHandle(m.pos, { clampTube: m }, "dir");
+        this._tubeHandles.set(m.tubeId, { mesh, art: "clamp", ruhe: m });
       }
+    }
+  }
+
+  /**
+   * Der Ankerpunkt eines Teils, das FREI auf einem Rohr sitzt, laeuft unter dem
+   * Mauszeiger mit: er zeigt genau die Stelle, an der das Teil landen wuerde --
+   * und verschwindet dort, wo es nicht hinpasst (zu dicht an der Kupplung, ein
+   * anderes Rad im Weg, unter dem Boden). Ohne Zeiger auf dem Rohr steht er
+   * wieder auf seiner Ruhelage in der Mitte.
+   */
+  _trackTubeHandles(x, y) {
+    if (!this._tubeHandles.size) return;
+    const tp = this.scene.pickTube ? this.scene.pickTube(x, y) : null;
+    const unterZeiger = tp && tp.point ? tp.data.id : null;
+    const cs = geometry().connectorSize;
+    for (const [tubeId, e] of this._tubeHandles) {
+      if (tubeId !== unterZeiger) {
+        this.scene.moveHandle(e.mesh, e.ruhe.pos);
+        this.scene.setHandleVisible(e.mesh, true);
+        if (e.art === "fitting") e.mesh.userData.fittingMount = e.ruhe;
+        else e.mesh.userData.clampTube = e.ruhe;
+        continue;
+      }
+      const punkt = [tp.point.x, tp.point.y, tp.point.z];
+      const m = e.art === "fitting"
+        ? this.model.tubeFittingMount(tubeId, punkt, this.fittingKind, cs)
+        : e.art === "clamp"
+          ? this.model.tubeClampMount(tubeId, punkt, TUBE_CLAMP_PARTS[this.fittingKind], cs)
+          : { pos: punkt };            // Doppelrohrverbinder/Rohrklammer: ueberall
+      if (!m) { this.scene.setHandleVisible(e.mesh, false); continue; }
+      this.scene.setHandleVisible(e.mesh, true);
+      // Klemmen sitzen neben der Rohrachse -- der Punkt gehoert an die Stelle
+      // auf dem Rohr, nicht an die Muendung des Anschlusses.
+      this.scene.moveHandle(e.mesh, e.art === "fitting" ? m.pos : punkt);
+      if (e.art === "fitting") e.mesh.userData.fittingMount = m;
+      else e.mesh.userData.clampTube = { tubeId, pos: punkt, tracked: true };
     }
   }
 
@@ -995,7 +1037,8 @@ export class Builder {
       return !!tb && (tb.a === sel || tb.b === sel);
     };
     for (const m of this._tubeMidpoints(sel, amKnoten)) {
-      this.scene.addHandle(m.pos, { clampTube: m }, "dir");
+      const mesh = this.scene.addHandle(m.pos, { clampTube: m }, "dir");
+      this._tubeHandles.set(m.tubeId, { mesh, art: "verbinder", ruhe: m });
     }
 
   }
@@ -1226,6 +1269,8 @@ export class Builder {
       else if (kind === "tube") obj = this._railUsable(p.data.id, true) ? p.object : null;
     } else if (this.mode === "fitting"
         && (TUBE_CLAMP_PARTS[this.fittingKind] || TUBE_FITTINGS[this.fittingKind])) {
+      // Der Ankerpunkt folgt dem Zeiger am Rohr entlang.
+      this._trackTubeHandles(x, y);
       // Teile auf Rohr/Klemme: Ankerpunkte zuerst, dann Rohre, gesetzte Teile
       // derselben Art (Klick dreht sie) und Kupplungen, an denen das Teil sitzen
       // darf. Fremde Anbauteile fangen den Zeiger NICHT ab.
@@ -1235,7 +1280,10 @@ export class Builder {
         const p = this.scene.pickForDelete(x, y);
         const kind = p && p.data.kind;
         if (kind === "tube") {
-          obj = this._straightTube(p.data.id) ? p.object : null;
+          // Kein Platz an dieser Stelle (Punkt ausgeblendet) -> keine Hand.
+          const spur = this._tubeHandles.get(p.data.id);
+          obj = this._straightTube(p.data.id) && !(spur && !spur.mesh.visible)
+            ? p.object : null;
         } else if (kind === "node") {
           const nd = this.model.nodes.get(p.data.id);
           obj = nd && (nd.clampOn || (this._fittingMountNodes && this._fittingMountNodes.has(nd.id)))
@@ -1249,7 +1297,8 @@ export class Builder {
         // Rohr hinter einem fremden Anbauteil: dorthin laesst sich trotzdem setzen.
         if (!obj && TUBE_FITTINGS[this.fittingKind]) {
           const tp = this.scene.pickTube(x, y);
-          if (tp && this._straightTube(tp.data.id)) obj = tp.object;
+          const spur = tp && this._tubeHandles.get(tp.data.id);
+          if (tp && this._straightTube(tp.data.id) && !(spur && !spur.mesh.visible)) obj = tp.object;
         }
       }
     } else if (this.mode === "fitting") {
@@ -1263,6 +1312,7 @@ export class Builder {
       else if (fremd && this._mountNearPoint(p.point)) obj = p.object;
       else obj = null;
     } else if (this.mode === "clamp") {
+      this._trackTubeHandles(x, y);
       const p = build(["tube", "clamp"]);
       const echt = p && (p.data.kind === "clamp" || this._straightTube(p.data.id));
       obj = handle() || (echt ? p.object : null);
@@ -1356,8 +1406,16 @@ export class Builder {
   // ihre freie Oeffnung kommt im BAU-Modus dazu, nicht hier.
   _clickClamp(e) {
     const h = this.scene.pickHandle(e.clientX, e.clientY);
-    if (h && h.data.clampTube) { this._placeClampOnTube(h.data.clampTube.tubeId, {
-      x: h.data.clampTube.pos[0], y: h.data.clampTube.pos[1] + 3, z: h.data.clampTube.pos[2] }); return; }
+    if (h && h.data.clampTube) {
+      const ct = h.data.clampTube;
+      // Ruhelage: der Punkt liegt auf der Rohrachse, dann gibt der Versatz nach
+      // oben die Seite vor. Ist er dem Zeiger gefolgt, liegt er schon auf der
+      // richtigen Seite des Rohrs.
+      this._placeClampOnTube(ct.tubeId, ct.tracked
+        ? { x: ct.pos[0], y: ct.pos[1], z: ct.pos[2] }
+        : { x: ct.pos[0], y: ct.pos[1] + 3, z: ct.pos[2] });
+      return;
+    }
     const pick = this.scene.pickBuild(e.clientX, e.clientY);
     if (!pick) return;
     if (pick.data.kind === "clamp") {

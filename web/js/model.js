@@ -952,6 +952,22 @@ export class BuildModel {
    * Rohr UND (ueber die Seite, auf der er liegt) die Richtung des Anschlusses.
    */
   addTubeClamp(tubeId, point, part, cs = 5) {
+    const m = this.tubeClampMount(tubeId, point, part, cs);
+    if (!m) return null;
+    const node = this.addNode(round(m.pos[0]), round(m.pos[1]), round(m.pos[2]));
+    node.part = part;
+    node.clampOn = { tubeId, t: m.t };
+    node.stub = m.stub;
+    return node;
+  }
+
+  /**
+   * Wohin eine Klemm-Kupplung an dieser Stelle des Rohrs kaeme -- ohne sie zu
+   * setzen. Liefert null, wo sie nicht hin darf (Bogenrohr, unter dem Boden,
+   * schon eine gleiche Klemme dort). Gebraucht fuer die Vorschau unter dem
+   * Mauszeiger und von addTubeClamp selbst.
+   */
+  tubeClampMount(tubeId, point, part, cs = 5) {
     const g = this._clampGeom(tubeId, point);
     if (!g) return null;
     const off = clampOffset(part, cs);
@@ -960,11 +976,7 @@ export class BuildModel {
     for (const n of this.nodes.values()) {
       if (n.part === part && Math.hypot(n.x - pos[0], n.y - pos[1], n.z - pos[2]) < 2) return null;
     }
-    const node = this.addNode(round(pos[0]), round(pos[1]), round(pos[2]));
-    node.part = part;
-    node.clampOn = { tubeId, t: round(g.t) };
-    node.stub = g.stub;
-    return node;
+    return { tubeId, pos, stub: g.stub, t: round(g.t) };
   }
 
   /**

@@ -2634,6 +2634,26 @@ export class SceneManager {
     return mesh;
   }
 
+  /**
+   * Einen vorhandenen Ankerpunkt verschieben (ohne alle Handles neu zu bauen).
+   * Gebraucht fuer Teile, die frei auf einem Rohr sitzen: der Punkt laeuft unter
+   * dem Zeiger mit und zeigt, wo das Teil landen wuerde.
+   */
+  moveHandle(mesh, position) {
+    if (!mesh) return;
+    if (mesh.position.x === position[0] && mesh.position.y === position[1]
+      && mesh.position.z === position[2]) return;
+    mesh.position.set(position[0], position[1], position[2]);
+    this._needsRender = true;
+  }
+
+  /** Ankerpunkt ein- oder ausblenden (bleibt in handleMeshes, nur unsichtbar). */
+  setHandleVisible(mesh, visible) {
+    if (!mesh || mesh.visible === visible) return;
+    mesh.visible = visible;
+    this._needsRender = true;
+  }
+
   // Anklickbares Kandidaten-Feld fuer eine Platte (Quad aus 4 Eckpunkten).
   addPanelHandle(corners, userData) {
     this._needsRender = true;
@@ -2873,7 +2893,7 @@ export class SceneManager {
   get clipping() { return !!this._clipPlane; }
 
   pickHandle(clientX, clientY) {
-    const hit = this.raycastObjects(clientX, clientY, this.handleMeshes);
+    const hit = this.raycastObjects(clientX, clientY, this.handleMeshes.filter((h) => h.visible));
     // distance: Abstand zur Kamera -- damit laesst sich ein Griff gegen ein
     // Bauteil abwaegen, das davor liegt.
     return hit ? { object: hit.object, data: hit.object.userData, distance: hit.distance } : null;
