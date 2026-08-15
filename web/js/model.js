@@ -41,6 +41,16 @@ const LATTICE_MAX = 160;
 
 const CARDINALS = [[1, 0, 0], [-1, 0, 0], [0, 1, 0], [0, -1, 0], [0, 0, 1], [0, 0, -1]];
 
+/**
+ * Abstand der Klemm-Kupplung von der Rohrachse, in Kupplungslaengen.
+ * Die Lochzapfenkupplung nimmt an ihrer Muendung direkt ein Rohr auf -- eine
+ * Laenge reicht. Die Lagerkupplung traegt dort eine ganze Kupplung, die noch
+ * einmal eine Laenge weiter aussen sitzt.
+ */
+export function clampOffset(part, cs = 5) {
+  return part === "bearing" ? cs * 2 : cs;
+}
+
 // Anbauteile, die sich per Klick weiterdrehen lassen: sie sitzen an einer
 // Kupplung und haben eine Achse, fuer die es mehrere Richtungen gibt.
 const ROTATABLE_FITTINGS = new Set([
@@ -518,7 +528,8 @@ export class BuildModel {
     const ab = [b.x - a.x, b.y - a.y, b.z - a.z];
     const L = Math.hypot(ab[0], ab[1], ab[2]) || 1;
     const u = [ab[0] / L, ab[1] / L, ab[2] / L];
-    const axis = [node.x - node.stub[0] * cs, node.y - node.stub[1] * cs, node.z - node.stub[2] * cs];
+    const off = clampOffset(node.part, cs);
+    const axis = [node.x - node.stub[0] * off, node.y - node.stub[1] * off, node.z - node.stub[2] * off];
     // 45 Grad um die Rohrachse (Rodrigues). Acht Stellungen -- die Kupplungen
     // sitzen am Rohr, sie muessen sich nicht ins Achsraster fuegen.
     const co = Math.SQRT1_2, si = Math.SQRT1_2;
@@ -724,7 +735,8 @@ export class BuildModel {
   addTubeClamp(tubeId, point, part, cs = 5) {
     const g = this._clampGeom(tubeId, point);
     if (!g) return null;
-    const pos = [g.axis[0] + g.stub[0] * cs, g.axis[1] + g.stub[1] * cs, g.axis[2] + g.stub[2] * cs];
+    const off = clampOffset(part, cs);
+    const pos = [g.axis[0] + g.stub[0] * off, g.axis[1] + g.stub[1] * off, g.axis[2] + g.stub[2] * off];
     if (this.isBelowGround(pos[1])) return null;
     for (const n of this.nodes.values()) {
       if (n.part === part && Math.hypot(n.x - pos[0], n.y - pos[1], n.z - pos[2]) < 2) return null;
@@ -747,7 +759,8 @@ export class BuildModel {
     if (!node || !node.clampOn) return false;
     const g = this._clampGeom(node.clampOn.tubeId, point, node.stub);
     if (!g) return false;
-    const pos = [g.axis[0] + node.stub[0] * cs, g.axis[1] + node.stub[1] * cs, g.axis[2] + node.stub[2] * cs];
+    const off = clampOffset(node.part, cs);
+    const pos = [g.axis[0] + node.stub[0] * off, g.axis[1] + node.stub[1] * off, g.axis[2] + node.stub[2] * off];
     if (this.isBelowGround(pos[1])) return false;
     const d = [pos[0] - node.x, pos[1] - node.y, pos[2] - node.z];
     if (Math.hypot(d[0], d[1], d[2]) < 0.01) return false;

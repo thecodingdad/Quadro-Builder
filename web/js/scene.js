@@ -4,6 +4,7 @@ import * as THREE from "three";
 import { OrbitControls } from "../vendor/three/OrbitControls.js";
 import { geometry, colorHex, connectorColor, getPanel } from "./catalog.js";
 import { panelNormal, modelMiddle } from "./util.js";
+import { clampOffset } from "./model.js";
 
 const UP = new THREE.Vector3(0, 1, 0);
 const ONE = new THREE.Vector3(1, 1, 1);
@@ -1425,7 +1426,8 @@ export class SceneManager {
     const g = geometry();
     const cs = g.connectorSize;
     const stub = n.stub || [0, 1, 0];
-    const axis = new THREE.Vector3(n.x - stub[0] * cs, n.y - stub[1] * cs, n.z - stub[2] * cs);
+    const off = clampOffset(n.part, cs);
+    const axis = new THREE.Vector3(n.x - stub[0] * off, n.y - stub[1] * off, n.z - stub[2] * off);
     const tube = n.clampOn ? model.tubes.get(n.clampOn.tubeId) : null;
     // Ohne bekanntes Rohr (importierte Kupplungen sitzen manchmal frei) liegt
     // die Huelse quer zum Anschluss.
@@ -1443,12 +1445,15 @@ export class SceneManager {
     sleeve.userData = { kind: "node", id: n.id };
     this.buildGroup.add(sleeve);
     if (st !== "future") this.pickNodes.push(sleeve);
+    // Der Hals reicht von der Huelse bis zum Knoten -- bei der Lagerkupplung
+    // also eine Kupplungslaenge weiter als bei der Lochzapfenkupplung.
     const sockR = g.tubeRadius * 1.18;
+    const neck = off * 1.4;
     const socket = new THREE.Mesh(
-      this._cachedGeo(`clampSocket${seg}`, () => new THREE.CylinderGeometry(sockR, sockR, cs * 1.4, seg)), mat);
+      this._cachedGeo(`clampSocket${seg}:${neck.toFixed(1)}`, () => new THREE.CylinderGeometry(sockR, sockR, neck, seg)), mat);
     const sv = new THREE.Vector3(stub[0], stub[1], stub[2]);
     socket.quaternion.setFromUnitVectors(UP, sv);
-    socket.position.copy(axis).addScaledVector(sv, cs * 0.7);
+    socket.position.copy(axis).addScaledVector(sv, neck / 2);
     socket.userData = { kind: "node", id: n.id };
     this.buildGroup.add(socket);
     if (st !== "future") this.pickNodes.push(socket);
