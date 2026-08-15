@@ -533,7 +533,7 @@ export function initUI({ scene, model, builder }) {
     activePopup.remove();
     activePopup = null;
     popupAnchor = null;
-    document.removeEventListener("click", onPopupOutsideClick);
+    document.removeEventListener("click", onPopupOutsideClick, true);
   }
 
   function onPopupOutsideClick(e) {
@@ -575,7 +575,11 @@ export function initUI({ scene, model, builder }) {
     activePopup = pop;
     popupAnchor = anchorBtn;
     // Leicht verzögert registrieren, damit der auslösende Klick nicht sofort schließt
-    setTimeout(() => document.addEventListener("click", onPopupOutsideClick), 0);
+    // In der CAPTURE-Phase: die Knöpfe der Leiste stoppen das Ereignis, damit
+    // sich das eigene Popup nicht sofort wieder schließt. In der Bubble-Phase
+    // käme der Schließer deshalb nie an, und eine offene Liste blieb stehen,
+    // wenn man daneben etwas anklickt, das gar kein Popup öffnet (Bogenrohr).
+    setTimeout(() => document.addEventListener("click", onPopupOutsideClick, true), 0);
   }
 
   // --- Rohr-Auswahl (Button + Popup) -------------------------------------
