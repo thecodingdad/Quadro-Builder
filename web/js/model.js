@@ -676,6 +676,7 @@ export class BuildModel {
         if (other) arms.push(other);
       }
       if (arms.length !== 1) continue;                 // nur freie Rohrenden
+      if (this.hasEndPiece(n)) continue;               // dort steckt schon eine Kappe
       const o = arms[0];
       const d = [n.x - o.x, n.y - o.y, n.z - o.z];
       const L = Math.hypot(d[0], d[1], d[2]) || 1;
@@ -1012,9 +1013,13 @@ export class BuildModel {
    */
   addFittingAt(kind, mount, color) {
     if (!PLACEABLE_FITTINGS.includes(kind)) return null;
+    // Rohrkappe und Radkappe schliessen beide ein Rohrende ab -- an derselben
+    // Stelle ergibt nur eine von beiden Sinn.
+    const CAPS = ["hub-cap2", "open-connector2"];
+    const blocken = CAPS.includes(kind) ? CAPS : [kind];
     for (const f of this.fittings.values()) {
-      if (f.kind !== kind) continue;
-      if (Math.hypot(f.x - mount.pos[0], f.y - mount.pos[1], f.z - mount.pos[2]) < 2) return null;
+      if (!blocken.includes(f.kind)) continue;
+      if (Math.hypot(f.x - mount.pos[0], f.y - mount.pos[1], f.z - mount.pos[2]) < 3) return null;
     }
     const f = this.addFitting(kind, mount.pos[0], mount.pos[1], mount.pos[2],
       { quat: mount.quat || quatFromXAxis(mount.dir), color: color || null });
