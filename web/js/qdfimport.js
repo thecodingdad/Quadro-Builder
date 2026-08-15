@@ -409,10 +409,13 @@ export function parseQDF(text, opts = {}) {
       if (a.id === b.id) continue;
       if (tubeExists(tubes, a.id, b.id)) continue;
       const mat = typeof p.rest[0] === "number" ? p.rest[0] : null;
+      const r6 = (v) => Math.round(v * 1e6) / 1e6;
       tubes.push({
         id: "t" + seq++, a: a.id, b: b.id,
         tubeId: curvedTubeId, color: materials.get(mat) || FALLBACK_COLOR,
         length: null, bow: true, bowCenter: [round(cx), round(cy), round(cz)],
+        // Wie beim geraden Rohr: eigene Lage aus der Datei (Tangente T, Normale N).
+        geom: { p0: [round(sx), round(sy), round(sz)], dir: T.map(r6), up: N.map(r6), len: lenCm },
       });
     } else if (p.name === "tube2") {
       if (!p.tuple || p.tuple.length < 7) continue;
@@ -436,7 +439,12 @@ export function parseQDF(text, opts = {}) {
       if (tubeExists(tubes, a.id, b.id)) continue;
       const mat = typeof p.rest[0] === "number" ? p.rest[0] : null;
       const color = materials.get(mat) || FALLBACK_COLOR;
-      tubes.push({ id: "t" + seq++, a: a.id, b: b.id, tubeId: def.id, color, length: def.length_cm });
+      // Das Rohr bringt seine eigene Lage mit: Anfang, Richtung und Teilemass
+      // aus der Datei. Nur so bleibt eine gedrehte Konstruktion erhalten -- in
+      // 4,7 % der Rohre des Bestands trifft das gerechnete Ende die Kupplung
+      // naemlich nicht (die Herstellersoftware rundet dort selbst).
+      tubes.push({ id: "t" + seq++, a: a.id, b: b.id, tubeId: def.id, color, length: def.length_cm,
+        geom: { p0: [round(sx), round(sy), round(sz)], dir: dir.map((v) => Math.round(v * 1e6) / 1e6), len: lenCm } });
     } else if (p.name === "hole-connector4") {
       // Lochzapfenkupplung: sie umschliesst ein Rohr und bietet quer dazu einen
       // offenen Anschluss. Der Punkt ist die Muendung dieses Anschlusses, das

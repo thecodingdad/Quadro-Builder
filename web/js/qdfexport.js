@@ -279,6 +279,18 @@ export function buildQDF(model) {
     const a = node(t.a), b = node(t.b);
     if (!a || !b) continue;
     const mat = tubeMat(t.color);
+    // Ein eingelesenes Rohr bringt seine eigene Lage mit -- die geht unveraendert
+    // wieder hinaus. Erst wenn es bewegt wurde, faellt sie weg und die Lage
+    // ergibt sich wieder aus den beiden Kupplungen.
+    if (t.geom && t.geom.p0 && t.geom.dir) {
+      const g = t.geom;
+      const q = t.bow && g.up
+        ? encodeQuat(quatFromAxes(g.dir, g.up, cross(g.dir, g.up)))
+        : encodeQuat(quatFromX(g.dir));
+      lines.push(`${t.bow ? "round-tube2" : "tube2"}{${mat}, ${tuple(q, g.p0[0], g.p0[1], g.p0[2])}, 1, ${mm(g.len)}, 0., 0}`);
+      if (t.bow) stats.bows++; else stats.tubes++;
+      continue;
+    }
     if (t.bow && t.bowCenter) {
       // Bogen: lokale X-Achse = Tangente am Anfang, lokale Y-Achse zeigt zum
       // Kreismittelpunkt. Radius = Rasterschritt, gespeichert wird das Rohrmass.

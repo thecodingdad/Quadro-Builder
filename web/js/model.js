@@ -617,6 +617,7 @@ export class BuildModel {
     const branch = this._branchFrom(nodeId).map((n) => ({ n, p: turn([n.x, n.y, n.z]) }));
     if (branch.some((e) => this.isBelowGround(e.p[1]))) return false;
     for (const e of branch) { e.n.x = round(e.p[0]); e.n.y = round(e.p[1]); e.n.z = round(e.p[2]); }
+    this._moveTubeGeom(new Set(branch.map((e) => e.n.id)));
     const st = node.stub;
     const c = cross3(u, st), d = dot3(u, st) * (1 - co);
     const ns = [st[0] * co + c[0] * si + u[0] * d, st[1] * co + c[1] * si + u[1] * d, st[2] * co + c[2] * si + u[2] * d];
@@ -975,9 +976,12 @@ export class BuildModel {
     if (this.isBelowGround(pos[1])) return false;
     const d = [pos[0] - node.x, pos[1] - node.y, pos[2] - node.z];
     if (Math.hypot(d[0], d[1], d[2]) < 0.01) return false;
+    const moved = new Set();
     for (const n of this._branchFrom(nodeId)) {
       n.x = round(n.x + d[0]); n.y = round(n.y + d[1]); n.z = round(n.z + d[2]);
+      moved.add(n.id);
     }
+    this._moveTubeGeom(moved, d);
     node.clampOn.t = round(g.t);
     return true;
   }
@@ -1556,6 +1560,29 @@ export class BuildModel {
       if (s.hook && s.hook.length === 3)
         s.hook = [round(s.hook[0] + dx), round(s.hook[1] + dy), round(s.hook[2] + dz)];
     }
+    this._moveTubeGeom(tg.nodes, [dx, dy, dz]);
+  }
+
+  /**
+   * Eigene Lage der Rohre nach einer Knotenbewegung nachziehen.
+   *
+   * Ein eingelesenes Rohr bringt seine Lage aus der Datei mit. Wandern BEIDE
+   * Enden um denselben Betrag, wandert sie mit; wandert nur ein Ende oder wird
+   * gedreht (`delta` fehlt), gilt sie nicht mehr und das Rohr rechnet sich
+   * wieder aus seinen zwei Kupplungen.
+   */
+  _moveTubeGeom(movedIds, delta = null) {
+    for (const t of this.tubes.values()) {
+      if (!t.geom) continue;
+      const ba = movedIds.has(t.a), bb = movedIds.has(t.b);
+      if (!ba && !bb) continue;
+      if (ba && bb && delta) {
+        t.geom = { ...t.geom, p0: [round(t.geom.p0[0] + delta[0]),
+          round(t.geom.p0[1] + delta[1]), round(t.geom.p0[2] + delta[2])] };
+      } else {
+        delete t.geom;
+      }
+    }
   }
 
   /**
@@ -2005,6 +2032,10 @@ export class BuildModel {
         if (t.arm) o.arm = true; // C45-Adapter-Arm (kein Rohr)
         if (t.link) o.link = true; // Doppelrohrverbinder-Verbindung (kein Rohr)
         if (t.bow) { o.bow = true; o.bowCenter = t.bowCenter; } // Bogenrohr (Viertelkreis)
+        // Eigene Lage aus einer eingelesenen Datei: Anfang, Richtung, Teilemass.
+        // Sie gilt, solange das Rohr nicht bewegt wurde -- gedrehte Aufbauten
+        // ueberstehen damit Laden und Speichern unveraendert.
+        if (t.geom) o.geom = t.geom;
         return o;
       }),
       panels: [...this.panels.values()].map((p) => {
@@ -2075,7 +2106,7 @@ export class BuildModel {
       this.tubes.set(t.id, {
         id: t.id, a: t.a, b: t.b, tubeId: t.tubeId, color: t.color, length: t.length,
         reinforced: !!t.reinforced, arm: !!t.arm, link: !!t.link,
-        bow: !!t.bow, bowCenter: t.bowCenter || null,
+        bow: !!t.bow, bowCenter: t.bowCenter || null, geom: t.geom || null,
       });
       maxSeq = Math.max(maxSeq, parseSeq(t.id));
     }

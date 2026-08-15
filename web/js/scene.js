@@ -2030,6 +2030,14 @@ export class SceneManager {
       if (t.arm || t.link) continue;
       const va = new THREE.Vector3(a.x, a.y, a.z);
       const vb = new THREE.Vector3(b.x, b.y, b.z);
+      // Eingelesenes gerades Rohr: es liegt da, wo die Datei es hinschreibt.
+      // In den Herstellerdateien treffen rund 5 % der Rohre ihre Kupplung nicht
+      // genau -- gezeichnet wird das echte Rohr, nicht die Verbindungslinie.
+      if (t.geom && !t.bow && t.geom.p0 && t.geom.dir) {
+        const g = t.geom, span = g.len + cs;
+        va.set(g.p0[0], g.p0[1], g.p0[2]);
+        vb.set(g.p0[0] + g.dir[0] * span, g.p0[1] + g.dir[1] * span, g.p0[2] + g.dir[2] * span);
+      }
       const mid = va.clone().add(vb).multiplyScalar(0.5);
       const len = va.distanceTo(vb);
 
