@@ -1121,10 +1121,12 @@ export class SceneManager {
   // Versatz, gleicher Punkt = sauberer Uebergang. Der Auslauf faellt von hier auf
   // Bodenhoehe ab und flacht aus.
   _slideEndConnectPoint(se) {
-    // QDF-ROHposition (nicht die magisch versetzte Viewer-Mitte!) + 12 cm hoch.
-    // So hat die Bogenrutsche zu IHREM Folgeteil immer denselben festen Versatz
-    // -> sie sieht in jeder Datei gleich aus (C0065 = C0076).
-    return new THREE.Vector3(se.x, se.y + 12, se.z);
+    // Anschlusspunkt = die Lage aus der Datei, ohne Versatz. Die frueheren
+    // 12 cm Anhebung glichen aus, dass der Auslauf schraeg gezeichnet wurde und
+    // erst am Ende auf seine Hoehe kam. Jetzt liegt er flach auf genau dieser
+    // Hoehe -- mit dem Versatz haetten Auslauf UND der Koerper davor 12 cm zu
+    // hoch gehangen.
+    return new THREE.Vector3(se.x, se.y, se.z);
   }
 
   // Legt einen Rutschenkoerper als EINE durchgehende U-Rinne (Boden + 2 hochgezogene
