@@ -58,7 +58,7 @@ function renderHelpTable() {
 }
 
 export function initUI({ scene, model, builder }) {
-  let slideBtn = null;
+  const slideButtons = [];
   let renderFittingButton = () => {};
   const inventory = loadInv();
 
@@ -398,7 +398,15 @@ export function initUI({ scene, model, builder }) {
     tubeBtn.classList.toggle("active", inAdd && !curved);
     if (bowBtn) bowBtn.classList.toggle("active", inAdd && curved);
     panelBtn.classList.toggle("active", inPanel);
-    if (slideBtn) slideBtn.classList.toggle("active", builder.mode === "slide");
+    for (const b of slideButtons) {
+      b.classList.toggle("active", builder.mode === "slide" && builder.slideKind === b.dataset.slide);
+      // Beschriftung kommt aus dem Katalog, nicht aus data-i18n -- beim
+      // Sprachwechsel deshalb hier nachziehen.
+      const name = slideKindName(b.dataset.slide);
+      b.title = name;
+      const span = b.querySelector("span");
+      if (span && span.textContent !== name) span.textContent = name;
+    }
     renderFittingButton();
     $("btn-diagonal").classList.toggle("active", inAdd && builder.diagonal);
     syncPartColors();
@@ -693,17 +701,34 @@ export function initUI({ scene, model, builder }) {
   // --- Rutschen-Button ---------------------------------------------------
   // Rutschen sind keine Rohre/Platten: sie werden an zwei senkrechten,
   // parallelen Rohren eingehaengt. Der Modus zeigt die passenden Felder an.
+  // Vier Teile: Integralrutsche (steht fuer sich), Modular- und Bogenrutschen-
+  // Koerper (lassen sich aneinanderhaengen) und der Auslauf, der eine Kette
+  // abschliesst. Ein Klick waehlt das Teil UND schaltet in den Rutschen-Modus;
+  // ein Klick auf das schon gewaehlte Teil schaltet zurueck aufs Bauen.
   {
-    const b = el("button", "btn part");
-    b.dataset.slide = "slide-new2";
-    b.title = t("part_slide");
-    b.innerHTML =
-      `<svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true">` +
-      `<path d="M3 13 C7 13 5 4 13 3" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>` +
-      `<span data-i18n="part_slide">${t("part_slide")}</span>`;
-    b.addEventListener("click", () => setMode(builder.mode === "slide" ? "add" : "slide"));
-    $("slide-buttons").appendChild(b);
-    slideBtn = b;
+    const formen = {
+      "slide-new2": `<path d="M3 13 C7 13 5 4 13 3" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/>`,
+      "slide2": `<path d="M3 12 C6 12 6 6 9 6 C11 6 11 4 13 4" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/>`,
+      "curved-slide2": `<path d="M13 3 C13 9 9 13 3 13" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/>`,
+      "slide-end2": `<path d="M2 11 C6 11 8 6 13 6" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/><path d="M2 11 L2 14" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/>`,
+    };
+    for (const kind of ["slide-new2", "slide2", "curved-slide2", "slide-end2"]) {
+      const b = el("button", "btn part");
+      b.dataset.slide = kind;
+      const name = slideKindName(kind);
+      b.title = name;
+      b.innerHTML =
+        `<svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true">${formen[kind]}</svg>` +
+        `<span>${name}</span>`;
+      b.addEventListener("click", () => {
+        const schonAktiv = builder.mode === "slide" && builder.slideKind === kind;
+        builder.slideKind = kind;
+        setMode(schonAktiv ? "add" : "slide");
+        syncPartButtons();
+      });
+      $("slide-buttons").appendChild(b);
+      slideButtons.push(b);
+    }
   }
 
   // --- Anbauteile: drei Gruppen mit je einer Klappliste -------------------
@@ -1504,7 +1529,7 @@ export function initUI({ scene, model, builder }) {
     const slb = $("bom-slides"); slb.innerHTML = "";
     const slides = bom.slides || [];
     if (slides.length === 0) slb.appendChild(el("div", "muted", "–"));
-    for (const r of slides) bomRow(slb, slideKindName(r.kind), null, r.count, null);
+    for (const r of slides) bomRow(slb, r.name || slideKindName(r.kind), null, r.count, r.subtotal || null);
 
     const fb = $("bom-fittings"); fb.innerHTML = "";
     const fits = bom.fittings || [];

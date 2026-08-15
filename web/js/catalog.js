@@ -171,8 +171,11 @@ export function diagonalTubeId() {
 // Rutschen/Dach-Art -> i18n-Schluessel. Einziger Ort, der die QDF-"kind"-Werte
 // kennt (slide2, slide-new2, ...) -> spaeter leicht erweiterbar.
 const SLIDE_KIND_KEYS = {
-  "slide2": "slide_slide", "slide-new2": "slide_slide", "slide-end2": "slide_end",
-  "curved-slide2": "slide_curved", "roof2": "slide_roof",
+  "slide2": "slide_slide",            // Modularrutschen-Koerper
+  "slide-new2": "slide_integral",     // Integralrutsche, steht fuer sich
+  "slide-end2": "slide_end",          // Rutschenauslauf, schliesst eine Kette ab
+  "curved-slide2": "slide_curved",    // Bogenrutschen-Koerper
+  "roof2": "slide_roof",
 };
 
 // Anzeigename einer Rutsche/eines Dachs (BOM/Stueckliste): unbekannte Arten

@@ -75,6 +75,31 @@ const CARDINALS = [[1, 0, 0], [-1, 0, 0], [0, 1, 0], [0, -1, 0], [0, 0, 1], [0, 
 const BEARING_LEN = 5;
 
 // Die lokale +X-Achse eines Anbauteils in Weltkoordinaten (quat: Three x,y,z,w).
+/** Vektor mit einem Quaternion (Three-Reihenfolge x,y,z,w) drehen. */
+function rotateVecByQuat(q, v) {
+  const [x, y, z, w] = q;
+  const t = [2 * (y * v[2] - z * v[1]), 2 * (z * v[0] - x * v[2]), 2 * (x * v[1] - y * v[0])];
+  return [
+    v[0] + w * t[0] + (y * t[2] - z * t[1]),
+    v[1] + w * t[1] + (z * t[0] - x * t[2]),
+    v[2] + w * t[2] + (x * t[1] - y * t[0]),
+  ];
+}
+
+/** Quaternion um `grad` um die eigene Hochachse (lokales Y) weiterdrehen. */
+function turnAroundY(q, grad) {
+  if (!grad) return q.slice();
+  const h = (grad * Math.PI) / 180 / 2;
+  const r = [0, Math.sin(h), 0, Math.cos(h)];       // Drehung um lokales Y
+  const [x1, y1, z1, w1] = q, [x2, y2, z2, w2] = r;
+  return [
+    w1 * x2 + x1 * w2 + y1 * z2 - z1 * y2,
+    w1 * y2 - x1 * z2 + y1 * w2 + z1 * x2,
+    w1 * z2 + x1 * y2 - y1 * x2 + z1 * w2,
+    w1 * w2 - x1 * x2 - y1 * y2 - z1 * z2,
+  ];
+}
+
 function rotateX(q) {
   const [x, y, z, w] = q;
   return [
@@ -123,6 +148,24 @@ const SLIDE_HOOK_LIFT = 5;                 // cm ueber der unteren Kupplung
 // aufliegen; nur unter den Boden darf er nicht.
 const SLIDE_DROP = 80;                     // cm, von der Kupplung bis zum Boden
 const SLIDE_RUN = 120;                     // cm waagerechter Auslauf
+// Rutschenteile und wie sie zusammenhaengen -- gemessen an den 176 Vorkommen
+// in den Herstellerdateien:
+//   Modularrutschen-Koerper (slide2): das Folgeteil sitzt im lokalen System bei
+//     (0, -80, 120) cm und ist gleich gedreht (73 von 76 Vorkommen).
+//   Bogenrutschen-Koerper (curved-slide2): das Folgeteil sitzt bei (60, -80, 60)
+//     und ist um 90 Grad um die Hochachse weitergedreht (9 von 9) -- der Bogen
+//     laeuft in lokaler +Z-Richtung hinein und in +X wieder heraus.
+//   Rutschenauslauf (slide-end2) und Integralrutsche (slide-new2) haben keinen
+//     Ausgang: hinter ihnen kommt nichts mehr.
+export const SLIDE_PARTS = {
+  "slide-new2":    { chain: false, exit: null },
+  "slide2":        { chain: true,  exit: { off: [0, -80, 120], turn: 0 } },
+  "curved-slide2": { chain: true,  exit: { off: [60, -80, 60], turn: 90 } },
+  "slide-end2":    { chain: false, exit: null },
+};
+// Teile, die eine Kette fortsetzen duerfen (der Auslauf beendet sie).
+export const SLIDE_CHAIN_KINDS = ["slide2", "curved-slide2", "slide-end2"];
+
 // Freiraum, den die Bahn braucht: naeher als das darf keine Kupplung stehen.
 const SLIDE_CLEARANCE = 18;
 // So nah muss eine Kupplung am Auslauf liegen, damit er getragen wird.
@@ -976,7 +1019,25 @@ export class BuildModel {
     for (const n of this.nodes.values()) {
       if (n.part === part && Math.hypot(n.x - pos[0], n.y - pos[1], n.z - pos[2]) < 2) return null;
     }
-    return { tubeId, pos, stub: g.stub, t: round(g.t) };
+    return { tubeId, pos, achse: g.axis, stub: g.stub, t: round(g.t) };
+  }
+
+  /**
+   * Trefferpunkt auf die Rohrachse ziehen (auf das Rohr begrenzt). Der
+   * Ankerpunkt einer Klemme gehoert MITTIG ins Rohr, nicht auf die Stelle der
+   * Oberflaeche, an der der Zeiger steht.
+   */
+  tubeAxisPoint(tubeId, point) {
+    const t = this.tubes.get(tubeId);
+    if (!t) return null;
+    const a = this.nodes.get(t.a), b = this.nodes.get(t.b);
+    if (!a || !b) return null;
+    const ab = [b.x - a.x, b.y - a.y, b.z - a.z];
+    const L = Math.hypot(ab[0], ab[1], ab[2]) || 1;
+    const u = [ab[0] / L, ab[1] / L, ab[2] / L];
+    const rel = [point[0] - a.x, point[1] - a.y, point[2] - a.z];
+    const s = Math.max(0, Math.min(L, rel[0] * u[0] + rel[1] * u[1] + rel[2] * u[2]));
+    return [a.x + u[0] * s, a.y + u[1] * s, a.z + u[2] * s];
   }
 
   /**
@@ -1211,7 +1272,11 @@ export class BuildModel {
   // Weil das Teil eine feste Groesse hat, kommen nur Rohrpaare in Frage, deren
   // untere Kupplungen GENAU zwei Rasterebenen ueber dem Boden sitzen -- und nur
   // dann, wenn die Bahn davor frei ist (siehe _slidePathFree).
-  slideMounts(width = 40, tol = 2) {
+  slideMounts(width = 40, tol = 2, kind = "slide-new2") {
+    // Ein Koerper einer Kette endet nicht hier: hinter ihm kommt das naechste
+    // Teil, sein Fuss muss also nichts tragen. Nur die Integralrutsche braucht
+    // Boden oder Geruest unter dem Auslauf.
+    const braucthAuflage = !(SLIDE_PARTS[kind] && SLIDE_PARTS[kind].chain);
     const out = [];
     const seen = new Set();
     const groundY = this._groundLevel();
@@ -1256,7 +1321,8 @@ export class BuildModel {
         let dir = front > back ? [-nrm[0], 0, -nrm[2]] : nrm;
         // Reicht der Platz und traegt der Auslauf? Sonst die Gegenseite
         // versuchen, sonst gibt es hier keine Montagestelle.
-        const usable = (d) => this._slidePathFree(hook, d) && this._slideFootRests(hook, d, groundY);
+        const usable = (d) => this._slidePathFree(hook, d)
+          && (!braucthAuflage || this._slideFootRests(hook, d, groundY));
         if (!usable(dir)) {
           const other = [-dir[0], 0, -dir[2]];
           if (!usable(other)) continue;
@@ -1309,19 +1375,91 @@ export class BuildModel {
     return false;
   }
 
+  /**
+   * Ausgang eines Rutschenteils: wo das naechste Teil ansetzt und wie es dort
+   * gedreht steht. Liefert null bei Teilen ohne Ausgang (Auslauf, Integral-
+   * rutsche) und bei Teilen ohne eigene Drehung (im Editor an ein Rohrpaar
+   * gehaengte Rutschen fuehren stattdessen `hook`).
+   */
+  slideExit(slide) {
+    const spec = slide && SLIDE_PARTS[slide.kind];
+    if (!spec || !spec.exit) return null;
+    const q = slide.quat && slide.quat.length === 4 ? slide.quat : [0, 0, 0, 1];
+    const off = rotateVecByQuat(q, spec.exit.off);
+    const pos = [round(slide.x + off[0]), round(slide.y + off[1]), round(slide.z + off[2])];
+    return { pos, quat: turnAroundY(q, spec.exit.turn), afterId: slide.id };
+  }
+
+  /** Sitzt an dieser Stelle schon ein Rutschenteil? */
+  _slideAt(pos, tol = 5) {
+    for (const s of this.slides.values()) {
+      if (Math.hypot(s.x - pos[0], s.y - pos[1], s.z - pos[2]) < tol) return s;
+    }
+    return null;
+  }
+
+  /**
+   * Freie Ausgaenge aller gesetzten Rutschenteile -- dort laesst sich das
+   * naechste Teil der Kette anhaengen. Die Integralrutsche gehoert nicht in
+   * eine Kette, der Auslauf beendet sie.
+   */
+  slideChainMounts(kind) {
+    if (!SLIDE_CHAIN_KINDS.includes(kind)) return [];
+    const out = [];
+    for (const s of this.slides.values()) {
+      const exit = this.slideExit(s);
+      if (!exit) continue;
+      if (this._slideAt(exit.pos)) continue;          // dort haengt schon eines
+      if (this.isBelowGround(exit.pos[1])) continue;
+      out.push(exit);
+    }
+    return out;
+  }
+
+  /**
+   * Rutschenteil an einen Ausgang haengen (Kette). Punkt und Drehung kommen von
+   * der Montagestelle -- genau so, wie die Herstellerdateien die Teile fuehren.
+   */
+  addSlideAt(kind, mount, color = null) {
+    if (!SLIDE_PARTS[kind] || !mount || !mount.pos) return null;
+    if (this._slideAt(mount.pos)) return null;
+    const slide = {
+      id: this._id("s"),
+      x: round(mount.pos[0]), y: round(mount.pos[1]), z: round(mount.pos[2]),
+      quat: (mount.quat || [0, 0, 0, 1]).map((v) => Math.round(v * 1e4) / 1e4),
+      kind, color,
+    };
+    this.slides.set(slide.id, slide);
+    return slide;
+  }
+
   // Rutsche an einer Montagestelle einhaengen. Feste Groesse: zwei Rasterebenen
   // Fall, drei Felder Auslauf -- der Fuss landet damit auf dem Boden.
   addSlide(hook, normal, kind = "slide-new2", color = null) {
     const drop = SLIDE_DROP + SLIDE_HOOK_LIFT;
     const run = SLIDE_RUN;
-    const slide = {
-      id: this._id("s"),
-      x: round(hook[0] + normal[0] * run),
-      y: round(hook[1] - drop),
-      z: round(hook[2] + normal[2] * run),
-      hook: [round(hook[0]), round(hook[1]), round(hook[2])],
-      kind, color,
-    };
+    // Kettenteile (Modular-, Bogenrutschen-Koerper) fuehren ihren Punkt am
+    // EINSTIEG und eine eigene Drehung -- so wie die Herstellerdateien, und nur
+    // so laesst sich das naechste Teil an ihren Ausgang rechnen. Die
+    // Integralrutsche behaelt ihren Punkt am Fuss samt Einhaengepunkt.
+    const kette = SLIDE_PARTS[kind] && SLIDE_PARTS[kind].chain;
+    const slide = kette
+      ? {
+        id: this._id("s"),
+        x: round(hook[0]), y: round(hook[1]), z: round(hook[2]),
+        quat: quatFromBasis(cross3([0, 1, 0], normal), [0, 1, 0], normal)
+          .map((v) => Math.round(v * 1e4) / 1e4),
+        kind, color,
+      }
+      : {
+        id: this._id("s"),
+        x: round(hook[0] + normal[0] * run),
+        y: round(hook[1] - drop),
+        z: round(hook[2] + normal[2] * run),
+        hook: [round(hook[0]), round(hook[1]), round(hook[2])],
+        kind, color,
+      };
+    if (kette && this._slideAt([slide.x, slide.y, slide.z])) return null;
     for (const s of this.slides.values()) {
       if (s.hook && Math.hypot(s.hook[0] - slide.hook[0], s.hook[1] - slide.hook[1], s.hook[2] - slide.hook[2]) < 1) {
         return null; // hier haengt schon eine Rutsche

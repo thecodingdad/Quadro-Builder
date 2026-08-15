@@ -376,13 +376,25 @@ export function computeBOM(model) {
   })).sort((a, b) => b.count - a.count);
   const fittingCount = fittings.reduce((s, r) => s + r.count, 0);
 
-  // --- Rutschen/Daecher (slide*/roof2) nach Art (dekorativ, ohne Preis) ---
+  // --- Rutschen/Daecher (slide*/roof2) nach Art ---------------------------
+  // Die vier Rutschenteile stehen im Katalog (Integralrutsche, Modular- und
+  // Bogenrutschen-Koerper, Auslauf) und bringen von dort Name, Code und Preis
+  // mit; Arten ohne Katalogteil (Dach) behalten ihren Anzeigenamen.
   const slideMap = new Map();
   for (const sl of (model.slides ? model.slides.values() : [])) {
     slideMap.set(sl.kind, (slideMap.get(sl.kind) || 0) + 1);
   }
-  const slides = [...slideMap.entries()].map(([kind, count]) => ({ key: kind, kind, count }))
-    .sort((a, b) => b.count - a.count);
+  const slides = [...slideMap.entries()].map(([kind, count]) => {
+    const def = partForFitting(kind);
+    return {
+      key: kind, kind, count,
+      id: def ? def.id : null,
+      name: def ? partName(def) : null,
+      code: (def && def.code) || "",
+      price: (def && def.price) || 0,
+      subtotal: round2(((def && def.price) || 0) * count),
+    };
+  }).sort((a, b) => b.count - a.count);
   const slideCount = slides.reduce((s, r) => s + r.count, 0);
 
   // --- Verstaerkungen ---
@@ -456,6 +468,11 @@ export function neededParts(bom) {
   for (const r of bom.fittings || []) {
     const pot = getConnector(r.id) ? connectors : fittings;
     pot.set(r.id, (pot.get(r.id) || 0) + r.count);
+  }
+  // Rutschenteile stehen als Zubehoer im Katalog und zaehlen wie Anbauteile.
+  for (const r of bom.slides || []) {
+    if (!r.id) continue;
+    fittings.set(r.id, (fittings.get(r.id) || 0) + r.count);
   }
   const reinforcements = new Map(); // id -> physische Stueckzahl (40-cm-Profile)
   for (const r of bom.reinforcements || [])

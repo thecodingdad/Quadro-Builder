@@ -39,6 +39,7 @@ export class Builder {
     this.onChange = onChange || (() => {});
     this.onNotice = () => {};        // kurze Hinweis-Meldung an die UI
     this._tubeHandles = new Map();   // Rohr -> mitwandernder Ankerpunkt
+    this.slideKind = "slide-new2";   // gewaehltes Rutschenteil
     this.onHistoryChange = () => {}; // Undo-Verfuegbarkeit hat sich geaendert
 
     // "select" (Cursor: vorhandenes auswaehlen) | "add" | "panel" | "slide" |
@@ -1007,9 +1008,11 @@ export class Builder {
           : { pos: punkt };            // Doppelrohrverbinder/Rohrklammer: ueberall
       if (!m) { this.scene.setHandleVisible(e.mesh, false); continue; }
       this.scene.setHandleVisible(e.mesh, true);
-      // Klemmen sitzen neben der Rohrachse -- der Punkt gehoert an die Stelle
-      // auf dem Rohr, nicht an die Muendung des Anschlusses.
-      this.scene.moveHandle(e.mesh, e.art === "fitting" ? m.pos : punkt);
+      // Der Punkt laeuft MITTIG im Rohr mit: nur die Stelle entlang des Rohrs
+      // wandert, nicht die Seite. Fuer den Klick zaehlt trotzdem der echte
+      // Trefferpunkt -- aus ihm ergibt sich, wohin der Anschluss zeigt.
+      const aufAchse = e.art === "fitting" ? m.pos : (this.model.tubeAxisPoint(tubeId, punkt) || punkt);
+      this.scene.moveHandle(e.mesh, aufAchse);
       if (e.art === "fitting") e.mesh.userData.fittingMount = m;
       else e.mesh.userData.clampTube = { tubeId, pos: punkt, tracked: true };
     }
@@ -1436,8 +1439,15 @@ export class Builder {
 
   // Montagestellen fuer Rutschen: Felder aus zwei senkrechten, parallelen Rohren.
   _buildSlideHandles() {
-    for (const m of this.model.slideMounts()) {
-      this.scene.addPanelHandle(m.corners, { slideMount: m });
+    // Der Rutschenauslauf haengt nur an einem Koerper, nie am Geruest.
+    if (this.slideKind !== "slide-end2") {
+      for (const m of this.model.slideMounts(40, 2, this.slideKind)) {
+        this.scene.addPanelHandle(m.corners, { slideMount: m });
+      }
+    }
+    // Freie Ausgaenge schon gesetzter Teile: dort wird die Kette fortgesetzt.
+    for (const m of this.model.slideChainMounts(this.slideKind)) {
+      this.scene.addHandle(m.pos, { slideChain: m }, "dir");
     }
   }
 
@@ -1692,6 +1702,17 @@ export class Builder {
   _clickSlide(e) {
     // pickHandle liefert { object, data } -- die Nutzdaten stecken in h.data.
     const h = this.scene.pickHandle(e.clientX, e.clientY);
+    // Ausgang eines gesetzten Teils: das naechste Kettenglied kommt dorthin.
+    if (h && h.data && h.data.slideChain) {
+      let added = null;
+      this.recordHistory(() => {
+        added = this.model.addSlideAt(this.slideKind, h.data.slideChain, this.colorFor("slide"));
+      });
+      if (added) this._notePlaced(added.id, "slide");
+      else this.onNotice(t("notice_slide_exists"));
+      this.refresh();
+      return;
+    }
     if (!h || !h.data || !h.data.slideMount) return;
     const m = h.data.slideMount;
     // Richtung aus der angeklickten SEITE des Feldes: die Rutsche faellt zu der
@@ -1704,7 +1725,7 @@ export class Builder {
       n[0] = -n[0]; n[2] = -n[2];
     }
     let added = null;
-    this.recordHistory(() => { added = this.model.addSlide(m.hook, n, "slide-new2", this.colorFor("slide")); });
+    this.recordHistory(() => { added = this.model.addSlide(m.hook, n, this.slideKind, this.colorFor("slide")); });
     if (added) this._notePlaced(added.id, "slide");
     else this.onNotice(t("notice_slide_exists"));
     this.refresh();

@@ -670,6 +670,42 @@
       "price": 0,
       "qdf": "bag2",
       "note": "Preis noch offen"
+    },
+    {
+      "id": "slide_integral",
+      "code": "",
+      "name": "Integralrutsche",
+      "name_en": "Integral slide",
+      "price": 0,
+      "qdf": "slide-new2",
+      "note": "eigenstaendige Rutsche ohne Anbauten · Preis noch offen"
+    },
+    {
+      "id": "slide_module",
+      "code": "",
+      "name": "Modularrutschen-Koerper",
+      "name_en": "Modular slide body",
+      "price": 0,
+      "qdf": "slide2",
+      "note": "leicht gewellte Bahn, mehrere hintereinander moeglich; am Ende der Kette der Auslauf · Preis noch offen"
+    },
+    {
+      "id": "slide_curved",
+      "code": "",
+      "name": "Bogenrutschen-Koerper",
+      "name_en": "Curved slide body",
+      "price": 0,
+      "qdf": "curved-slide2",
+      "note": "gebogene Bahn, Ausgang 90 Grad zur Laufrichtung · Preis noch offen"
+    },
+    {
+      "id": "slide_end",
+      "code": "",
+      "name": "Rutschenauslauf",
+      "name_en": "Slide run-out",
+      "price": 0,
+      "qdf": "slide-end2",
+      "note": "schliesst eine Kette aus Modular- oder Bogenrutschen-Koerpern ab · Preis noch offen"
     }
   ]
 }

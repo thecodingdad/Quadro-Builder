@@ -2380,6 +2380,12 @@ export class SceneManager {
     }
     if (target) {
       P1 = target.kind === "slide-end2" ? this._slideEndConnectPoint(target) : new THREE.Vector3(target.x, target.y, target.z);
+    } else if (sl.kind === "slide2" && sl.quat && sl.quat.length === 4) {
+      // Modularrutschen-Koerper ohne Folgeteil: er ist ein festes Teil und
+      // laeuft seine eigenen (0, -80, 120) ab -- der Punkt ist der EINSTIEG.
+      // (Die Integralrutsche unten ist etwas anderes: dort liegt der Punkt am
+      // Fuss, deshalb der Suchlauf nach dem Einhaengepunkt.)
+      P1 = P1exp.clone();
     } else {
       // Einzelne Rutsche ohne Folgeteil: Die QDF-Position ist dann der FUSS
       // (Auslauf am Boden), nicht der Einstieg -- alle Rutschen-Records einer
