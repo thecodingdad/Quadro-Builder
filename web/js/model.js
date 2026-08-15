@@ -12,7 +12,6 @@ const FITTING_MOUNTS = {
   "casters2":        { at: "node", offset: 0 },   // Laufrolle; der Adapter kommt mit
   "open-connector2": { at: "node", offset: 0 },
   "steering-lock2":  { at: "node", offset: 0 },   // Multirad-Arretierung, sitzt am Ende des Stutzens
-  "bag2":            { at: "tube", offset: 20 },  // 200 mm vom Rohrende
 };
 
 /**
@@ -38,6 +37,7 @@ export const PLACEABLE_FITTINGS = [...new Set([
   ...Object.keys(FITTING_MOUNTS),
   ...Object.keys(TUBE_FITTINGS),
   "hub-cap2",                     // am offenen Rohrende, siehe _wheelCapMounts
+  "bag2",                         // zwischen zwei Rohren, siehe addBag
   "hole-connector4",              // Lochzapfenkupplung: klemmt um ein Rohr
   "bearing-clamp",                // Lagerkupplung: klemmt um ein Rohr (kein eigenes QDF-Element)
   "lattice2", "textil-round2", "roof-large2",
@@ -65,6 +65,9 @@ const FITTING_WIDTH = {
 };
 
 const WHEEL_KINDS = new Set(["multi-wheel2", "floating-wheel2"]);
+
+// Kantenmass des Spielsacks (cm) -- er spannt ein Rasterfeld.
+const BAG_SIZE = 35;
 
 const CARDINALS = [[1, 0, 0], [-1, 0, 0], [0, 1, 0], [0, -1, 0], [0, 0, 1], [0, 0, -1]];
 
@@ -1094,6 +1097,36 @@ export class BuildModel {
     }
     return this.addFitting("lattice2", c[0], c[1], c[2],
       { quat: quatFromBasis(up, ey, ez), color: color || null, w, h });
+  }
+
+  /**
+   * Spielsack zwischen zwei parallele Rohre haengen. Das Tuch misst 35 x 35 cm
+   * und spannt damit ein Rasterfeld; gehalten wird es von den beiden Rohren.
+   * Gespeichert wird wie beim Gitter: Mitte, Dreibein, Masse.
+   */
+  addBag(aId, bId, t0, len, color) {
+    const ra = this._rail(aId), rb = this._rail(bId);
+    if (!ra || !rb) return null;
+    const A = [ra.p0[0] + ra.dir[0] * t0, ra.p0[1] + ra.dir[1] * t0, ra.p0[2] + ra.dir[2] * t0];
+    const off = [rb.p0[0] - ra.p0[0], rb.p0[1] - ra.p0[1], rb.p0[2] - ra.p0[2]];
+    const along = dot3(off, ra.dir);
+    const perp = [off[0] - ra.dir[0] * along, off[1] - ra.dir[1] * along, off[2] - ra.dir[2] * along];
+    const gap = Math.hypot(perp[0], perp[1], perp[2]);
+    if (gap < 1) return null;
+    const u = [perp[0] / gap, perp[1] / gap, perp[2] / gap];   // erstes -> zweites Rohr
+    const c = [
+      A[0] + ra.dir[0] * (len / 2) + perp[0] / 2,
+      A[1] + ra.dir[1] * (len / 2) + perp[1] / 2,
+      A[2] + ra.dir[2] * (len / 2) + perp[2] / 2,
+    ];
+    for (const f of this.fittings.values()) {
+      if (f.kind === "bag2" && Math.hypot(f.x - c[0], f.y - c[1], f.z - c[2]) < 5) return null;
+    }
+    // Lokales X quer zu den Rohren, Y laengs, Z senkrecht dazu (der Sack haengt
+    // entgegen dieser Richtung nach unten).
+    const ez = cross3(u, ra.dir);
+    return this.addFitting("bag2", c[0], c[1], c[2],
+      { quat: quatFromBasis(u, ra.dir, ez), color: color || null, w: BAG_SIZE, h: BAG_SIZE });
   }
 
   /**

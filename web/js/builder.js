@@ -10,6 +10,8 @@ import { TUBE_FITTINGS } from "./model.js";
 
 // Kupplungen, die auf einem Rohr sitzen statt im Raster: QDF-Art -> Katalogteil.
 const TUBE_CLAMP_PARTS = { "hole-connector4": "hole_1", "bearing-clamp": "bearing" };
+// Teile, die wie eine Platte an ZWEI parallelen Rohren haengen.
+const RAIL_FITTINGS = new Set(["lattice2", "bag2"]);
 
 const CLICK_TOLERANCE = 9; // px: groessere Bewegung = Kamera drehen, kein Klick (Touch-tauglich)
 
@@ -301,7 +303,7 @@ export class Builder {
     const t = this.model.tubes.get(id);
     if (!t || t.arm || t.link || t.bow) return false;
     if (this.panelRail) return this.highlight ? this.highlight.has(id) : false;
-    if (lattice) return this.model.latticePartners(id).length > 0;
+    if (lattice) return this._railPartners(id).length > 0;
     const dims = this._panelDims();
     return !!dims && this.model.panelPartners(id, dims).length > 0;
   }
@@ -932,7 +934,7 @@ export class Builder {
     // Merkt sich, an welchen Kupplungen das gewaehlte Teil sitzen darf -- der
     // Zeiger zeigt dort eine Hand, auch wenn er den Ankerpunkt knapp verfehlt.
     this._fittingMountNodes = new Set();
-    if (this.fittingKind === "lattice2") return;      // Gitter laeuft ueber zwei Rohre
+    if (RAIL_FITTINGS.has(this.fittingKind)) return;  // Gitter/Sack laufen ueber zwei Rohre
     // Ist eine Kupplung gewaehlt, gelten nur ihre Stellen -- bei Teilen auf einem
     // Rohr nur die Rohre, die an ihr haengen. Ohne Auswahl sind alle zu sehen.
     const sel = this.selectedNodeId;
@@ -1213,12 +1215,12 @@ export class Builder {
       else if (kind === "tube") obj = this._railUsable(p.data.id) ? p.object : null;
     } else if (this.mode === "slide") {
       obj = handle();                            // nur die Feld-Handles
-    } else if (this.mode === "fitting" && this.fittingKind === "lattice2") {
+    } else if (this.mode === "fitting" && RAIL_FITTINGS.has(this.fittingKind)) {
       // Gitter: Rohre waehlen wie im Platten-Modus, gesetzte Gitter entfernen.
       const p = (this.panelRail && this.highlight && this.scene.pickAmong(x, y, this.highlight))
         || this.scene.pickForDelete(x, y);
       const kind = p && p.data.kind;
-      if (kind === "fitting") obj = null;   // ein Gitter laesst sich nicht drehen
+      if (kind === "fitting") obj = null;   // Gitter und Sack lassen sich nicht drehen
       else if (kind === "tube") obj = this._railUsable(p.data.id, true) ? p.object : null;
     } else if (this.mode === "fitting"
         && (TUBE_CLAMP_PARTS[this.fittingKind] || TUBE_FITTINGS[this.fittingKind])) {
@@ -1380,7 +1382,7 @@ export class Builder {
    * sonst laege ein Ankerpunkt hinter einem Teil und man kaeme nicht daran.
    */
   _clickFitting(e) {
-    if (this.fittingKind === "lattice2") { this._clickLattice(e); return; }
+    if (RAIL_FITTINGS.has(this.fittingKind)) { this._clickLattice(e); return; }
     if (TUBE_CLAMP_PARTS[this.fittingKind]) { this._clickTubeClamp(e); return; }
     if (TUBE_FITTINGS[this.fittingKind]) { this._clickTubeFitting(e); return; }
     const h = this.scene.pickHandle(e.clientX, e.clientY);
@@ -1472,6 +1474,13 @@ export class Builder {
     this.refresh();
   }
 
+  /** Gegenrohre fuer das gewaehlte Rohr-Teil: Gitter frei, Sack im 40er-Feld. */
+  _railPartners(railId) {
+    return this.fittingKind === "bag2"
+      ? this.model.panelPartners(railId, [40, 40])
+      : this.model.latticePartners(railId);
+  }
+
   /**
    * Klemm-Kupplung (Lochzapfen-, Lagerkupplung): auf ein beliebiges Rohr
    * klicken -- sie sitzt genau dort, mit dem offenen Anschluss zur Klickseite.
@@ -1528,8 +1537,8 @@ export class Builder {
     if (!pick) { this._clearPanelRail(); return; }
     if (pick.data.kind === "fitting" && !this.panelRail) {
       const f = this.model.fittings.get(pick.data.id);
-      // Ein Gitter laesst sich nicht drehen -- es haengt an seinen zwei Rohren.
-      if (f && f.kind === "lattice2") { this.onNotice(t("notice_fitting_fixed")); return; }
+      // Gitter und Sack lassen sich nicht drehen -- sie haengen an ihren Rohren.
+      if (f && RAIL_FITTINGS.has(f.kind)) { this.onNotice(t("notice_fitting_fixed")); return; }
     }
     if (pick.data.kind !== "tube") { this._clearPanelRail(); return; }
     const tube = this.model.tubes.get(pick.data.id);
@@ -1537,21 +1546,21 @@ export class Builder {
 
     if (this.panelRail) {
       if (pick.data.id === this.panelRail.id) { this._clearPanelRail(); return; }
-      const partner = this.model.latticePartners(this.panelRail.id)
-        .find((c) => c.id === pick.data.id);
+      const partner = this._railPartners(this.panelRail.id).find((c) => c.id === pick.data.id);
       if (!partner) { this.onNotice(t("notice_panel_no_fit")); return; }
       const sec = this.model.panelSection(partner, this.panelRail.at);
       let added = null;
       this.recordHistory(() => {
-        added = this.model.addLattice(this.panelRail.id, partner.id, sec.t0, sec.len,
-          this.colorFor("panel"));
+        added = this.fittingKind === "bag2"
+          ? this.model.addBag(this.panelRail.id, partner.id, sec.t0, sec.len, this.colorFor("panel"))
+          : this.model.addLattice(this.panelRail.id, partner.id, sec.t0, sec.len, this.colorFor("panel"));
       });
       if (added) this._notePlaced(added.id, "fitting");
       else this.onNotice(t("notice_fitting_exists"));
       this._clearPanelRail();
       return;
     }
-    const partners = this.model.latticePartners(pick.data.id);
+    const partners = this._railPartners(pick.data.id);
     if (!partners.length) { this.onNotice(t("notice_panel_no_partner")); return; }
     this.panelRail = { id: pick.data.id, at: this._alongTube(pick.data.id, pick.point) };
     this.highlight = new Set(partners.map((c) => c.id));
