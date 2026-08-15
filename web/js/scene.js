@@ -55,7 +55,7 @@ const CURVED_SLIDE_EXIT = new THREE.Vector3(1, -0.55, 0).normalize();
 const FLAT_FITTINGS = new Set(["lattice2", "textil-round2", "roof-large2"]);
 // Anbauteile, die auf einem Stutzen der Kupplung sitzen: die Kupplung bekommt
 // dort denselben Stutzen wie fuer ein Rohr.
-const ARM_FITTINGS = new Set(["multi-wheel2", "floating-wheel2", "adapter2", "bearing2"]);
+const ARM_FITTINGS = new Set(["adapter2", "bearing2"]);
 
 const HIGHLIGHT_COLOR = 0x9b30ff;
 const HIGHLIGHT_EMISSIVE = 0x3a0066;
@@ -700,15 +700,22 @@ export class SceneManager {
         mat = this._fittingMaterial(hex, false);
         break;
       }
-      case "floating-wheel2": {         // schwarzes Vollrad, dicker
-        geo = this._wheelGeometry(WHEEL_R, 6, false);
-        mat = this._fittingMaterial(0x1c1c1c, false);
+      case "floating-wheel2": {         // Schwimmrad: grau, knapp 15 cm dick
+        geo = this._wheelGeometry(WHEEL_R, 14, false);
+        mat = this._fittingMaterial(0x8f9296, false);
         break;
       }
-      case "hub-cap2": {                // rote Nabenkappe
-        geo = this._cachedGeo("hubcap", () =>
-          new THREE.CylinderGeometry(3.2, 4.2, 2.2, Math.max(10, this._q().tube)));
-        mat = this._fittingMaterial(f.color ? hex : 0xd42e2e, false);
+      case "hub-cap2": {                // Radkappe: haelt das Schwimmrad fest
+        // Gleiche Aufgabe wie die Radarretierung, nur groesser und gewoelbt --
+        // und weiter aussen, weil das Schwimmrad 14 cm dick ist. Sie steht wie
+        // die Arretierung 1 cm ueber die Aussenflaeche des Rades hinaus.
+        geo = this._cachedGeo("hubcap", () => {
+          const g = new THREE.CylinderGeometry(5.5, 7, 3, Math.max(16, this._q().tube * 2));
+          g.rotateZ(-Math.PI / 2);          // Achse auf +X, schmale Seite aussen
+          g.translate(6.5, 0, 0);
+          return g;
+        });
+        mat = this._fittingMaterial(0xd42e2e, false);
         break;
       }
       case "casters2": {                // Laufrolle: Gabel mit Raedchen am Ende
@@ -2735,6 +2742,14 @@ export class SceneManager {
       if (data && ids.has(data.id)) return { object: hit.object, data, point: hit.point, distance: hit.distance };
     }
     return null;
+  }
+
+  // Nur Rohre treffen -- fuer Teile, die auf einem Rohr sitzen und deshalb
+  // durch schon gesetzte Anbauteile hindurch zielen muessen.
+  pickTube(clientX, clientY) {
+    const hit = this.raycastObjects(clientX, clientY, this.pickTubes);
+    const data = this._hitData(hit);
+    return data ? { object: hit.object, data, point: hit.point, distance: hit.distance } : null;
   }
 
   pickBuild(clientX, clientY) {

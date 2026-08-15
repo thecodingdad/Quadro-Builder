@@ -6,6 +6,7 @@ import { computeBuildPlan, connectorLabelInfo } from "./buildplan.js";
 import { infeasibleConnectors } from "./bom.js";
 import { t } from "./i18n.js";
 import { round2, panelNormal, modelMiddle } from "./util.js";
+import { TUBE_FITTINGS } from "./model.js";
 
 // Kupplungen, die auf einem Rohr sitzen statt im Raster: QDF-Art -> Katalogteil.
 const TUBE_CLAMP_PARTS = { "hole-connector4": "hole_1", "bearing2": "bearing" };
@@ -837,6 +838,7 @@ export class Builder {
   _buildFittingHandles() {
     if (this.fittingKind === "lattice2") return;      // Gitter laeuft ueber zwei Rohre
     if (TUBE_CLAMP_PARTS[this.fittingKind]) return;   // Klemm-Kupplung sitzt frei auf dem Rohr
+    if (TUBE_FITTINGS[this.fittingKind]) return;      // Raeder/Nabenkappe sitzen frei auf dem Rohr
     for (const m of this.model.fittingMounts(this.fittingKind)) {
       let taken = false;
       for (const f of this.model.fittings.values()) {
@@ -1082,7 +1084,8 @@ export class Builder {
         const tb = this.model.tubes.get(p.data.id);
         obj = tb && !tb.arm && !tb.link && !tb.bow ? p.object : null;
       }
-    } else if (this.mode === "fitting" && TUBE_CLAMP_PARTS[this.fittingKind]) {
+    } else if (this.mode === "fitting"
+        && (TUBE_CLAMP_PARTS[this.fittingKind] || TUBE_FITTINGS[this.fittingKind])) {
       // Klemm-Kupplung: Rohre sind anklickbar, gesetzte Kupplungen ebenso.
       const p = this.scene.pickForDelete(x, y);
       const kind = p && p.data.kind;
@@ -1091,6 +1094,8 @@ export class Builder {
         obj = tb && !tb.arm && !tb.link ? p.object : null;
       } else if (kind === "node") {
         obj = this.model.nodes.get(p.data.id)?.clampOn ? p.object : null;
+      } else if (kind === "fitting") {
+        obj = TUBE_FITTINGS[this.fittingKind] ? p.object : null;
       }
     } else if (this.mode === "fitting") {
       // Ankerpunkte setzen, ein Klick auf ein gesetztes Anbauteil entfernt es.
@@ -1221,6 +1226,7 @@ export class Builder {
   _clickFitting(e) {
     if (this.fittingKind === "lattice2") { this._clickLattice(e); return; }
     if (TUBE_CLAMP_PARTS[this.fittingKind]) { this._clickTubeClamp(e); return; }
+    if (TUBE_FITTINGS[this.fittingKind]) { this._clickTubeFitting(e); return; }
     const h = this.scene.pickHandle(e.clientX, e.clientY);
     const p = this.scene.pickForDelete(e.clientX, e.clientY);
     // Der Ankerpunkt hat Vorrang: er liegt dicht an der Kupplung, und die waere
@@ -1242,6 +1248,40 @@ export class Builder {
       if (!turned) this.onNotice(t("notice_fitting_fixed"));
       this.refresh();
     }
+  }
+
+  /**
+   * Teil auf einem Rohr (Rad, Schwimmrad, Nabenkappe): Rohr anklicken. Raeder
+   * sitzen genau an der angeklickten Stelle, die Nabenkappe am naeheren Ende.
+   * Ein Klick auf ein gesetztes Teil dreht es -- oder meldet, dass es nichts zu
+   * drehen gibt.
+   */
+  _clickTubeFitting(e) {
+    const pick = this.scene.pickForDelete(e.clientX, e.clientY);
+    // Nur ein Teil DERSELBEN Art faengt den Klick ab -- sonst verdeckt das
+    // erste gesetzte Rad das Rohr und nichts liesse sich mehr daneben setzen.
+    if (pick && pick.data.kind === "fitting"
+        && this.model.fittings.get(pick.data.id)?.kind === this.fittingKind) {
+      let turned = false;
+      this.recordHistory(() => { turned = this.model.rotateFitting(pick.data.id); });
+      if (!turned) this.onNotice(t("notice_fitting_fixed"));
+      this.refresh();
+      return;
+    }
+    const hitTube = this.scene.pickTube ? this.scene.pickTube(e.clientX, e.clientY) : null;
+    const tubePick = (pick && pick.data.kind === "tube") ? pick : hitTube;
+    if (!tubePick || !tubePick.point) { this.onNotice(t("notice_clamp_click_tube")); return; }
+    const pickData = tubePick.data;
+    const tb = this.model.tubes.get(pickData.id);
+    if (!tb || tb.arm || tb.link) { this.onNotice(t("notice_clamp_click_tube")); return; }
+    const hit = [tubePick.point.x, tubePick.point.y, tubePick.point.z];
+    const mount = this.model.tubeFittingMount(pickData.id, hit, this.fittingKind);
+    let added = null;
+    if (mount) this.recordHistory(() => {
+      added = this.model.addFittingAt(this.fittingKind, mount, this.colorFor("fitting"));
+    });
+    if (!added) this.onNotice(t("notice_fitting_exists"));
+    this.refresh();
   }
 
   /**

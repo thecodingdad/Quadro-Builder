@@ -583,29 +583,29 @@
     {
       "id": "wheel",
       "code": "",
-      "name": "Rad",
-      "name_en": "Wheel",
+      "name": "Multirad",
+      "name_en": "Multi wheel",
       "price": 0,
       "qdf": "multi-wheel2",
-      "note": "Speichenrad, farbig · Preis noch offen"
+      "note": "schmales Speichenrad, sitzt auf einem Radlager · Preis noch offen"
     },
     {
       "id": "wheel_floating",
       "code": "",
-      "name": "Laufrad",
-      "name_en": "Floating wheel",
+      "name": "Schwimmrad",
+      "name_en": "Float wheel",
       "price": 0,
       "qdf": "floating-wheel2",
-      "note": "schwarzes Vollrad · Preis noch offen"
+      "note": "knapp 15 cm dick, sitzt auf einem Rohr · Preis noch offen"
     },
     {
       "id": "hub_cap",
       "code": "",
-      "name": "Nabenkappe",
-      "name_en": "Hub cap",
+      "name": "Radkappe",
+      "name_en": "Wheel cap",
       "price": 0,
       "qdf": "hub-cap2",
-      "note": "rote Kappe in der Radmitte · Preis noch offen"
+      "note": "haelt das Schwimmrad fest, wie die Radarretierung beim Multirad · Preis noch offen"
     },
     {
       "id": "caster",

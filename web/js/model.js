@@ -12,20 +12,32 @@ const FITTING_MOUNTS = {
   "casters2":        { at: "node", offset: 0 },   // Laufrolle; der Adapter kommt mit
   "open-connector2": { at: "node", offset: 0 },
   "hole-connector4": { at: "node", offset: 5 },   // 50 mm neben der Kupplung
-  "multi-wheel2":    { at: "node", offset: 5 },   // Rad auf der Lagerachse
-  "hub-cap2":        { at: "node", offset: 5 },   // Nabenkappe in der Radmitte
-  "floating-wheel2": { at: "tube", offset: 10 },  // 100 mm vom Rohrende, auf dem Rohr
   "bag2":            { at: "tube", offset: 20 },  // 200 mm vom Rohrende
 };
 
-// Welche Anbauteile sich setzen lassen. Die meisten haengen an einer Kupplung
-// oder einem Rohr (FITTING_MOUNTS); das Gitter spannt wie eine Platte zwischen
-// zwei Rohren und hat deshalb einen eigenen Ablauf.
+/**
+ * Teile, die auf einem ROHR sitzen statt an einer Kupplung -- sie werden durch
+ * einen Klick auf das Rohr gesetzt, nicht ueber einen Ankerpunkt.
+ *   "anywhere" = an der angeklickten Stelle, Achse = Rohrachse
+ *   "end"      = am naeheren Rohrende, Achse nach aussen
+ * Gemessen am Truck (My first Q+Mobil): die Raeder sitzen mitten auf einem
+ * 15-cm-Rohr, die Nabenkappe an dessen Ende.
+ */
+export const TUBE_FITTINGS = {
+  "multi-wheel2":    "anywhere",   // schmales Rad
+  "floating-wheel2": "anywhere",   // Schwimmrad, knapp 15 cm dick
+};
+
+// Welche Anbauteile sich setzen lassen: die an einer Kupplung (FITTING_MOUNTS),
+// die auf einem Rohr (TUBE_FITTINGS) und die mit eigenem Ablauf (Radarretierung,
+// Gitter, Rundabdeckung, grosses Dach).
 export const PLACEABLE_FITTINGS = [
   ...Object.keys(FITTING_MOUNTS),
-  "steering-lock2",   // in der Radmitte, siehe _wheelLockMounts
+  ...Object.keys(TUBE_FITTINGS),
+  "steering-lock2", "hub-cap2",   // in der Radmitte, siehe _wheelLockMounts
   "lattice2", "textil-round2", "roof-large2",
 ];
+
 
 // Abstand der beiden Bogenrohre, ueber die eine Rundabdeckung gespannt wird:
 // in allen 52 Vorkommen 800 mm.
@@ -54,7 +66,7 @@ export function clampOffset(part, cs = 5) {
 // Anbauteile, die sich per Klick weiterdrehen lassen: sie sitzen an einer
 // Kupplung und haben eine Achse, fuer die es mehrere Richtungen gibt.
 const ROTATABLE_FITTINGS = new Set([
-  "bearing2", "casters2", "open-connector2", "multi-wheel2", "hub-cap2",
+  "bearing2", "casters2", "open-connector2",
 ]);
 
 const norm3 = (v) => { const L = Math.hypot(v[0], v[1], v[2]) || 1; return [v[0] / L, v[1] / L, v[2] / L]; };
@@ -564,12 +576,32 @@ export class BuildModel {
    * Liefert je Stelle { pos:[x,y,z], dir:[x,y,z], nodeId?, tubeId? }.
    */
   fittingMounts(kind) {
-    if (kind === "steering-lock2") return this._wheelLockMounts();
+    if (kind === "steering-lock2") return this._wheelLockMounts("multi-wheel2");
+    if (kind === "hub-cap2") return this._wheelLockMounts("floating-wheel2");
     if (kind === "textil-round2") return this._roundCoverMounts();
     if (kind === "roof-large2") return this._roofMounts();
     const spec = FITTING_MOUNTS[kind];
     if (!spec) return [];
     return spec.at === "tube" ? this._fittingTubeMounts(spec) : this._fittingNodeMounts(spec);
+  }
+
+  /**
+   * Montagestelle eines Rohr-Teils aus dem Trefferpunkt: entweder genau dort
+   * (Raeder) oder am naeheren Rohrende (Nabenkappe).
+   */
+  tubeFittingMount(tubeId, point, kind) {
+    const where = TUBE_FITTINGS[kind];
+    if (!where) return null;
+    if (where === "end") return this.tubeEndMount(tubeId, point);
+    const t = this.tubes.get(tubeId);
+    const a = t && this.nodes.get(t.a), b = t && this.nodes.get(t.b);
+    if (!a || !b) return null;
+    const ab = [b.x - a.x, b.y - a.y, b.z - a.z];
+    const L = Math.hypot(ab[0], ab[1], ab[2]) || 1;
+    const u = [ab[0] / L, ab[1] / L, ab[2] / L];
+    const rel = [point[0] - a.x, point[1] - a.y, point[2] - a.z];
+    const s = Math.max(0, Math.min(L, rel[0] * u[0] + rel[1] * u[1] + rel[2] * u[2]));
+    return { pos: [a.x + u[0] * s, a.y + u[1] * s, a.z + u[2] * s], dir: u, tubeId };
   }
 
   /**
@@ -591,14 +623,15 @@ export class BuildModel {
   }
 
   /**
-   * Radarretierung: sitzt in der MITTE eines gesetzten Rades und verbindet es
-   * fest mit der Kupplung. Es gibt sie also nur dort, wo ein Rad steckt, und
-   * sie uebernimmt dessen Achse.
+   * Radarretierung und Radkappe sitzen in der MITTE eines gesetzten Rades und
+   * halten es fest -- die Arretierung am schmalen Rad, die Kappe am Schwimmrad.
+   * Es gibt sie also nur dort, wo das passende Rad steckt, und sie uebernehmen
+   * dessen Achse.
    */
-  _wheelLockMounts() {
+  _wheelLockMounts(wheelKind) {
     const out = [];
     for (const f of this.fittings.values()) {
-      if (f.kind !== "multi-wheel2" && f.kind !== "floating-wheel2") continue;
+      if (f.kind !== wheelKind) continue;
       out.push({ pos: [f.x, f.y, f.z], dir: [1, 0, 0], quat: f.quat ? f.quat.slice() : null });
     }
     return out;
