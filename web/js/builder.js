@@ -1477,7 +1477,7 @@ export class Builder {
   /** Gegenrohre fuer das gewaehlte Rohr-Teil: Gitter frei, Sack im 40er-Feld. */
   _railPartners(railId) {
     return this.fittingKind === "bag2"
-      ? this.model.panelPartners(railId, [40, 40])
+      ? this.model.bagPartners(railId)
       : this.model.latticePartners(railId);
   }
 

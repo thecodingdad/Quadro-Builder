@@ -32,6 +32,9 @@ const PANEL_GAP = 1.5;
 // Laenge des Doppelrohrverbinders entlang der Rohre.
 const CLAMP_LEN = 5;
 
+// Tiefe des Spielsacks: er haengt an allen vier Seiten rund 17 cm hinunter.
+const BAG_DEPTH = 17;
+
 // Anbauteile: Radgroesse und Radius der gebogenen Wand, aus den Entwurfsdaten
 // (Rad sitzt 5 cm neben der Kupplung, Rundwand 40 cm von Kupplung und Rohr).
 const WHEEL_R = 19;
@@ -864,27 +867,14 @@ export class SceneManager {
           }),
         ].map((g) => this._placeFitting(new THREE.Mesh(g, this._fittingMaterial(hex, false)), f, q));
       }
-      case "bag2": {                    // Spielsack: Tuch zwischen zwei Rohren
-        // Er haengt als Mulde unter den beiden Rohren: lokales Y laeuft an den
-        // Rohren entlang, lokales X quer dazu, und die Mulde faellt entgegen der
-        // lokalen Z-Achse nach unten. Kantenmass 35 cm.
-        const w = f.w || 35, r = w / 2;
-        const seg = Math.max(12, this._q().tube);
-        const m2 = this._fittingMaterial(hex, false);
-        // Die Zylinderachse liegt schon auf +Y (Rohrrichtung); genommen wird die
-        // Haelfte mit z < 0, damit die Mulde nach unten haengt.
-        const mulde = new THREE.Mesh(this._cachedGeo(`bag${w}`, () =>
-          new THREE.CylinderGeometry(r, r, w, seg, 1, true, Math.PI / 2, Math.PI)), m2);
-        const enden = [-1, 1].map((sgn) => {
-          const e = new THREE.Mesh(this._cachedGeo(`bagend${w}`, () => {
-            const g = new THREE.CircleGeometry(r, seg, Math.PI, Math.PI);
-            g.rotateX(Math.PI / 2);        // Flaeche quer zur Rohrrichtung, nach unten
-            return g;
-          }), m2);
-          e.position.set(0, sgn * w / 2, 0);
-          return e;
-        });
-        return [mulde, ...enden].map((mesh) => this._placeFitting(mesh, f, q));
+      case "bag2": {                    // Spielsack: offener Kasten aus Tuch
+        // Er haengt zwischen zwei Rohren: oben offen, an allen vier Seiten rund
+        // 17 cm tief, mit Boden. Lokales X liegt quer zu den Rohren, Y laengs,
+        // Z zeigt nach oben -- der Sack haengt also in -Z.
+        const w = f.w || 35;
+        geo = this._cachedGeo(`bag${w}`, () => this._bagGeometry(w, BAG_DEPTH));
+        mat = this._fittingMaterial(hex, false);
+        break;
       }
       default:
         return [];
@@ -922,6 +912,29 @@ export class SceneManager {
       -hy, Math.max(-hx + bar, Math.min(hx, x + b)), hy));
     lines(sy, (y) => ribbon(-hx, Math.max(-hy, Math.min(hy - bar, y - b)),
       hx, Math.max(-hy + bar, Math.min(hy, y + b))));
+    const g = new THREE.BufferGeometry();
+    g.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
+    g.computeVertexNormals();
+    return g;
+  }
+
+  /**
+   * Spielsack: oben offener Kasten -- vier Waende und ein Boden, alles in EINER
+   * Geometrie. Die Oberkante liegt auf z = 0 (Ebene der beiden Rohre), der Boden
+   * bei -depth.
+   */
+  _bagGeometry(size, depth) {
+    const h = size / 2, pos = [];
+    const quad = (a, b, c, d) => {
+      pos.push(...a, ...b, ...c, ...a, ...c, ...d);
+    };
+    // Boden
+    quad([-h, -h, -depth], [h, -h, -depth], [h, h, -depth], [-h, h, -depth]);
+    // Waende: je zwei gegenueberliegende
+    quad([-h, -h, -depth], [-h, h, -depth], [-h, h, 0], [-h, -h, 0]);
+    quad([h, -h, -depth], [h, h, -depth], [h, h, 0], [h, -h, 0]);
+    quad([-h, -h, -depth], [h, -h, -depth], [h, -h, 0], [-h, -h, 0]);
+    quad([-h, h, -depth], [h, h, -depth], [h, h, 0], [-h, h, 0]);
     const g = new THREE.BufferGeometry();
     g.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
     g.computeVertexNormals();

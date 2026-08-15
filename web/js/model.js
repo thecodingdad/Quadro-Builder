@@ -1100,6 +1100,21 @@ export class BuildModel {
   }
 
   /**
+   * Gegenrohre fuer den Spielsack: beide Rohre muessen WAAGERECHT liegen und auf
+   * gleicher Hoehe, denn der Sack haengt nach unten -- zur Seite oder nach oben
+   * gibt es ihn nicht.
+   */
+  bagPartners(railId) {
+    const ra = this._rail(railId);
+    if (!ra || Math.abs(ra.dir[1]) > 0.01) return [];
+    return this.panelPartners(railId, [40, 40]).filter((c) => {
+      const rb = this._rail(c.id);
+      if (!rb || Math.abs(rb.dir[1]) > 0.01) return false;
+      return Math.abs(rb.p0[1] - ra.p0[1]) < 1;      // gleiche Hoehe
+    });
+  }
+
+  /**
    * Spielsack zwischen zwei parallele Rohre haengen. Das Tuch misst 35 x 35 cm
    * und spannt damit ein Rasterfeld; gehalten wird es von den beiden Rohren.
    * Gespeichert wird wie beim Gitter: Mitte, Dreibein, Masse.
@@ -1122,11 +1137,14 @@ export class BuildModel {
     for (const f of this.fittings.values()) {
       if (f.kind === "bag2" && Math.hypot(f.x - c[0], f.y - c[1], f.z - c[2]) < 5) return null;
     }
-    // Lokales X quer zu den Rohren, Y laengs, Z senkrecht dazu (der Sack haengt
-    // entgegen dieser Richtung nach unten).
-    const ez = cross3(u, ra.dir);
+    // Lokales X quer zu den Rohren, Y laengs, Z senkrecht dazu. Z muss nach OBEN
+    // zeigen -- der Sack haengt in die Gegenrichtung, also nach unten.
+    let ex = u, ey = ra.dir;
+    let ez = cross3(ex, ey);
+    if (ez[1] < 0) { ey = [-ey[0], -ey[1], -ey[2]]; ez = cross3(ex, ey); }
+    if (ez[1] < 0.9) return null;                    // Feld liegt nicht waagerecht
     return this.addFitting("bag2", c[0], c[1], c[2],
-      { quat: quatFromBasis(u, ra.dir, ez), color: color || null, w: BAG_SIZE, h: BAG_SIZE });
+      { quat: quatFromBasis(ex, ey, ez), color: color || null, w: BAG_SIZE, h: BAG_SIZE });
   }
 
   /**
