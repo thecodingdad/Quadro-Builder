@@ -740,7 +740,7 @@ export class Builder {
     const gap = cs / 2 + 4;
 
     if (this.model.isEmpty()) {
-      this.scene.addHandle([0, cs / 2, 0], { origin: true }, "origin");
+      this.scene.addHandle([0, 0, 0], { origin: true }, "origin");
       return;
     }
     // Freie Oeffnung eines Doppelrohrverbinders/einer Rohrklammer: dort gehoert
@@ -1834,8 +1834,11 @@ export class Builder {
       if (h.data.clampOpening) { this._placeSecondTube(h.data.center, h.data.dir); return; }
       if (h.data.origin) {
         this.recordHistory(() => {
-          const cs = geometry().connectorSize;
-          this.selectedNodeId = this.model.addNode(0, cs / 2, 0).id;
+          // Erste Kupplung auf y = 0 -- genau wie in den Herstellerdateien, wo
+          // die unterste Kupplung dort sitzt. Der Würfel reicht dann eine halbe
+          // Kupplung nach unten und steht auf dem (2,5 cm tiefer gezeichneten)
+          // Boden auf, statt darüber zu schweben.
+          this.selectedNodeId = this.model.addNode(0, 0, 0).id;
         });
         this.refresh();
         return;
