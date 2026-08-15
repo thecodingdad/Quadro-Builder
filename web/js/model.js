@@ -202,7 +202,9 @@ export class BuildModel {
 
   addNode(x, y, z) {
     const existing = this.findNodeNear(x, y, z);
-    if (existing) return existing;
+    // Wird hier gebaut, ist die Kupplung in Gebrauch -- der Vermerk aus dem
+    // Import (steht in der Datei, haelt aber nichts) gilt dann nicht mehr.
+    if (existing) { delete existing.unused; return existing; }
     const node = { id: this._id("n"), x, y, z };
     this.nodes.set(node.id, node);
     return node;
@@ -2050,6 +2052,7 @@ export class BuildModel {
         const o = { id: n.id, x: round(n.x), y: round(n.y), z: round(n.z) };
         if (n.c45) o.c45 = true; // Knoten traegt eine 45-Grad-Winkelkupplung
         if (n.c45file) o.c45file = true; // Winkelkupplung stand so in der QDF-Datei
+        if (n.unused) o.unused = true;   // aus der Datei, aber ohne Rohr/Platte
         if (n.c45body) o.c45body = true; // Adapter-Koerper am Arm-Ende der C45
         if (n.c45axis) o.c45axis = n.c45axis; // kardinale Huelsenachse des Adapters
         if (n.armDirs) o.armDirs = n.armDirs; // gespeicherte Arm-Richtungen (rotierte Kupplung)
@@ -2133,7 +2136,7 @@ export class BuildModel {
       this.nodes.set(n.id, { id: n.id, x: n.x, y: n.y, z: n.z, c45: !!n.c45, c45body: !!n.c45body,
         c45axis: n.c45axis || null, armDirs: n.armDirs || null, arms: n.arms || null, quat: n.quat || null,
         part: n.part || null, clampOn: n.clampOn || null, stub: n.stub || null,
-        ownConnector: !!n.ownConnector, c45file: !!n.c45file });
+        ownConnector: !!n.ownConnector, c45file: !!n.c45file, unused: !!n.unused });
       maxSeq = Math.max(maxSeq, parseSeq(n.id));
     }
     for (const t of data.tubes || []) {

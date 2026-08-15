@@ -135,6 +135,7 @@ export function infeasibleConnectors(model) {
   }
   const bad = new Set();
   for (const n of model.nodes.values()) {
+    if (n.unused) continue;             // haelt nichts, also auch nichts zu pruefen
     if (n.c45body) continue;            // Adapter-Koerper ist immer einarmig
     if (armsFeasible(dirsAt.get(n.id) || [])) bad.add(n.id);
   }
@@ -294,6 +295,7 @@ export function computeBOM(model) {
   const connMap = new Map();
   let openEnds = 0;
   for (const n of model.nodes.values()) {
+    if (n.unused) continue;   // steht in der Datei, haelt aber nichts
     const types = connectorsForNode(model, n);
     if (types.length === 0) {
       // Radkappe und offener Anschluss schliessen das Rohrende ab -- es ist

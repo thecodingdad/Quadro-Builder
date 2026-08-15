@@ -1864,6 +1864,9 @@ export class SceneManager {
     for (const n of model.nodes.values()) {
       const st = stateOf(n.id);
       if (st === "future") continue;   // noch nicht gebaute Teile bleiben unsichtbar
+      // Kupplung, die in der Datei steht, aber nichts haelt: die Hersteller-
+      // software zeichnet sie nicht -- sonst schweben Wuerfel in der Luft.
+      if (n.unused) continue;
       // Bezugspunkte fuer die Drehpunkt-Suche (_pointUnderCursor).
       this._nodePoints.push(new THREE.Vector3(n.x, n.y, n.z));
       let mat;

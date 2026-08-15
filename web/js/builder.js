@@ -753,7 +753,9 @@ export class Builder {
     // waehlt sie, danach sind nur noch ihre Punkte zu sehen.
     const nodes = this.selectedNodeId
       ? [this.model.nodes.get(this.selectedNodeId)].filter(Boolean)
-      : [...this.model.nodes.values()];
+      // Kupplungen ohne Rohr aus einer QDF-Datei werden nicht gezeichnet --
+      // dann bieten sie auch keine Ankerpunkte an.
+      : [...this.model.nodes.values()].filter((n) => !n.unused);
     for (const node of nodes) this._addBuildHandles(node, gap);
   }
 

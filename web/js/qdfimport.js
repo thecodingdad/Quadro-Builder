@@ -833,7 +833,13 @@ export function parseQDF(text, opts = {}) {
     // danach auf Knoten, die es nicht mehr gibt.
     for (const tx of textiles) for (const id of tx.nodes) referenced.add(id);
     for (let i = nodes.length - 1; i >= 0; i--) {
-      if (!referenced.has(nodes[i].id) && !nodes[i].fromFile) nodes.splice(i, 1);
+      if (referenced.has(nodes[i].id)) continue;
+      // Aus der Datei: nicht wegwerfen, aber als ungenutzt merken. In 71 der
+      // 237 Herstellerdateien stehen solche Kupplungen (228 Stueck), an denen
+      // nichts haengt -- die Herstellersoftware zeichnet sie nicht, wir also
+      // auch nicht. Beim Speichern gehen sie trotzdem wieder mit hinaus.
+      if (nodes[i].fromFile) nodes[i].unused = true;
+      else nodes.splice(i, 1);
     }
   }
 
@@ -873,6 +879,7 @@ export function parseQDF(text, opts = {}) {
       const o = { id: n.id, x: n.x, y: n.y, z: n.z };
       if (n.c45) o.c45 = true;
       if (n.c45file) o.c45file = true;   // Winkelkupplung stand so in der Datei
+      if (n.unused) o.unused = true;     // Kupplung ohne Rohr/Platte: nicht zeichnen
       if (n.c45body) o.c45body = true;
       if (n.c45axis) o.c45axis = n.c45axis;
       if (n.armDirs) o.armDirs = n.armDirs; // rotierte Arm-Richtungen (45-gedrehte Kupplung)
