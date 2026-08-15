@@ -1241,8 +1241,10 @@ export class Builder {
           obj = nd && (nd.clampOn || (this._fittingMountNodes && this._fittingMountNodes.has(nd.id)))
             ? p.object : null;
         } else if (kind === "fitting") {
-          obj = this.model.fittings.get(p.data.id)?.kind === this.fittingKind
-            && this.model.canRotateFitting(p.data.id) ? p.object : null;
+          const eigenes = this.model.fittings.get(p.data.id)?.kind === this.fittingKind;
+          obj = eigenes
+            ? (this.model.canRotateFitting(p.data.id) ? p.object : null)
+            : (this._mountNearPoint(p.point) ? p.object : null);
         }
         // Rohr hinter einem fremden Anbauteil: dorthin laesst sich trotzdem setzen.
         if (!obj && TUBE_FITTINGS[this.fittingKind]) {
@@ -1254,8 +1256,11 @@ export class Builder {
       // Ankerpunkte setzen, ein Klick auf ein gesetztes Anbauteil entfernt es.
       const h = this.scene.pickHandle(x, y);
       const p = this.scene.pickForDelete(x, y);
+      const fremd = p && p.data.kind === "fitting"
+        && this.model.fittings.get(p.data.id)?.kind !== this.fittingKind;
       if (h && (!p || h.distance <= p.distance)) obj = h.object;
-      else if (p && p.data.kind === "fitting" && this.model.canRotateFitting(p.data.id)) obj = p.object;
+      else if (p && p.data.kind === "fitting" && !fremd && this.model.canRotateFitting(p.data.id)) obj = p.object;
+      else if (fremd && this._mountNearPoint(p.point)) obj = p.object;
       else obj = null;
     } else if (this.mode === "clamp") {
       const p = build(["tube", "clamp"]);
@@ -1401,6 +1406,21 @@ export class Builder {
       this.refresh();
       return;
     }
+    if (p && p.data.kind === "fitting"
+        && this.model.fittings.get(p.data.id)?.kind !== this.fittingKind) {
+      // Fremdes Teil verdeckt den Ankerpunkt: die Stelle dahinter gilt trotzdem.
+      const nah = this._mountNearPoint(p.point);
+      if (nah) {
+        let added = null;
+        this.recordHistory(() => {
+          added = this.model.addFittingAt(this.fittingKind, nah, this.colorFor("fitting"));
+        });
+        if (added) this._notePlaced(added.id, "fitting");
+        else this.onNotice(t("notice_fitting_exists"));
+        this.refresh();
+        return;
+      }
+    }
     if (p && p.data.kind === "fitting") {
       // Klick auf ein gesetztes Teil DREHT es weiter (wie beim Bogenrohr) --
       // geloescht wird im Auswahl-Modus. Teile ohne Wahlmoeglichkeit bleiben.
@@ -1457,6 +1477,21 @@ export class Builder {
       this.refresh();
       return;
     }
+    // Fremdes Anbauteil im Weg (Arretierung ueber dem Radlager): die Stelle
+    // dahinter gilt trotzdem.
+    if (pick && pick.data.kind === "fitting") {
+      const nah = this._mountNearPoint(pick.point);
+      if (nah) {
+        let added = null;
+        this.recordHistory(() => {
+          added = this.model.addFittingAt(this.fittingKind, nah, this.colorFor("fitting"));
+        });
+        if (added) this._notePlaced(added.id, "fitting");
+        else this.onNotice(t("notice_fitting_exists"));
+        this.refresh();
+        return;
+      }
+    }
     const hitTube = this.scene.pickTube ? this.scene.pickTube(e.clientX, e.clientY) : null;
     const tubePick = (pick && pick.data.kind === "tube") ? pick : hitTube;
     if (!tubePick || !tubePick.point) { this._pickFittingNode(pick); return; }
@@ -1474,6 +1509,32 @@ export class Builder {
     if (added) this._notePlaced(added.id, "fitting");
     else this.onNotice(t("notice_fitting_no_room"));
     this.refresh();
+  }
+
+  /**
+   * Montagestelle des gewaehlten Teils dicht am angeklickten Punkt.
+   *
+   * Ein fremdes Anbauteil kann den Ankerpunkt verdecken: die Multirad-
+   * Arretierung ist eine Scheibe genau dort, wo das Multirad auf sein Radlager
+   * gehoert. Wer auf die Scheibe klickt, verfehlt die kleine Kugel des
+   * Ankerpunkts -- gemeint ist aber offensichtlich diese Stelle.
+   */
+  _mountNearPoint(point, tol = 8) {
+    if (!point) return null;
+    const besetzt = (m) => {
+      for (const f of this.model.fittings.values()) {
+        if (f.kind !== this.fittingKind) continue;
+        if (Math.hypot(f.x - m.pos[0], f.y - m.pos[1], f.z - m.pos[2]) < 2) return true;
+      }
+      return false;
+    };
+    let best = null, bd = tol;
+    for (const m of this.model.fittingMounts(this.fittingKind)) {
+      if (besetzt(m)) continue;
+      const d = Math.hypot(m.pos[0] - point.x, m.pos[1] - point.y, m.pos[2] - point.z);
+      if (d < bd) { bd = d; best = m; }
+    }
+    return best;
   }
 
   /** Gegenrohre fuer das gewaehlte Rohr-Teil: Gitter frei, Sack im 40er-Feld. */
