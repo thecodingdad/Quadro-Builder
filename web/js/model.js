@@ -135,6 +135,8 @@ const PANEL_OVERLAP_EPS = 1;
 // Lage sitzen genau darauf (y = 0), erst ein negativer Wert liegt darunter. Die
 // Toleranz faengt Rundungsreste aus round2 ab.
 const GROUND_TOL = 0.01;
+// Unter dem Boden bauen ist erlaubt -- in den Herstellerdateien kommt es vor.
+const ALLOW_BELOW_GROUND = true;
 
 function dist2(a, b) {
   const dx = a.x - b.x, dy = a.y - b.y, dz = a.z - b.z;
@@ -182,9 +184,17 @@ export class BuildModel {
     return Number.isFinite(min) ? min : 0;
   }
 
-  /** Liegt diese Hoehe unter dem Boden (Nullebene)? */
+  /**
+   * Liegt diese Hoehe unter dem Boden (Nullebene)?
+   *
+   * Gebaut werden darf auch unter dem Boden: mehrere Entwuerfe des Herstellers
+   * setzen Teile bewusst tiefer (Fussenden von Tischen und Stuehlen, Raeder
+   * unter dem Rahmen, Bodenplatten eines Pools). Die Pruefung bleibt als eine
+   * Stelle stehen, damit sich die Regel wieder umdrehen laesst -- GROUND_TOL
+   * beschreibt jetzt keinen Anschlag mehr.
+   */
   isBelowGround(y) {
-    return y < -GROUND_TOL;
+    return ALLOW_BELOW_GROUND ? false : y < -GROUND_TOL;
   }
 
   addNode(x, y, z) {
