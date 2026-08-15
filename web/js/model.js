@@ -66,8 +66,9 @@ const FITTING_WIDTH = {
 
 const WHEEL_KINDS = new Set(["multi-wheel2", "floating-wheel2"]);
 
-// Großes Dach: First = ein waagerechtes 75er Rohr (80 cm Rastermaß), das Dach
-// steht an beiden Enden 40 cm über (First insgesamt 160 cm).
+// Großes Dach: der First besteht aus ZWEI waagerechten 75er Rohren (je 80 cm
+// Rastermaß, zusammen 160 cm). Der Bezugspunkt liegt 40 cm vor der Kupplung
+// zwischen beiden.
 const ROOF_RIDGE_SPAN = 80;
 const ROOF_OVERHANG = 40;
 
@@ -912,44 +913,56 @@ export class BuildModel {
   }
 
   /**
-   * Großes Dach: es sitzt als Giebel MITTIG über einem waagerechten 75er Rohr
-   * -- dem First. Gemessen an allen neun Vorkommen im Bestand: das Dach liegt
-   * genau auf der Achse dieses Rohrs, sein Bezugspunkt 40 cm vor dessen Anfang,
-   * und über dem Rohr steht nichts mehr. Der First ist 160 cm lang, das Dach
-   * steht also an beiden Enden 40 cm über.
+   * Großes Dach: es liegt als Giebel auf einem FIRST aus zwei 75er Rohren --
+   * 160 cm, genau die Länge seines Firsts. Gemessen an allen neun Vorkommen im
+   * Bestand: die beiden Rohre liegen lokal bei -40..40 und 40..120 ab dem
+   * Bezugspunkt des Dachs, es deckt sie also ohne Überstand ab, und über ihnen
+   * steht nichts mehr.
    *
-   * Der Ankerpunkt wird auf der ROHRMITTE gezeigt: dort liegt das Dach, und
-   * damit ist zu sehen, welches Rohr es aufnimmt.
+   * Der Ankerpunkt sitzt auf der Kupplung ZWISCHEN den beiden Rohren -- der
+   * Mitte des Firsts.
    */
   _roofMounts() {
     const out = [];
-    for (const t of this.tubes.values()) {
-      if (t.arm || t.link || t.bow) continue;
-      const a = this.nodes.get(t.a), b = this.nodes.get(t.b);
-      if (!a || !b || Math.abs(a.y - b.y) > 0.5) continue;      // nur waagerechte Rohre
-      const L = Math.hypot(b.x - a.x, b.y - a.y, b.z - a.z);
-      if (Math.abs(L - ROOF_RIDGE_SPAN) > 2) continue;          // First ist ein 75er Rohr
-      const mid = [(a.x + b.x) / 2, (a.y + b.y) / 2, (a.z + b.z) / 2];
-      // Nur ganz oben: steht über dem Rohr noch etwas, ist es kein First.
-      let verdeckt = false;
-      for (const n of this.nodes.values()) {
-        if (n.y <= a.y + 1) continue;
-        if (Math.hypot(n.x - mid[0], n.z - mid[2]) < ROOF_RIDGE_SPAN) { verdeckt = true; break; }
+    const gesehen = new Set();
+    for (const mitte of this.nodes.values()) {
+      // Waagerechte 75er, die an dieser Kupplung hängen.
+      const arme = [];
+      for (const t of this.tubes.values()) {
+        if (t.arm || t.link || t.bow) continue;
+        const a = this.nodes.get(t.a), b = this.nodes.get(t.b);
+        if (!a || !b || (a.id !== mitte.id && b.id !== mitte.id)) continue;
+        const other = a.id === mitte.id ? b : a;
+        if (Math.abs(other.y - mitte.y) > 0.5) continue;                 // nicht waagerecht
+        const L = Math.hypot(other.x - mitte.x, other.y - mitte.y, other.z - mitte.z);
+        if (Math.abs(L - ROOF_RIDGE_SPAN) > 2) continue;                 // kein 75er
+        arme.push(norm3([other.x - mitte.x, other.y - mitte.y, other.z - mitte.z]));
       }
-      if (verdeckt) continue;
-      const ex = norm3([b.x - a.x, b.y - a.y, b.z - a.z]);
-      const s = cross3(ex, [0, 1, 0]);                          // waagerecht, quer zum First
-      const ey = norm3([s[0], 1 + s[1], s[2]]);                 // Normale der einen Schräge
-      const ez = cross3(ex, ey);
-      const zurueck = L / 2 + ROOF_OVERHANG;
-      out.push({
-        pos: [mid[0] - ex[0] * zurueck, mid[1] - ex[1] * zurueck, mid[2] - ex[2] * zurueck],
-        handle: mid,
-        dir: ex, quat: quatFromBasis(ex, ey, ez), tubeId: t.id,
-      });
+      for (const ex of arme) {
+        // Gegenüber muss der First weitergehen -- zwei Rohre ergeben ihn.
+        if (!arme.some((d) => dot3(d, ex) < -0.99)) continue;
+        // Nur ganz oben: steht über dem First noch etwas, ist es keiner.
+        let verdeckt = false;
+        for (const n of this.nodes.values()) {
+          if (n.y <= mitte.y + 1) continue;
+          if (Math.hypot(n.x - mitte.x, n.z - mitte.z) < ROOF_RIDGE_SPAN) { verdeckt = true; break; }
+        }
+        if (verdeckt) continue;
+        const pos = [round(mitte.x - ex[0] * ROOF_OVERHANG),
+          round(mitte.y - ex[1] * ROOF_OVERHANG), round(mitte.z - ex[2] * ROOF_OVERHANG)];
+        const key = pos.join("|");
+        if (gesehen.has(key)) continue;
+        gesehen.add(key);
+        const s2 = cross3(ex, [0, 1, 0]);                 // waagerecht, quer zum First
+        const ey = norm3([s2[0], 1 + s2[1], s2[2]]);      // Normale der einen Schräge
+        const ez = cross3(ex, ey);
+        out.push({ pos, handle: [mitte.x, mitte.y, mitte.z], dir: ex,
+          quat: quatFromBasis(ex, ey, ez), nodeId: mitte.id });
+      }
     }
     return out;
   }
+
 
   // An der Kupplung: jede kardinale Richtung ohne Rohr, nicht unter den Boden.
   // Die Laufrolle haengt immer nach unten, sie kennt nur diese eine Stelle.

@@ -10,6 +10,9 @@ const UP = new THREE.Vector3(0, 1, 0);
 // So viel darf ein Bauteil vor einem Ankerpunkt liegen, ohne ihn zu verdecken
 // (Rohrhalbmesser + halbe Kupplung).
 const HANDLE_CLEAR = 6;
+// Das große Dach liegt auf dem First-Rohr, nicht auf dessen Achse.
+const ROOF_LIFT = 5;
+const ROOF_THICK = 2.5;   // Materialstärke der beiden Dachschrägen
 const ONE = new THREE.Vector3(1, 1, 1);
 
 // Render-Qualitaet: steuert nur die Aufloesung der gecachten Geometrien, nicht
@@ -876,18 +879,29 @@ export class SceneManager {
         // Masse aus den neun Cover-Entwuerfen: First von -40 bis +120 cm, Traufe
         // 60 cm tiefer und 60 cm seitlich -> Schraege 60*sqrt(2).
         const slope = Math.SQRT2 * 60;
+        // Dachstärke wie an einer Platte: das Dach ist ein Formteil, kein Tuch.
+        // Beide Schrägen liegen mit ihrer Innenseite am First und überlappen
+        // sich dort -- die Ecke bleibt dadurch geschlossen.
+        const dick = ROOF_THICK;
         return [
           this._cachedGeo("roofSlopeA", () => {
-            const g = new THREE.BoxGeometry(160, 1.2, slope);
-            g.translate(40, 0, slope / 2);
+            const g = new THREE.BoxGeometry(160, dick, slope);
+            g.translate(40, -dick / 2, slope / 2);
             return g;
           }),
           this._cachedGeo("roofSlopeB", () => {
-            const g = new THREE.BoxGeometry(160, slope, 1.2);
-            g.translate(40, -slope / 2, 0);
+            const g = new THREE.BoxGeometry(160, slope, dick);
+            g.translate(40, -slope / 2, -dick / 2);
             return g;
           }),
-        ].map((g) => this._placeFitting(new THREE.Mesh(g, this._fittingMaterial(hex, false)), f, q));
+        ].map((g) => {
+          const mesh = this._placeFitting(new THREE.Mesh(g, this._fittingMaterial(hex, false)), f, q);
+          // Der Bezugspunkt liegt auf der Achse des First-Rohrs. Das Dach LIEGT
+          // aber darauf: eine halbe Kupplung höher, sonst schneidet der First
+          // durch das Rohr und das Dach hängt darunter.
+          mesh.position.y += ROOF_LIFT;
+          return mesh;
+        });
       }
       case "bag2": {                    // Spielsack: offener Kasten aus Tuch
         // Er haengt zwischen zwei Rohren: oben offen, an allen vier Seiten rund
