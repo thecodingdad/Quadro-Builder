@@ -55,7 +55,7 @@ const CURVED_SLIDE_EXIT = new THREE.Vector3(1, -0.55, 0).normalize();
 const FLAT_FITTINGS = new Set(["lattice2", "textil-round2", "roof-large2"]);
 // Anbauteile, die auf einem Stutzen der Kupplung sitzen: die Kupplung bekommt
 // dort denselben Stutzen wie fuer ein Rohr.
-const ARM_FITTINGS = new Set(["adapter2", "bearing2"]);
+const ARM_FITTINGS = new Set(["adapter2", "bearing2", "steering-lock2"]);
 
 const HIGHLIGHT_COLOR = 0x9b30ff;
 const HIGHLIGHT_EMISSIVE = 0x3a0066;
