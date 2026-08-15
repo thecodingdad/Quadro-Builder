@@ -35,6 +35,7 @@ export const PLACEABLE_FITTINGS = [
   ...Object.keys(FITTING_MOUNTS),
   ...Object.keys(TUBE_FITTINGS),
   "steering-lock2", "hub-cap2",   // in der Radmitte, siehe _wheelLockMounts
+  "bearing-clamp",                // Lagerkupplung: klemmt um ein Rohr (kein eigenes QDF-Element)
   "lattice2", "textil-round2", "roof-large2",
 ];
 

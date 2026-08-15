@@ -213,14 +213,13 @@
     {
       "id": "bearing",
       "code": "CBR",
-      "name": "Radlager",
-      "name_en": "Wheel bearing",
+      "name": "Lagerkupplung",
+      "name_en": "Bearing connector",
       "arms": 2,
       "kind": "special",
       "price": 6.49,
       "buildable": false,
-      "note": "drehbar (Rad/Achse)",
-      "qdf": "bearing2"
+      "note": "klemmt um ein Rohr und traegt eine Kupplung"
     },
     {
       "id": "double_tube",
@@ -543,6 +542,15 @@
     }
   ],
   "accessories": [
+    {
+      "id": "wheel_bearing",
+      "code": "CBR",
+      "name": "Radlager",
+      "name_en": "Wheel bearing",
+      "price": 0,
+      "qdf": "bearing2",
+      "note": "5 cm langes Rohrstueck an einer Kupplung, traegt das Multirad · Preis noch offen"
+    },
     {
       "id": "tube_cap",
       "code": "TCP",
