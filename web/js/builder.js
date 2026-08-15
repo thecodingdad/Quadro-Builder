@@ -11,7 +11,7 @@ import { TUBE_FITTINGS } from "./model.js";
 // Kupplungen, die auf einem Rohr sitzen statt im Raster: QDF-Art -> Katalogteil.
 const TUBE_CLAMP_PARTS = { "hole-connector4": "hole_1", "bearing-clamp": "bearing" };
 // Teile, die wie eine Platte an ZWEI parallelen Rohren haengen.
-const RAIL_FITTINGS = new Set(["lattice2", "bag2"]);
+const RAIL_FITTINGS = new Set(["lattice2", "bag2", "textil2"]);
 
 const CLICK_TOLERANCE = 9; // px: groessere Bewegung = Kamera drehen, kein Klick (Touch-tauglich)
 
@@ -1609,7 +1609,7 @@ export class Builder {
   _railPartners(railId) {
     return this.fittingKind === "bag2"
       ? this.model.bagPartners(railId)
-      : this.model.latticePartners(railId);
+      : this.model.latticePartners(railId);   // Gitter und Textil: gleiche Regel
   }
 
   /**
@@ -1682,11 +1682,11 @@ export class Builder {
       const sec = this.model.panelSection(partner, this.panelRail.at);
       let added = null;
       this.recordHistory(() => {
-        added = this.fittingKind === "bag2"
-          ? this.model.addBag(this.panelRail.id, partner.id, sec.t0, sec.len, this.colorFor("panel"))
-          : this.model.addLattice(this.panelRail.id, partner.id, sec.t0, sec.len, this.colorFor("panel"));
+        const wohin = this.fittingKind === "bag2" ? "addBag"
+          : this.fittingKind === "textil2" ? "addTextile" : "addLattice";
+        added = this.model[wohin](this.panelRail.id, partner.id, sec.t0, sec.len, this.colorFor("panel"));
       });
-      if (added) this._notePlaced(added.id, "fitting");
+      if (added) this._notePlaced(added.id, this.fittingKind === "textil2" ? "textile" : "fitting");
       else this.onNotice(t("notice_fitting_exists"));
       this._clearPanelRail();
       return;

@@ -40,7 +40,11 @@ export const PLACEABLE_FITTINGS = [...new Set([
   "bag2",                         // zwischen zwei Rohren, siehe addBag
   "hole-connector4",              // Lochzapfenkupplung: klemmt um ein Rohr
   "bearing-clamp",                // Lagerkupplung: klemmt um ein Rohr (kein eigenes QDF-Element)
-  "lattice2", "textil-round2", "roof-large2",
+  "lattice2", "textil-round2",
+  "textil2",                      // Textil: wie das Gitter zwischen zwei Rohre
+  // Das Dachtextil (roof-large2) steht bewusst NICHT hier: es ist über eine
+  // ganz bestimmte Dachkonstruktion gestülpt und lässt sich nicht frei setzen.
+  // Aus Dateien wird es weiter gelesen, gezeichnet und gezählt.
 ])];
 
 
@@ -65,12 +69,6 @@ const FITTING_WIDTH = {
 };
 
 const WHEEL_KINDS = new Set(["multi-wheel2", "floating-wheel2"]);
-
-// Großes Dach: der First besteht aus ZWEI waagerechten 75er Rohren (je 80 cm
-// Rastermaß, zusammen 160 cm). Der Bezugspunkt liegt 40 cm vor der Kupplung
-// zwischen beiden.
-const ROOF_RIDGE_SPAN = 80;
-const ROOF_OVERHANG = 40;
 
 // Kantenmass des Spielsacks (cm) -- er spannt ein Rasterfeld.
 const BAG_SIZE = 35;
@@ -695,7 +693,6 @@ export class BuildModel {
     if (kind === "multi-wheel2") return this._wheelMounts();
     if (kind === "hub-cap2" || kind === "open-connector2") return this._wheelCapMounts();
     if (kind === "textil-round2") return this._roundCoverMounts();
-    if (kind === "roof-large2") return this._roofMounts();
     const spec = FITTING_MOUNTS[kind];
     if (!spec) return [];
     return spec.at === "tube" ? this._fittingTubeMounts(spec) : this._fittingNodeMounts(spec);
@@ -912,56 +909,7 @@ export class BuildModel {
     return out;
   }
 
-  /**
-   * Großes Dach: es liegt als Giebel auf einem FIRST aus zwei 75er Rohren --
-   * 160 cm, genau die Länge seines Firsts. Gemessen an allen neun Vorkommen im
-   * Bestand: die beiden Rohre liegen lokal bei -40..40 und 40..120 ab dem
-   * Bezugspunkt des Dachs, es deckt sie also ohne Überstand ab, und über ihnen
-   * steht nichts mehr.
-   *
-   * Der Ankerpunkt sitzt auf der Kupplung ZWISCHEN den beiden Rohren -- der
-   * Mitte des Firsts.
-   */
-  _roofMounts() {
-    const out = [];
-    const gesehen = new Set();
-    for (const mitte of this.nodes.values()) {
-      // Waagerechte 75er, die an dieser Kupplung hängen.
-      const arme = [];
-      for (const t of this.tubes.values()) {
-        if (t.arm || t.link || t.bow) continue;
-        const a = this.nodes.get(t.a), b = this.nodes.get(t.b);
-        if (!a || !b || (a.id !== mitte.id && b.id !== mitte.id)) continue;
-        const other = a.id === mitte.id ? b : a;
-        if (Math.abs(other.y - mitte.y) > 0.5) continue;                 // nicht waagerecht
-        const L = Math.hypot(other.x - mitte.x, other.y - mitte.y, other.z - mitte.z);
-        if (Math.abs(L - ROOF_RIDGE_SPAN) > 2) continue;                 // kein 75er
-        arme.push(norm3([other.x - mitte.x, other.y - mitte.y, other.z - mitte.z]));
-      }
-      for (const ex of arme) {
-        // Gegenüber muss der First weitergehen -- zwei Rohre ergeben ihn.
-        if (!arme.some((d) => dot3(d, ex) < -0.99)) continue;
-        // Nur ganz oben: steht über dem First noch etwas, ist es keiner.
-        let verdeckt = false;
-        for (const n of this.nodes.values()) {
-          if (n.y <= mitte.y + 1) continue;
-          if (Math.hypot(n.x - mitte.x, n.z - mitte.z) < ROOF_RIDGE_SPAN) { verdeckt = true; break; }
-        }
-        if (verdeckt) continue;
-        const pos = [round(mitte.x - ex[0] * ROOF_OVERHANG),
-          round(mitte.y - ex[1] * ROOF_OVERHANG), round(mitte.z - ex[2] * ROOF_OVERHANG)];
-        const key = pos.join("|");
-        if (gesehen.has(key)) continue;
-        gesehen.add(key);
-        const s2 = cross3(ex, [0, 1, 0]);                 // waagerecht, quer zum First
-        const ey = norm3([s2[0], 1 + s2[1], s2[2]]);      // Normale der einen Schräge
-        const ez = cross3(ex, ey);
-        out.push({ pos, handle: [mitte.x, mitte.y, mitte.z], dir: ex,
-          quat: quatFromBasis(ex, ey, ez), nodeId: mitte.id });
-      }
-    }
-    return out;
-  }
+
 
 
   // An der Kupplung: jede kardinale Richtung ohne Rohr, nicht unter den Boden.
@@ -1186,6 +1134,32 @@ export class BuildModel {
    * eine Kupplung (1600 -> 1550), quer dazu minus eine halbe (800 -> 775), und
    * das Netz schliesst oben buendig mit dem Rohr ab, unten bleiben 25 mm Luft.
    */
+  /**
+   * Textil zwischen zwei parallele Rohre spannen -- gesetzt wie das Gitter, nur
+   * dass daraus kein Anbauteil wird, sondern ein Eintrag in `textiles`: dieselbe
+   * Sorte Fläche wie eine Platte (zwei Tragrohre, Versatz, Länge) und genau das,
+   * was der Export als textil2 schreibt.
+   */
+  addTextile(aId, bId, t0, len, color) {
+    const ra = this._rail(aId), rb = this._rail(bId);
+    if (!ra || !rb) return null;
+    const off = [rb.p0[0] - ra.p0[0], rb.p0[1] - ra.p0[1], rb.p0[2] - ra.p0[2]];
+    const along = off[0] * ra.dir[0] + off[1] * ra.dir[1] + off[2] * ra.dir[2];
+    const perp = [off[0] - ra.dir[0] * along, off[1] - ra.dir[1] * along, off[2] - ra.dir[2] * along];
+    const gap = Math.hypot(perp[0], perp[1], perp[2]);
+    if (gap < 1) return null;
+    for (const x of this.textiles.values()) {
+      if (((x.a === aId && x.b === bId) || (x.a === bId && x.b === aId))
+        && Math.abs((x.t0 || 0) - t0) < 2) return null;      // dort hängt schon eins
+    }
+    const tx = {
+      id: this._id("x"), a: aId, b: bId, t0: round(t0), len: round(len),
+      w: round(len - 5), h: round(gap - 5), color: color || null, side: 1,
+    };
+    this.textiles.set(tx.id, tx);
+    return tx;
+  }
+
   addLattice(aId, bId, t0, len, color) {
     const ra = this._rail(aId), rb = this._rail(bId);
     if (!ra || !rb) return null;

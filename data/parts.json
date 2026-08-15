@@ -654,11 +654,11 @@
     {
       "id": "roof_large",
       "code": "",
-      "name": "Grosses Dach",
-      "name_en": "Large roof",
+      "name": "Dachtextil",
+      "name_en": "Roof textile",
       "price": 0,
       "qdf": "roof-large2",
-      "note": "Preis noch offen"
+      "note": "Textil, das über eine bestimmte Dachkonstruktion gestülpt wird (First aus zwei 75ern) · wird geladen, aber nicht frei gesetzt · Preis noch offen"
     },
     {
       "id": "lattice",
@@ -713,6 +713,15 @@
       "price": 0,
       "qdf": "slide-end2",
       "note": "schließt eine Kette aus Modular- oder Bogenrutschen-Körpern ab · Preis noch offen"
+    },
+    {
+      "id": "textile",
+      "code": "",
+      "name": "Textil",
+      "name_en": "Textile",
+      "price": 0,
+      "qdf": "textil2",
+      "note": "Tuch zwischen zwei parallelen Rohren, gesetzt wie das Gitter · Preis noch offen"
     }
   ]
 }

@@ -872,12 +872,15 @@ export class SceneManager {
         mat = this._fittingMaterial(hex, true);
         break;
       }
-      case "roof-large2": {             // grosses Dach: Giebel ueber dem First
-        // Der Punkt liegt auf dem First, die lokale X-Achse laeuft am First
-        // entlang. Von dort faellt eine Flaeche entlang +Z, die andere entlang
+      case "roof-large2": {             // Dachtextil: Giebel über dem First
+        // Der Punkt liegt auf dem First, die lokale X-Achse läuft am First
+        // entlang. Von dort fällt eine Fläche entlang +Z, die andere entlang
         // -Y ab (beide 45 Grad, deshalb stehen die Achsen senkrecht aufeinander).
-        // Masse aus den neun Cover-Entwuerfen: First von -40 bis +120 cm, Traufe
-        // 60 cm tiefer und 60 cm seitlich -> Schraege 60*sqrt(2).
+        // Maße aus den neun Cover-Entwürfen: First von -40 bis +120 cm, Traufe
+        // 60 cm tiefer und 60 cm seitlich -> Schräge 60*sqrt(2). Der First liegt
+        // dort immer auf ZWEI waagerechten 75ern (lokal -40..40 und 40..120) --
+        // deshalb ist das Teil nicht frei setzbar, es passt nur auf genau diese
+        // Konstruktion.
         const slope = Math.SQRT2 * 60;
         // Dachstärke wie an einer Platte: das Dach ist ein Formteil, kein Tuch.
         // Beide Schrägen liegen mit ihrer Innenseite am First und überlappen

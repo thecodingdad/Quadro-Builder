@@ -790,7 +790,7 @@ export function initUI({ scene, model, builder }) {
       `<line x1="2.5" y1="6" x2="13.5" y2="6" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/>` +
       `<line x1="2.5" y1="11" x2="13.5" y2="11" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/>` +
       `<rect x="6" y="3" width="4" height="11" rx="1.4" fill="none" stroke="currentColor" stroke-width="1.3"/>`],
-    ["grp_other", ["bag2", "lattice2", "textil-round2", "roof-large2"],
+    ["grp_other", ["bag2", "lattice2", "textil2", "textil-round2"],
       `<rect x="2.5" y="2.5" width="11" height="11" rx="2" fill="none" stroke="currentColor" stroke-width="1.5"/>` +
       `<line x1="2.5" y1="8" x2="13.5" y2="8" stroke="currentColor" stroke-width="1.3"/>`],
   ];
@@ -839,8 +839,9 @@ export function initUI({ scene, model, builder }) {
       `<path d="M6 4 L6 12 M9.5 4 L9.5 12 M2.5 6.7 L13.5 6.7 M2.5 9.3 L13.5 9.3" stroke="currentColor" stroke-width="0.8"/>`,
     "textil-round2": `<path d="M3 13 L3 8 A8 8 0 0 1 11 13 Z" fill="none" stroke="currentColor" stroke-width="1.4"/>` +
       `<path d="M3 8 A8 8 0 0 1 11 13" fill="none" stroke="currentColor" stroke-width="1.6"/>`,
-    "roof-large2": `<path d="M2 11 L8 4 L14 11" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>` +
-      `<line x1="2" y1="12.6" x2="14" y2="12.6" stroke="currentColor" stroke-width="1.2"/>`,
+    "textil2": `<path d="M2.5 4 L13.5 4 L13.5 12 L2.5 12 Z" fill="none" stroke="currentColor" stroke-width="1.4"/>` +
+      `<path d="M2.5 6.5 C5 5.4 6.5 7.6 8 6.5 C9.5 5.4 11 7.6 13.5 6.5" fill="none" stroke="currentColor" stroke-width="1"/>` +
+      `<path d="M2.5 9.5 C5 8.4 6.5 10.6 8 9.5 C9.5 8.4 11 10.6 13.5 9.5" fill="none" stroke="currentColor" stroke-width="1"/>`,
   };
   const fittingGroupBtns = [];
   for (const [key, kinds, path] of FITTING_GROUPS) {
