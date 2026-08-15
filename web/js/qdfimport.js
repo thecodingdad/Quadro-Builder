@@ -10,7 +10,8 @@
 //   panel2{mat,{q0..q3, cx,cy,cz},flag,w_mm,_,h_mm,..}-> Platte (Mitte + Kantenmasse)
 //   alu2{mat,{q0..q3, x,y,z},flag,len_mm,...}         -> Alu-Verstaerkungsprofil (wie Rohr, 800 mm)
 //   alu-connector2{...}                               -> kurzes Alu-Profil (400 mm)
-//   clamp2{mat,{q0..q3, x,y,z},flag,...}              -> Doppelrohrverbinder/Klemme (Punkt auf einem Rohr)
+//   clamp2{mat,{q0..q3, x,y,z},flag,...}              -> Doppelrohrverbinder (Punkt auf einem Rohr)
+//   clip2{mat,{q0..q3, x,y,z},flag,...}               -> Rohrklammer (wie clamp2, ein Loch offen)
 //   textil2 / roof2 / slide* / curved-slide*          -> Sonderteile (uebersprungen)
 //
 // Alu-Profile werden in Rohre geschoben und verstaerken sie. Sie liegen wie
@@ -354,11 +355,18 @@ export function parseQDF(text, opts = {}) {
           nd.arms = nd.arms ? unionDirs(nd.arms, armWorld) : armWorld;
         }
       }
-    } else if (p.name === "clamp2") {
-      // Doppelrohrverbinder/Klemme: sitzt als freier Punkt auf einem Rohr.
+    } else if (p.name === "clamp2" || p.name === "clip2") {
+      // Doppelrohrverbinder (clamp2) und Rohrklammer (clip2) sitzen als freier
+      // Punkt auf einem Rohr. Die lokale +X-Achse ist die Rohrrichtung.
       if (!p.tuple || p.tuple.length < 7) { skipped[p.name] = (skipped[p.name] || 0) + 1; continue; }
       const x = p.tuple[4] / 10, y = p.tuple[5] / 10, z = p.tuple[6] / 10;
-      clamps.push({ id: "k" + seq++, x: round(x), y: round(y), z: round(z), connectorId: "double_tube" });
+      const q = decodeQuat([p.tuple[0], p.tuple[1], p.tuple[2], p.tuple[3]]);
+      const dir = nearestCardinal(rotateByQuat(q, [1, 0, 0]));
+      clamps.push({
+        id: "k" + seq++, x: round(x), y: round(y), z: round(z),
+        connectorId: p.name === "clip2" ? "tube_clamp" : "double_tube",
+        dir,
+      });
     }
   }
 
@@ -779,23 +787,6 @@ export function parseQDF(text, opts = {}) {
     // danach auf Knoten, die es nicht mehr gibt.
     for (const tx of textiles) for (const id of tx.nodes) referenced.add(id);
     for (let i = nodes.length - 1; i >= 0; i--) if (!referenced.has(nodes[i].id)) nodes.splice(i, 1);
-  }
-
-  // Radarretierung und Radkappe halten ihr Rad, stehen in den Herstellerdateien
-  // aber an der Kupplung -- also HINTER dem Rad. Beim Einlesen ruecken sie in
-  // die Nabe des Rades, zu dem sie gehoeren. Erst dadurch bleiben sie dort
-  // liegen, wenn spaeter das Rad geloescht wird.
-  for (const f of fittings) {
-    const wheelKind = f.kind === "steering-lock2" ? "multi-wheel2"
-      : f.kind === "hub-cap2" ? "floating-wheel2" : null;
-    if (!wheelKind) continue;
-    let best = null, bd = 12;
-    for (const w of fittings) {
-      if (w.kind !== wheelKind) continue;
-      const d = Math.hypot(w.x - f.x, w.y - f.y, w.z - f.z);
-      if (d < bd) { bd = d; best = w; }
-    }
-    if (best) { f.x = best.x; f.y = best.y; f.z = best.z; f.quat = best.quat ? best.quat.slice() : f.quat; }
   }
 
   // Lochzapfenkupplungen: Knoten an der Muendung, dazu das umschlossene Rohr.

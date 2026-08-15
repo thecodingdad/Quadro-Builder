@@ -711,11 +711,12 @@ export function initUI({ scene, model, builder }) {
   // verbindet, und der Rest. Der Doppelrohrverbinder ist kein Anbauteil, er hat
   // einen eigenen Modus -- in der Liste steht er trotzdem bei den Verbindungen.
   const CLAMP_ENTRY = "double_tube";
+  const CLIP_ENTRY = "tube_clamp";
   const FITTING_GROUPS = [
     ["grp_wheels", ["multi-wheel2", "floating-wheel2", "casters2", "bearing2", "hub-cap2", "steering-lock2"],
       `<circle cx="8" cy="8" r="5.4" fill="none" stroke="currentColor" stroke-width="1.6"/>` +
       `<circle cx="8" cy="8" r="1.6" fill="currentColor"/>`],
-    ["grp_joints", ["bearing-clamp", "hole-connector4", CLAMP_ENTRY, "open-connector2"],
+    ["grp_joints", ["bearing-clamp", "hole-connector4", CLAMP_ENTRY, CLIP_ENTRY, "open-connector2"],
       `<line x1="2.5" y1="6" x2="13.5" y2="6" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/>` +
       `<line x1="2.5" y1="11" x2="13.5" y2="11" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/>` +
       `<rect x="6" y="3" width="4" height="11" rx="1.4" fill="none" stroke="currentColor" stroke-width="1.3"/>`],
@@ -726,7 +727,8 @@ export function initUI({ scene, model, builder }) {
   const fittingGroupBtns = [];
   for (const [key, kinds, path] of FITTING_GROUPS) {
     const items = kinds.map((k) => {
-      const def = k === CLAMP_ENTRY ? allConnectors().find((c) => c.id === CLAMP_ENTRY) : partForFitting(k);
+      const def = (k === CLAMP_ENTRY || k === CLIP_ENTRY)
+        ? allConnectors().find((c) => c.id === k) : partForFitting(k);
       return def ? { ...def, id: k, qdf: k } : null;
     }).filter(Boolean);
     if (!items.length) continue;
@@ -734,8 +736,12 @@ export function initUI({ scene, model, builder }) {
     const btn = el("button", "btn part");
     btn.addEventListener("click", (e) => {
       e.stopPropagation();
-      showPartPopup(btn, items, builder.mode === "clamp" ? CLAMP_ENTRY : builder.fittingKind, icon, (p) => {
-        if (p.qdf === CLAMP_ENTRY) { setMode("clamp"); return; }
+      showPartPopup(btn, items, builder.mode === "clamp" ? builder.clampPart : builder.fittingKind, icon, (p) => {
+        if (p.qdf === CLAMP_ENTRY || p.qdf === CLIP_ENTRY) {
+          builder.setClampPart(p.qdf);
+          setMode("clamp");
+          return;
+        }
         builder.setFitting(p.qdf);
         setMode("fitting");
       });
@@ -749,7 +755,7 @@ export function initUI({ scene, model, builder }) {
   renderFittingButton = () => {
     for (const g of fittingGroupBtns) {
       const aktiv = (builder.mode === "fitting" && g.kinds.includes(builder.fittingKind))
-        || (builder.mode === "clamp" && g.kinds.includes(CLAMP_ENTRY));
+        || (builder.mode === "clamp" && g.kinds.includes(builder.clampPart));
       g.btn.classList.toggle("active", aktiv);
       g.btn.lastChild.textContent = t(g.key);
     }

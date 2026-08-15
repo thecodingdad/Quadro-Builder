@@ -349,7 +349,11 @@ export function buildQDF(model) {
 
   // --- Klemmen und Rutschen ----------------------------------------------
   for (const c of (model.clamps ? model.clamps.values() : [])) {
-    lines.push(`clamp2{${CONNECTOR_MAT}, ${tuple(IDENTITY, c.x, c.y, c.z)}, 1, 0, 0}`);
+    // Doppelrohrverbinder und Rohrklammer sind zwei Elemente; die lokale
+    // +X-Achse ist die Richtung des umschlossenen Rohrs.
+    const kind = c.connectorId === "tube_clamp" ? "clip2" : "clamp2";
+    const q = c.dir ? encodeQuat(quatFromX(c.dir)) : IDENTITY;
+    lines.push(`${kind}{${TUBE_MAT.red}, ${tuple(q, c.x, c.y, c.z)}, 1, 0, 0}`);
     stats.clamps++;
   }
   // Anbauteile: Punkt + Ausrichtung, beim Gitter zusaetzlich die Masse. Die

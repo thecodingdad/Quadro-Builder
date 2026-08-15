@@ -44,6 +44,7 @@ export class Builder {
     this.tubeId = geometry().defaultTube;
     this.panelId = defaultPanel();
     this.fittingKind = "multi-wheel2";   // gewaehltes Anbauteil (QDF-Art)
+    this.clampPart = "double_tube";      // Doppelrohrverbinder oder Rohrklammer
     // Platten-Modus: erstes angeklicktes Tragrohr + Stelle entlang davon.
     this.panelRail = null;
     this.color = "blue";
@@ -163,6 +164,8 @@ export class Builder {
   }
   setTube(tubeId) { this.tubeId = tubeId; }
   setPanel(panelId) { this.panelId = panelId; if (this.mode === "panel") this.refresh(); }
+  setClampPart(id) { this.clampPart = id; if (this.mode === "clamp") this.refresh(); }
+
   setFitting(kind) {
     this.fittingKind = kind;
     this._clearPanelRail();          // Rohr-Auswahl gilt nur fuer das Gitter
@@ -995,7 +998,7 @@ export class Builder {
     const off = [card[0] * cs, card[1] * cs, card[2] * cs];
     const pos = [ax[0] + off[0] / 2, ax[1] + off[1] / 2, ax[2] + off[2] / 2];
     this.recordHistory(() => {
-      const clamp = this.model.addClamp(round2(pos[0]), round2(pos[1]), round2(pos[2]));
+      const clamp = this.model.addClamp(round2(pos[0]), round2(pos[1]), round2(pos[2]), this.clampPart);
       clamp.dir = u.map(round2); clamp.off = off.map(round2);
     });
     this.onNotice(t("notice_clamp_placed"));
