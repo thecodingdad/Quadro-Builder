@@ -1739,7 +1739,15 @@ export class SceneManager {
         if (d < nd) { nd = d; near = n; }
       }
       if (!near) continue;
-      pushDir(near.id, f.x - near.x, f.y - near.y, f.z - near.z, false);
+      // Sitzt das Teil GENAU auf der Kupplung (Radlager, Adapter), gibt der
+      // Abstand keine Richtung her -- dann zaehlt seine eigene Achse.
+      const dx = f.x - near.x, dy = f.y - near.y, dz = f.z - near.z;
+      if (Math.hypot(dx, dy, dz) > 0.5) pushDir(near.id, dx, dy, dz, false);
+      else {
+        const qx = new THREE.Quaternion(f.quat[0], f.quat[1], f.quat[2], f.quat[3]).normalize();
+        const ax = new THREE.Vector3(1, 0, 0).applyQuaternion(qx);
+        pushDir(near.id, ax.x, ax.y, ax.z, false);
+      }
     }
     // Die Kupplung, die eine Lagerkupplung traegt, steckt mit einem Stutzen in
     // ihr -- der zeigt zurueck zum Rohr, sonst schwebt der Wuerfel frei.

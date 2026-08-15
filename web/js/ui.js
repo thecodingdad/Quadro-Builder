@@ -1,6 +1,6 @@
 // Verkabelt die Bedienoberflaeche (Toolbar, Tastatur, Stueckliste, Bestand).
 
-import { buildableTubes, buildableCurvedTubes, buildablePanels, tubeColors, geometry, allTubes, allConnectors, panels, reinforcements, slideKindName, partName, partForFitting } from "./catalog.js";
+import { buildableTubes, buildableCurvedTubes, buildablePanels, tubeColors, geometry, allTubes, allConnectors, panels, reinforcements, slideKindName, partName, partForFitting, accessories } from "./catalog.js";
 import { PLACEABLE_FITTINGS } from "./model.js";
 import { computeBOM, compareInventory, connectorsForNode } from "./bom.js";
 import { computeBuildPlan, BUILD_ORDERS } from "./buildplan.js";
@@ -38,6 +38,7 @@ function loadInv() {
   inv.connectors = inv.connectors || {};
   inv.panels = inv.panels || {};
   inv.reinforcements = inv.reinforcements || {};
+  inv.fittings = inv.fittings || {};
   return inv;
 }
 function saveInv(inv) { localStorage.setItem(INV_KEY, JSON.stringify(inv)); }
@@ -1493,6 +1494,11 @@ export function initUI({ scene, model, builder }) {
     if (slides.length === 0) slb.appendChild(el("div", "muted", "–"));
     for (const r of slides) bomRow(slb, slideKindName(r.kind), null, r.count, null);
 
+    const fb = $("bom-fittings"); fb.innerHTML = "";
+    const fits = bom.fittings || [];
+    if (fits.length === 0) fb.appendChild(el("div", "muted", "–"));
+    for (const r of fits) bomRow(fb, r.name, null, r.count, r.subtotal || null);
+
     const rb = $("bom-reinforcements"); rb.innerHTML = "";
     const reinf = bom.reinforcements || [];
     if (reinf.length === 0) rb.appendChild(el("div", "muted", "–"));
@@ -1627,6 +1633,7 @@ export function initUI({ scene, model, builder }) {
       [t("group_connectors"), "connectors", allConnectors()],
       [t("group_panels"), "panels", panels()],
       [t("group_reinforcements"), "reinforcements", reinforcements()],
+      [t("group_fittings"), "fittings", accessories()],
     ];
     for (const [title, bucket, items] of groups) {
       if (!items.length) continue;

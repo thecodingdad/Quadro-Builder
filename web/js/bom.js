@@ -1,6 +1,6 @@
 // Stueckliste (BOM) + Kupplungstyp-Heuristik + Bestands-/Machbarkeitscheck.
 
-import { getTube, getConnector, getPanel, colorName, partName, reinforcementPart, reinforcementRunName, partForFitting } from "./catalog.js";
+import { getTube, getConnector, getPanel, colorName, partName, reinforcementPart, reinforcementRunName, partForFitting, getPartById } from "./catalog.js";
 import { round2 } from "./util.js";
 
 // Einheitsvektoren der Nachbarn eines Knotens. Doppelrohr-Verbindungen (link)
@@ -430,8 +430,14 @@ export function neededParts(bom) {
   for (const r of bom.connectors) connectors.set(r.type, r.count);
   const panels = new Map();  // panelId -> count
   for (const r of bom.panels || []) panels.set(r.panelId, (panels.get(r.panelId) || 0) + r.count);
+  // Anbauteile: was im Katalog eine Kupplung ist (Radlager, Lochzapfenkupplung),
+  // gehoert in denselben Topf wie die uebrigen Kupplungen -- sonst stuende es im
+  // Bestand zweimal.
   const fittings = new Map();   // Katalog-id -> Stueckzahl
-  for (const r of bom.fittings || []) fittings.set(r.id, (fittings.get(r.id) || 0) + r.count);
+  for (const r of bom.fittings || []) {
+    const pot = getConnector(r.id) ? connectors : fittings;
+    pot.set(r.id, (pot.get(r.id) || 0) + r.count);
+  }
   const reinforcements = new Map(); // id -> physische Stueckzahl (40-cm-Profile)
   for (const r of bom.reinforcements || [])
     reinforcements.set(r.id, (reinforcements.get(r.id) || 0) + (r.pieces ?? r.count));
@@ -464,6 +470,13 @@ export function compareInventory(bom, inv) {
     const ok = owned >= count;
     if (!ok) feasible = false;
     rows.push({ group: "panels", key: panelId, name: partName(def), need: count, owned, ok });
+  }
+  for (const [id, count] of need.fittings) {
+    const def = getPartById(id) || { name: id };
+    const owned = (inv.fittings && inv.fittings[id]) || 0;
+    const ok = owned >= count;
+    if (!ok) feasible = false;
+    rows.push({ group: "fittings", key: id, name: partName(def), need: count, owned, ok });
   }
   for (const [id, count] of need.reinforcements) {
     const def = reinforcementPart() || { name: id };
