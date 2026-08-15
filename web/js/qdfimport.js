@@ -810,12 +810,13 @@ export function parseQDF(text, opts = {}) {
     }
   }
 
-  // Rutschen-Fussrohr verwerfen: Am Auslauf einer Rutsche steht in der QDF-Datei
-  // ein Rohr (samt Kupplungen), dessen Mitte exakt auf der Rutschen-Position
-  // liegt. Die Herstellersoftware zeichnet es nicht -- es gehoert zum Rutschen-
-  // Bauteil und ist real kein eigenes Rohr. Ohne diesen Filter steht es lose im
-  // Raum und taucht faelschlich in der Stueckliste auf. Die dadurch verwaisten
-  // Kupplungen raeumt der folgende Block mit weg.
+  // Fußrohr der Integralrutsche verwerfen: Unter ihrem Auslauf steht in der
+  // QDF-Datei ein Rohr, dessen Mitte exakt auf der Rutschen-Position liegt --
+  // es gehört zum Bauteil und ist real kein eigenes Rohr.
+  //
+  // Bei den Ketten-Teilen (Modular- und Bogenrutschen-Körper, Auslauf) ist es
+  // umgekehrt: dort trägt an JEDEM Ende ein echtes Rohr die Bahn, und die
+  // Herstellersoftware zeigt es auch. Die bleiben deshalb stehen.
   if (slides.length) {
     const FOOT_TOL = 3; // cm
     const nodeById = new Map(nodes.map((n) => [n.id, n]));
@@ -824,7 +825,8 @@ export function parseQDF(text, opts = {}) {
       const a = nodeById.get(t.a), b = nodeById.get(t.b);
       if (!a || !b) continue;
       const mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2, mz = (a.z + b.z) / 2;
-      const slide = slides.find((s) => Math.hypot(s.x - mx, s.y - my, s.z - mz) <= FOOT_TOL);
+      const slide = slides.find((s) => s.kind === "slide-new2"
+        && Math.hypot(s.x - mx, s.y - my, s.z - mz) <= FOOT_TOL);
       if (slide) {
         // Lage des Fussrohrs merken: der Export schreibt es wieder mit, sonst
         // fehlt es in der Datei und die Herstellersoftware zeigt die Rutschen-
