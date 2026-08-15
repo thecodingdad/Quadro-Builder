@@ -8,7 +8,7 @@ import { round2 as round, quatFromXAxis, quatFromBasis } from "./util.js";
 // Herstellers: `at` ist der Anker (Kupplung oder Rohr), `offset` der Abstand in
 // cm entlang der gewaehlten Achse. Die Achse ist immer die lokale +X des Teils.
 const FITTING_MOUNTS = {
-  "bearing2":        { at: "node", offset: 0 },   // Lagerkupplung sitzt auf der Kupplung
+  "bearing2":        { at: "node", offset: 0 },   // Radlager: 5-cm-Stueck an der Kupplung
   "casters2":        { at: "node", offset: 0 },   // Laufrolle; der Adapter kommt mit
   "open-connector2": { at: "node", offset: 0 },
   "hole-connector4": { at: "node", offset: 5 },   // 50 mm neben der Kupplung
@@ -24,7 +24,6 @@ const FITTING_MOUNTS = {
  * 15-cm-Rohr, die Nabenkappe an dessen Ende.
  */
 export const TUBE_FITTINGS = {
-  "multi-wheel2":    "anywhere",   // schmales Rad
   "floating-wheel2": "anywhere",   // Schwimmrad, knapp 15 cm dick
 };
 
@@ -35,6 +34,7 @@ export const PLACEABLE_FITTINGS = [
   ...Object.keys(FITTING_MOUNTS),
   ...Object.keys(TUBE_FITTINGS),
   "steering-lock2", "hub-cap2",   // in der Radmitte, siehe _wheelLockMounts
+  "multi-wheel2",                 // auf einem Radlager, siehe _wheelMounts
   "lattice2", "textil-round2", "roof-large2",
 ];
 
@@ -52,6 +52,19 @@ const LATTICE_STEP = 40;
 const LATTICE_MAX = 160;
 
 const CARDINALS = [[1, 0, 0], [-1, 0, 0], [0, 1, 0], [0, -1, 0], [0, 0, 1], [0, 0, -1]];
+
+// Laenge des Radlagers (Feld 50. in allen 125 bearing2-Zeilen des Bestands).
+const BEARING_LEN = 5;
+
+// Die lokale +X-Achse eines Anbauteils in Weltkoordinaten (quat: Three x,y,z,w).
+function rotateX(q) {
+  const [x, y, z, w] = q;
+  return [
+    1 - 2 * (y * y + z * z),
+    2 * (x * y + z * w),
+    2 * (x * z - y * w),
+  ];
+}
 
 /**
  * Abstand der Klemm-Kupplung von der Rohrachse, in Kupplungslaengen.
@@ -576,6 +589,7 @@ export class BuildModel {
    * Liefert je Stelle { pos:[x,y,z], dir:[x,y,z], nodeId?, tubeId? }.
    */
   fittingMounts(kind) {
+    if (kind === "multi-wheel2") return this._wheelMounts();
     if (kind === "steering-lock2") return this._wheelLockMounts("multi-wheel2");
     if (kind === "hub-cap2") return this._wheelLockMounts("floating-wheel2");
     if (kind === "textil-round2") return this._roundCoverMounts();
@@ -620,6 +634,23 @@ export class BuildModel {
     const d = [end.x - other.x, end.y - other.y, end.z - other.z];
     const L = Math.hypot(d[0], d[1], d[2]) || 1;
     return { pos: [end.x, end.y, end.z], dir: [d[0] / L, d[1] / L, d[2] / L], nodeId: end.id };
+  }
+
+  /**
+   * Multirad: sitzt auf dem AEUSSEREN Ende eines Radlagers -- das ist ein 5 cm
+   * langes Rohrstueck an einer Kupplung. Gemessen in Basic II_Auto: Radlager auf
+   * der Kupplung mit Laengenfeld 50 mm, das Rad 50 mm weiter aussen auf
+   * derselben Achse.
+   */
+  _wheelMounts() {
+    const out = [];
+    for (const f of this.fittings.values()) {
+      if (f.kind !== "bearing2" || !f.quat) continue;
+      const ax = rotateX(f.quat);
+      out.push({ pos: [round(f.x + ax[0] * BEARING_LEN), round(f.y + ax[1] * BEARING_LEN),
+        round(f.z + ax[2] * BEARING_LEN)], dir: ax, quat: f.quat.slice() });
+    }
+    return out;
   }
 
   /**

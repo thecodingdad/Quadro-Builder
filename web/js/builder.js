@@ -9,7 +9,7 @@ import { round2, panelNormal, modelMiddle } from "./util.js";
 import { TUBE_FITTINGS } from "./model.js";
 
 // Kupplungen, die auf einem Rohr sitzen statt im Raster: QDF-Art -> Katalogteil.
-const TUBE_CLAMP_PARTS = { "hole-connector4": "hole_1", "bearing2": "bearing" };
+const TUBE_CLAMP_PARTS = { "hole-connector4": "hole_1" };
 
 const CLICK_TOLERANCE = 9; // px: groessere Bewegung = Kamera drehen, kein Klick (Touch-tauglich)
 

@@ -735,7 +735,19 @@ export class SceneManager {
         }), dark);
         return [fork, roll].map((m) => this._placeFitting(m, f, q));
       }
-      case "bearing2":
+      case "bearing2": {                // Radlager: schwarzes 5-cm-Rohrstueck
+        // Es steckt auf einem Stutzen der Kupplung und traegt das Multirad an
+        // seinem aeusseren Ende. Laenge 5 cm -- so steht es im Datensatz.
+        const rb = geometry().tubeRadius;
+        geo = this._cachedGeo("bearingstub", () => {
+          const g = new THREE.CylinderGeometry(rb, rb, 5, Math.max(10, this._q().tube));
+          g.rotateZ(Math.PI / 2);
+          g.translate(2.5, 0, 0);
+          return g;
+        });
+        mat = this._fittingMaterial(0x1c1c1c, false);
+        break;
+      }
       case "adapter2": {                // Topf, der ueber den Stutzen der Kupplung greift
         const r = geometry().tubeRadius * 1.3;
         geo = this._cachedGeo("fitcup", () => {

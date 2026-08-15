@@ -213,8 +213,8 @@
     {
       "id": "bearing",
       "code": "CBR",
-      "name": "Lagerkupplung",
-      "name_en": "Bearing connector",
+      "name": "Radlager",
+      "name_en": "Wheel bearing",
       "arms": 2,
       "kind": "special",
       "price": 6.49,
