@@ -19,7 +19,7 @@
 //
 // Bewusst ohne Three.js und DOM -- wie qdfimport.js in Node testbar.
 
-import { geometry, getPanel } from "./catalog.js";
+import { geometry, getPanel, getTube } from "./catalog.js";
 import { panelNormal, modelMiddle } from "./util.js";
 
 // Farbtabelle wie in den Dateien der Herstellersoftware: erst der Satz fuer
@@ -203,7 +203,9 @@ export function buildQDF(model) {
   // Der Adapterkoerper einer 45-Grad-Winkelkupplung ist kein eigenes Teil: er
   // steckt auf der Eck-Kupplung, die dafuer als connector45_2 geschrieben wird.
   for (const n of model.nodes.values()) {
-    if (n.c45body) continue;
+    // Adapter-Koerper sind keine eigene Kupplung -- ausser am freien Ende einer
+    // Schraege, wo die Datei eine connector3 fuehrt (ownConnector).
+    if (n.c45body && !n.ownConnector) continue;
     // Klemm-Kupplung: eigene Zeile statt connector3. Der Punkt ist die
     // Muendung des offenen Anschlusses, das lokale -Y zeigt in ihn hinein und
     // das lokale X laeuft am umschlossenen Rohr entlang -- so steht es in allen
@@ -257,7 +259,9 @@ export function buildQDF(model) {
       const l = toLocal(t.bow && t.bowCenter ? bowStubDir(n, other, t.bowCenter) : dirOf(n, other));
       for (const [bit, v] of ARM_BITS) if (dot(l, v) > 0.9) mask |= bit;
     }
-    const c45 = n.c45 || carriesAdapter;
+    // Ein Adapter-Koerper mit eigener Kupplung ist in der Datei eine gewoehnliche
+    // connector3 -- die Winkelkupplung steckt an der Ecke, nicht hier.
+    const c45 = (n.c45 || carriesAdapter) && !n.ownConnector;
     const q = quat ? encodeQuat(quat) : IDENTITY;
     // Die Eck-Kupplung der 45-Grad-Winkelkupplung fuehrt NUR drei Felder hinter
     // dem Tupel -- in allen 732 Vorkommen der Herstellerdateien. Schreibt man
@@ -295,7 +299,14 @@ export function buildQDF(model) {
     // weichen beide um ein paar Zentimeter voneinander ab -- mit der Katalog-
     // Laenge landete das Ende dann neben der Kupplung.
     const span = lenOf(a, b);
-    const len = span - conn;
+    // Die Datei kennt nur Katalog-Laengen (100/150/200/250/350/520/750). Liegt
+    // der gemessene Abstand dicht an der Laenge des verbauten Teils, schreiben
+    // wir diese -- sonst stuende dort ein Mass, das es nicht gibt (Schraegen aus
+    // dem C45-Adapter kommen sonst als 360 oder 364 heraus). Weicht er weiter
+    // ab, gilt weiter der Abstand: das Rohrende muss auf der Kupplung landen.
+    const katalog = t.length != null ? t.length : (getTube(t.tubeId) || {}).length_cm;
+    const gemessen = span - conn;
+    const len = (katalog != null && Math.abs(katalog - gemessen) <= 2) ? katalog : gemessen;
     const q = encodeQuat(quatFromX(dirOf(a, b)));
     lines.push(`tube2{${mat}, ${tuple(q, a.x, a.y, a.z)}, 1, ${mm(len)}, 0., 0}`);
     stats.tubes++;

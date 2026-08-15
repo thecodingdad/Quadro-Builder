@@ -285,6 +285,9 @@ export function parseQDF(text, opts = {}) {
       return existing || snapToConnector(round(x), round(y), round(z));
     }
     const body = existing || nodeAt(round(x), round(y), round(z)); // Adapter-Koerper am Rohrende
+    // Stand an dieser Stelle schon eine Kupplung (freies Ende einer Schraege),
+    // dann gehoert sie in die Datei zurueck -- der Adapter kommt dort zusaetzlich.
+    if (existing) body.ownConnector = true;
     body.c45 = true;
     body.c45body = true;
     if (!connectorNodes.includes(body)) connectorNodes.push(body); // L3-fix: c45body als Snap-Ziel
@@ -845,6 +848,7 @@ export function parseQDF(text, opts = {}) {
       if (n.part) o.part = n.part; // festes Katalogteil (Klemm-Kupplung)
       if (n.clampOn) o.clampOn = n.clampOn; // umschlossenes Rohr + Stelle darauf
       if (n.stub) o.stub = n.stub; // Richtung des offenen Anschlusses
+      if (n.ownConnector) o.ownConnector = true; // c45body, an dem auch eine Kupplung sitzt
       return o;
     }),
     tubes,

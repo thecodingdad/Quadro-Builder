@@ -1996,6 +1996,7 @@ export class BuildModel {
         if (n.part) o.part = n.part; // festes Katalogteil (Klemm-Kupplungen)
         if (n.clampOn) o.clampOn = n.clampOn; // umschlossenes Rohr + Stelle darauf
         if (n.stub) o.stub = n.stub; // Richtung des offenen Anschlusses
+        if (n.ownConnector) o.ownConnector = true; // Adapter-Koerper MIT eigener Kupplung
         return o;
       }),
       tubes: [...this.tubes.values()].map((t) => {
@@ -2061,7 +2062,8 @@ export class BuildModel {
     for (const n of data.nodes) {
       this.nodes.set(n.id, { id: n.id, x: n.x, y: n.y, z: n.z, c45: !!n.c45, c45body: !!n.c45body,
         c45axis: n.c45axis || null, armDirs: n.armDirs || null, arms: n.arms || null, quat: n.quat || null,
-        part: n.part || null, clampOn: n.clampOn || null, stub: n.stub || null });
+        part: n.part || null, clampOn: n.clampOn || null, stub: n.stub || null,
+        ownConnector: !!n.ownConnector });
       maxSeq = Math.max(maxSeq, parseSeq(n.id));
     }
     for (const t of data.tubes || []) {
