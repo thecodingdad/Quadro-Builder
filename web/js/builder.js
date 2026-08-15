@@ -9,7 +9,9 @@ import { round2, panelNormal, modelMiddle } from "./util.js";
 import { TUBE_FITTINGS } from "./model.js";
 
 // Kupplungen, die auf einem Rohr sitzen statt im Raster: QDF-Art -> Katalogteil.
-const TUBE_CLAMP_PARTS = { "hole-connector4": "hole_1", "bearing-clamp": "bearing" };
+// Teile, die sich um ein Rohr klemmen lassen. Die Lochzapfenkupplung gehört
+// NICHT dazu -- sie umschließt kein Rohr (siehe PLACEABLE_FITTINGS).
+const TUBE_CLAMP_PARTS = { "bearing-clamp": "bearing" };
 // Teile, die wie eine Platte an ZWEI parallelen Rohren haengen.
 const RAIL_FITTINGS = new Set(["lattice2", "bag2", "textil2"]);
 

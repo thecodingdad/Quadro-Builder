@@ -786,7 +786,7 @@ export function initUI({ scene, model, builder }) {
     ["grp_wheels", ["multi-wheel2", "floating-wheel2", "casters2", "bearing2", "hub-cap2", "steering-lock2"],
       `<circle cx="8" cy="8" r="5.4" fill="none" stroke="currentColor" stroke-width="1.6"/>` +
       `<circle cx="8" cy="8" r="1.6" fill="currentColor"/>`],
-    ["grp_joints", ["bearing-clamp", "hole-connector4", CLAMP_ENTRY, CLIP_ENTRY, "open-connector2"],
+    ["grp_joints", ["bearing-clamp", CLAMP_ENTRY, CLIP_ENTRY, "open-connector2"],
       `<line x1="2.5" y1="6" x2="13.5" y2="6" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/>` +
       `<line x1="2.5" y1="11" x2="13.5" y2="11" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/>` +
       `<rect x="6" y="3" width="4" height="11" rx="1.4" fill="none" stroke="currentColor" stroke-width="1.3"/>`],

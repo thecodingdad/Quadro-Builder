@@ -38,7 +38,9 @@ export const PLACEABLE_FITTINGS = [...new Set([
   ...Object.keys(TUBE_FITTINGS),
   "hub-cap2",                     // am offenen Rohrende, siehe _wheelCapMounts
   "bag2",                         // zwischen zwei Rohren, siehe addBag
-  "hole-connector4",              // Lochzapfenkupplung: klemmt um ein Rohr
+  // Die Lochzapfenkupplung (hole-connector4) klemmt NICHT um ein Rohr -- wie sie
+  // wirklich sitzt, ist noch offen. Sie steht deshalb vorerst nicht zum Setzen
+  // bereit; aus Dateien wird sie weiter gelesen, gezeichnet und gezählt.
   "bearing-clamp",                // Lagerkupplung: klemmt um ein Rohr (kein eigenes QDF-Element)
   "lattice2", "textil-round2",
   "textil2",                      // Textil: wie das Gitter zwischen zwei Rohre
