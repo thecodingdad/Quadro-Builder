@@ -267,7 +267,12 @@ export function buildQDF(model) {
       const ey = [-n.stub[0], -n.stub[1], -n.stub[2]];
       const ez = [ex[1] * ey[2] - ex[2] * ey[1], ex[2] * ey[0] - ex[0] * ey[2], ex[0] * ey[1] - ex[1] * ey[0]];
       if (n.part === "hole_1") {
-        lines.push(`hole-connector4{${CONNECTOR_MAT}, ${tuple(encodeQuat(quatFromAxes(ex, ey, ez)), n.x, n.y, n.z)}, 0, 0, 11, 8, 3840, 0, 0}`);
+        // Eingelesene Klemme: ihre Ausrichtung kommt aus der Datei. Nur selbst
+        // gesetzte werden aus Stutzen und Rohr gerechnet.
+        const qh = n.partQuat && n.partQuat.length === 4
+          ? encodeQuat([n.partQuat[3], n.partQuat[0], n.partQuat[1], n.partQuat[2]])
+          : encodeQuat(quatFromAxes(ex, ey, ez));
+        lines.push(`hole-connector4{${CONNECTOR_MAT}, ${tuple(qh, n.x, n.y, n.z)}, 0, 0, 11, 8, 3840, 0, 0}`);
         stats.fittings++;
         continue;   // die Lochzapfenkupplung IST die Kupplung
       }
@@ -472,7 +477,10 @@ export function buildQDF(model) {
     // Tuchteile tragen die Platten-Materialien (Spielsack, Gitter, Rundwand);
     // alles andere die der Rohre.
     const stoff = f.kind === "bag2" || f.kind === "lattice2" || f.kind === "textil-round2";
-    const mat = f.color ? (stoff ? panelMat(f.color) : tubeMat(f.color)) : CONNECTOR_MAT;
+    // Ohne Farbe: Material 0 wie in der Datei (so stehen alle 50 Dach-Zeilen
+    // des Bestands dort). CONNECTOR_MAT waere schwarz und faerbte das Teil beim
+    // naechsten Laden ein.
+    const mat = f.color ? (stoff ? panelMat(f.color) : tubeMat(f.color)) : 0;
     // Der Spielsack wird an dem Rohr gespeichert, an dem er haengt -- unsere
     // Mitte liegt 20 cm weiter in der lokalen +Z-Richtung, also zurueckrechnen.
     let fx = f.x, fy = f.y, fz = f.z;

@@ -242,7 +242,12 @@ export function parseQDF(text, opts = {}) {
   // von ~8,67 cm zum Kupplungszentrum. Dafuer wird eine groessere Snap-
   // Toleranz (10 cm) verwendet.
   const connectorNodes = []; // Knoten, die aus einer Kupplung stammen
-  const SNAP_TOL = opts.snapTol != null ? opts.snapTol : 5;
+  // 5,5 statt 5 cm: Rohrenden, die genau eine Kupplungslaenge neben ihrer
+  // Kupplung enden (Schraegen aus gedrehten Aufbauten), lagen exakt auf der
+  // Grenze -- nach dem Runden auf Millimeter fielen sie mal drueber, mal
+  // drunter, und beim Wiedereinlesen des eigenen Exports entstand dort ein
+  // zweiter Knoten. Kleiner als das kuerzeste Rohr (10 cm) bleibt es.
+  const SNAP_TOL = opts.snapTol != null ? opts.snapTol : 5.5;
   const snapTol2 = SNAP_TOL * SNAP_TOL;
   function snapToConnector(x, y, z, create = true) {
     let best = null, bestD = snapTol2;
@@ -340,7 +345,11 @@ export function parseQDF(text, opts = {}) {
         // Wuerfel-Orientierung der Kupplung (Three-Order x,y,z,w). So sitzt der
         // Kupplungs-Wuerfel wie das echte Teil -- die Arme kommen aus den Flaechen,
         // auch bei Rampenwinkeln (30°/60°). Erste gewinnt bei Merge.
-        if (!nd.quat) {
+        // Die Identitaet nicht merken: sie dreht nichts und wuerde ein Modell
+        // nach dem eigenen Export anders aussehen lassen als davor (wir
+        // schreiben ungedrehte Kupplungen mit der Identitaet).
+        const dreht = Math.abs(q[1]) > 1e-6 || Math.abs(q[2]) > 1e-6 || Math.abs(q[3]) > 1e-6;
+        if (!nd.quat && dreht) {
           const cq = (n) => Math.round(n * 1e4) / 1e4;
           nd.quat = [cq(q[1]), cq(q[2]), cq(q[3]), cq(q[0])];
         }
@@ -462,6 +471,10 @@ export function parseQDF(text, opts = {}) {
       holeClamps.push({
         x: round(p.tuple[4] / 10), y: round(p.tuple[5] / 10), z: round(p.tuple[6] / 10),
         stub: nearestCardinal([-ey[0], -ey[1], -ey[2]]),
+        // Eigene Ausrichtung aus der Datei (Three-Reihenfolge x,y,z,w). In
+        // gedrehten Aufbauten steht die Klemme schraeg -- aus Stutzen und Rohr
+        // laesst sie sich dann nicht zurueckrechnen.
+        quat: [q[1], q[2], q[3], q[0]].map((v) => Math.round(v * 1e4) / 1e4),
       });
     } else if (FITTING_KINDS[p.name]) {
       // Anbauteile: Raeder, Radkappen, Laufrollen, Lager, Lochzapfen- und
@@ -870,6 +883,7 @@ export function parseQDF(text, opts = {}) {
     nodes.push(nd);
     nd.part = "hole_1";
     nd.stub = h.stub;
+    if (h.quat) nd.partQuat = h.quat;
     if (onTube) nd.clampOn = onTube;
   }
 
@@ -880,6 +894,7 @@ export function parseQDF(text, opts = {}) {
       if (n.c45) o.c45 = true;
       if (n.c45file) o.c45file = true;   // Winkelkupplung stand so in der Datei
       if (n.unused) o.unused = true;     // Kupplung ohne Rohr/Platte: nicht zeichnen
+      if (n.partQuat) o.partQuat = n.partQuat;   // Ausrichtung der Klemm-Kupplung
       if (n.c45body) o.c45body = true;
       if (n.c45axis) o.c45axis = n.c45axis;
       if (n.armDirs) o.armDirs = n.armDirs; // rotierte Arm-Richtungen (45-gedrehte Kupplung)
