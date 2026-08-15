@@ -11,7 +11,6 @@ const FITTING_MOUNTS = {
   "bearing2":        { at: "node", offset: 0 },   // Radlager: 5-cm-Stueck an der Kupplung
   "casters2":        { at: "node", offset: 0 },   // Laufrolle; der Adapter kommt mit
   "open-connector2": { at: "node", offset: 0 },
-  "hole-connector4": { at: "node", offset: 5 },   // 50 mm neben der Kupplung
   "steering-lock2":  { at: "node", offset: 0 },   // Multirad-Arretierung, sitzt am Ende des Stutzens
   "bag2":            { at: "tube", offset: 20 },  // 200 mm vom Rohrende
 };
@@ -39,6 +38,7 @@ export const PLACEABLE_FITTINGS = [...new Set([
   ...Object.keys(FITTING_MOUNTS),
   ...Object.keys(TUBE_FITTINGS),
   "hub-cap2",                     // am offenen Rohrende, siehe _wheelCapMounts
+  "hole-connector4",              // Lochzapfenkupplung: klemmt um ein Rohr
   "bearing-clamp",                // Lagerkupplung: klemmt um ein Rohr (kein eigenes QDF-Element)
   "lattice2", "textil-round2", "roof-large2",
 ])];

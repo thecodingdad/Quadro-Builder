@@ -906,7 +906,6 @@ export class Builder {
     // Zeiger zeigt dort eine Hand, auch wenn er den Ankerpunkt knapp verfehlt.
     this._fittingMountNodes = new Set();
     if (this.fittingKind === "lattice2") return;      // Gitter laeuft ueber zwei Rohre
-    if (TUBE_CLAMP_PARTS[this.fittingKind]) return;   // Klemm-Kupplung sitzt frei auf dem Rohr
     // Ist eine Kupplung gewaehlt, gelten nur ihre Stellen -- bei Teilen auf einem
     // Rohr nur die Rohre, die an ihr haengen. Ohne Auswahl sind alle zu sehen.
     const sel = this.selectedNodeId;
@@ -934,9 +933,39 @@ export class Builder {
       if (!frei(m)) continue;
       this.scene.addHandle(m.pos, { fittingMount: m }, "dir");
     }
+    // Klemm-Kupplungen (Lochzapfen-, Lagerkupplung) klemmen an einer beliebigen
+    // Stelle -- ein Punkt je Rohr zeigt, welche Rohre in Frage kommen.
+    if (TUBE_CLAMP_PARTS[this.fittingKind]) {
+      for (const m of this._tubeMidpoints(sel, amKnoten)) {
+        this.scene.addHandle(m.pos, { clampTube: m }, "dir");
+      }
+    }
+  }
+
+  /** Mitte jedes echten Rohrs -- Vorschlagspunkte fuer Teile, die dort klemmen. */
+  _tubeMidpoints(sel, amKnoten) {
+    const out = [];
+    for (const t of this.model.tubes.values()) {
+      if (t.arm || t.link || t.bow) continue;
+      if (sel && !amKnoten(t.id)) continue;
+      const a = this.model.nodes.get(t.a), b = this.model.nodes.get(t.b);
+      if (!a || !b) continue;
+      out.push({ tubeId: t.id, pos: [(a.x + b.x) / 2, (a.y + b.y) / 2, (a.z + b.z) / 2] });
+    }
+    return out;
   }
 
   _buildClampHandles() {
+    // Ein Punkt je Rohr zeigt, wo sich ein Verbinder setzen laesst; ist eine
+    // Kupplung gewaehlt, nur an ihren Rohren.
+    const sel = this.selectedNodeId;
+    const amKnoten = (tubeId) => {
+      const tb = this.model.tubes.get(tubeId);
+      return !!tb && (tb.a === sel || tb.b === sel);
+    };
+    for (const m of this._tubeMidpoints(sel, amKnoten)) {
+      this.scene.addHandle(m.pos, { clampTube: m }, "dir");
+    }
     for (const c of this.model.clamps.values()) {
       if (!c.dir || !c.off) continue;
       const center = [c.x + c.off[0] / 2, c.y + c.off[1] / 2, c.z + c.off[2] / 2];
@@ -1295,6 +1324,8 @@ export class Builder {
     // Grüner Punkt in der leeren Öffnung? -> zweite parallele Tube setzen.
     const h = this.scene.pickHandle(e.clientX, e.clientY);
     if (h && h.data.clampOpening) { this._placeSecondTube(h.data.center, h.data.dir); return; }
+    if (h && h.data.clampTube) { this._placeClampOnTube(h.data.clampTube.tubeId, {
+      x: h.data.clampTube.pos[0], y: h.data.clampTube.pos[1] + 3, z: h.data.clampTube.pos[2] }); return; }
     const pick = this.scene.pickBuild(e.clientX, e.clientY);
     if (!pick) return;
     if (pick.data.kind === "clamp") {
@@ -1421,9 +1452,20 @@ export class Builder {
    * Ein Klick auf eine gesetzte Kupplung nimmt sie weg.
    */
   _clickTubeClamp(e) {
-    const pick = this.scene.pickForDelete(e.clientX, e.clientY);
-    if (!pick) return;
     const part = TUBE_CLAMP_PARTS[this.fittingKind];
+    const h = this.scene.pickHandle(e.clientX, e.clientY);
+    if (h && h.data && h.data.clampTube) {
+      const m = h.data.clampTube;
+      let added = null;
+      this.recordHistory(() => {
+        added = this.model.addTubeClamp(m.tubeId, m.pos, part, geometry().connectorSize);
+      });
+      if (!added) this.onNotice(t("notice_fitting_exists"));
+      this.refresh();
+      return;
+    }
+    const pick = this.scene.pickForDelete(e.clientX, e.clientY);
+    if (!pick) { this._pickFittingNode(null); return; }
     if (pick.data.kind === "node") {
       const n = this.model.nodes.get(pick.data.id);
       if (n && n.clampOn) {
