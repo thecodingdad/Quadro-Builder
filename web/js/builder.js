@@ -277,6 +277,26 @@ export class Builder {
     this.onHistoryChange();
   }
 
+  /** Ein echtes Rohr -- keine Arm-Huelse und keine Doppelrohr-Verbindung. */
+  _realTube(id) {
+    const t = this.model.tubes.get(id);
+    return !!t && !t.arm && !t.link;
+  }
+
+  /**
+   * Taugt dieses Rohr als Tragrohr fuer die gewaehlte Platte bzw. das Gitter?
+   * Ist schon eines gewaehlt, zaehlen nur noch die hervorgehobenen Gegenrohre --
+   * die stecken in this.highlight und kommen hier gar nicht erst an.
+   */
+  _railUsable(id, lattice = false) {
+    const t = this.model.tubes.get(id);
+    if (!t || t.arm || t.link || t.bow) return false;
+    if (this.panelRail) return this.highlight ? this.highlight.has(id) : false;
+    if (lattice) return this.model.latticePartners(id).length > 0;
+    const dims = this._panelDims();
+    return !!dims && this.model.panelPartners(id, dims).length > 0;
+  }
+
   /** Laesst sich an dieser Stelle ein Ziehen der Auswahl beginnen? */
   _isMoveHandle(id) {
     return this.mode === "select" && this.selection.size > 0 && this.selection.has(id);
@@ -1113,15 +1133,14 @@ export class Builder {
       else if (h) obj = h.object;
       else obj = p && p.data.kind === "node" && this._isBuildable(p.data.id) ? p.object : null;
     } else if (this.mode === "panel") {
-      // Anklickbar sind Rohre (Tragrohr waehlen) und liegende Platten (umlegen).
+      // Hand nur, wo die gewaehlte Platte auch hinkann: auf einem Tragrohr mit
+      // passendem Gegenrohr, danach nur noch auf den hervorgehobenen Gegenrohren.
+      // Eine liegende Platte laesst sich immer umlegen.
       const p = (this.panelRail && this.highlight && this.scene.pickAmong(x, y, this.highlight))
         || this.scene.pickForDelete(x, y);
       const kind = p && p.data.kind;
-      if (kind === "panel") obj = p.object;
-      else if (kind === "tube") {
-        const tb = this.model.tubes.get(p.data.id);
-        obj = tb && !tb.arm && !tb.link && !tb.bow ? p.object : null;
-      }
+      if (kind === "panel") obj = this.panelRail ? null : p.object;
+      else if (kind === "tube") obj = this._railUsable(p.data.id) ? p.object : null;
     } else if (this.mode === "slide") {
       obj = handle();                            // nur die Feld-Handles
     } else if (this.mode === "fitting" && this.fittingKind === "lattice2") {
@@ -1129,11 +1148,8 @@ export class Builder {
       const p = (this.panelRail && this.highlight && this.scene.pickAmong(x, y, this.highlight))
         || this.scene.pickForDelete(x, y);
       const kind = p && p.data.kind;
-      if (kind === "fitting") obj = this.model.fittings.get(p.data.id)?.kind === "lattice2" ? p.object : null;
-      else if (kind === "tube") {
-        const tb = this.model.tubes.get(p.data.id);
-        obj = tb && !tb.arm && !tb.link && !tb.bow ? p.object : null;
-      }
+      if (kind === "fitting") obj = null;   // ein Gitter laesst sich nicht drehen
+      else if (kind === "tube") obj = this._railUsable(p.data.id, true) ? p.object : null;
     } else if (this.mode === "fitting"
         && (TUBE_CLAMP_PARTS[this.fittingKind] || TUBE_FITTINGS[this.fittingKind])) {
       // Teile auf Rohr/Klemme: Ankerpunkte zuerst, dann Rohre, gesetzte Teile
@@ -1152,7 +1168,8 @@ export class Builder {
           obj = nd && (nd.clampOn || (this._fittingMountNodes && this._fittingMountNodes.has(nd.id)))
             ? p.object : null;
         } else if (kind === "fitting") {
-          obj = this.model.fittings.get(p.data.id)?.kind === this.fittingKind ? p.object : null;
+          obj = this.model.fittings.get(p.data.id)?.kind === this.fittingKind
+            && this.model.canRotateFitting(p.data.id) ? p.object : null;
         }
         // Rohr hinter einem fremden Anbauteil: dorthin laesst sich trotzdem setzen.
         if (!obj && TUBE_FITTINGS[this.fittingKind]) {
@@ -1165,12 +1182,15 @@ export class Builder {
       const h = this.scene.pickHandle(x, y);
       const p = this.scene.pickForDelete(x, y);
       if (h && (!p || h.distance <= p.distance)) obj = h.object;
-      else if (p && p.data.kind === "fitting") obj = p.object;
+      else if (p && p.data.kind === "fitting" && this.model.canRotateFitting(p.data.id)) obj = p.object;
       else obj = null;
     } else if (this.mode === "clamp") {
-      obj = handle() || build(["tube", "clamp"])?.object || null;
+      const p = build(["tube", "clamp"]);
+      const echt = p && (p.data.kind === "clamp" || this._realTube(p.data.id));
+      obj = handle() || (echt ? p.object : null);
     } else if (this.mode === "reinforce") {
-      obj = build(["tube"])?.object || null;
+      const p = build(["tube"]);
+      obj = p && this._realTube(p.data.id) ? p.object : null;
     } else if (this.mode === "assembly") {
       // Nur ansehen -- aber die Hand zeigt, dass sich ein Teil nachschlagen laesst.
       obj = this.scene.pickForDelete(x, y)?.object || null;

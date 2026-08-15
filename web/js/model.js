@@ -2,7 +2,7 @@
 // Bewusst ohne Three.js-Abhaengigkeit, damit es testbar und Backend-tauglich bleibt.
 
 import { MERGE_EPS, FORMAT_VERSION, DIAGONAL_SNAP_TOL } from "./config.js";
-import { round2 as round, quatFromXAxis, quatFromBasis } from "./util.js";
+import { round2 as round, quatFromXAxis, quatFromBasis, xAxisOf } from "./util.js";
 
 // Wohin ein Anbauteil gehoert, gemessen an den 799 Vorkommen in den Dateien des
 // Herstellers: `at` ist der Anker (Kupplung oder Rohr), `offset` der Abstand in
@@ -506,43 +506,61 @@ export class BuildModel {
    * Rohr) bleiben, wo sie sind.
    */
   rotateFitting(id) {
+    const step = this._nextFittingMount(id);
+    if (!step) return false;
+    const { f, mount } = step;
+    const quat = quatFromXAxis(mount.dir);
+    // Die Laufrolle sitzt auf ihrem Adapter -- sie dreht mit.
+    const rider = f.kind === "adapter2" || f.kind === "casters2"
+      ? [...this.fittings.values()].find((o) => o.id !== f.id
+          && (o.kind === "casters2" || o.kind === "adapter2")
+          && Math.hypot(o.x - f.x, o.y - f.y, o.z - f.z) < 2)
+      : null;
+    for (const part of [f, rider]) {
+      if (!part) continue;
+      part.x = round(mount.pos[0]); part.y = round(mount.pos[1]); part.z = round(mount.pos[2]);
+      part.quat = quat.slice();
+    }
+    return true;
+  }
+
+  /** Laesst sich dieses Anbauteil weiterdrehen? (fuer Zeiger und Meldung) */
+  canRotateFitting(id) {
+    return !!this._nextFittingMount(id);
+  }
+
+  // Naechste freie Stelle desselben Teils an derselben Kupplung -- oder null.
+  _nextFittingMount(id) {
     const f = this.fittings.get(id);
-    if (!f || !ROTATABLE_FITTINGS.has(f.kind)) return false;
+    if (!f || !ROTATABLE_FITTINGS.has(f.kind)) return null;
     let anchor = null, nd = 16;
     for (const n of this.nodes.values()) {
       const d = Math.hypot(n.x - f.x, n.y - f.y, n.z - f.z);
       if (d < nd) { nd = d; anchor = n; }
     }
-    if (!anchor) return false;
+    if (!anchor) return null;
     const mounts = this.fittingMounts(f.kind).filter((m) => m.nodeId === anchor.id);
-    if (mounts.length < 2) return false;
-    const at = (m) => Math.hypot(m.pos[0] - f.x, m.pos[1] - f.y, m.pos[2] - f.z);
-    let cur = 0, best = Infinity;
-    mounts.forEach((m, i) => { const d = at(m); if (d < best) { best = d; cur = i; } });
-    // Belegte Stellen ueberspringen -- dort steckt schon dasselbe Teil.
+    if (mounts.length < 2) return null;
+    // Teile, die GENAU auf der Kupplung sitzen (Radlager, Arretierung), haben an
+    // jeder Stelle dieselbe Position -- unterscheiden lassen sie sich nur an
+    // ihrer Achse. Deshalb zaehlt Ort UND Richtung.
+    const axis = f.quat ? xAxisOf(f.quat) : [1, 0, 0];
+    const gleich = (m, x, y, z, ax) =>
+      Math.hypot(m.pos[0] - x, m.pos[1] - y, m.pos[2] - z) < 2
+      && dot3(m.dir, ax) > 0.9;
+    let cur = mounts.findIndex((m) => gleich(m, f.x, f.y, f.z, axis));
+    if (cur < 0) cur = 0;
     for (let k = 1; k <= mounts.length; k++) {
       const m = mounts[(cur + k) % mounts.length];
-      if (at(m) < 0.01) continue;
+      if (gleich(m, f.x, f.y, f.z, axis)) continue;
       let taken = false;
       for (const o of this.fittings.values()) {
         if (o.id === f.id || o.kind !== f.kind) continue;
-        if (Math.hypot(o.x - m.pos[0], o.y - m.pos[1], o.z - m.pos[2]) < 2) { taken = true; break; }
+        if (gleich(m, o.x, o.y, o.z, o.quat ? xAxisOf(o.quat) : [1, 0, 0])) { taken = true; break; }
       }
-      if (taken) continue;
-      const quat = quatFromXAxis(m.dir);
-      // Der Adapter unter der Laufrolle dreht mit.
-      const rider = f.kind === "casters2"
-        ? [...this.fittings.values()].find((o) => o.kind === "adapter2"
-            && Math.hypot(o.x - f.x, o.y - f.y, o.z - f.z) < 2)
-        : null;
-      for (const part of [f, rider]) {
-        if (!part) continue;
-        part.x = round(m.pos[0]); part.y = round(m.pos[1]); part.z = round(m.pos[2]);
-        part.quat = quat.slice();
-      }
-      return true;
+      if (!taken) return { f, mount: m };
     }
-    return false;
+    return null;
   }
 
   /**
