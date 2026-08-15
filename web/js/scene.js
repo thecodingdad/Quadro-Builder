@@ -62,6 +62,8 @@ const STRAIGHT_SLIDE_DROP = new THREE.Vector3(0, -80, 120);
 // Dahinter sitzt der flach liegende Auslauf -- käme der Bogen schräg an, gäbe
 // es dort einen Knick.
 const CURVED_SLIDE_EXIT = new THREE.Vector3(1, 0, 0);
+// Höhe der Rutschbahn des Auslaufs über seinem Bezugspunkt (halbe Kupplung).
+const SLIDE_END_LIFT = 2.5;
 // Flaechige Anbauteile verschwinden im Verstaerken- und Kollisions-Modus, wie
 // Platten und Netze auch.
 const FLAT_FITTINGS = new Set(["lattice2", "textil-round2", "roof-large2"]);
@@ -1121,12 +1123,12 @@ export class SceneManager {
   // Versatz, gleicher Punkt = sauberer Uebergang. Der Auslauf faellt von hier auf
   // Bodenhoehe ab und flacht aus.
   _slideEndConnectPoint(se) {
-    // Anschlusspunkt = die Lage aus der Datei, ohne Versatz. Die frueheren
-    // 12 cm Anhebung glichen aus, dass der Auslauf schraeg gezeichnet wurde und
-    // erst am Ende auf seine Hoehe kam. Jetzt liegt er flach auf genau dieser
-    // Hoehe -- mit dem Versatz haetten Auslauf UND der Koerper davor 12 cm zu
-    // hoch gehangen.
-    return new THREE.Vector3(se.x, se.y, se.z);
+    // Anschlusspunkt = Lage aus der Datei plus die halbe Kupplungslänge: die
+    // Rutschbahn des Auslaufs liegt so hoch über seinem Bezugspunkt. Die früher
+    // hier stehenden 12 cm glichen aus, dass der Auslauf schräg gezeichnet
+    // wurde und erst am Ende auf seine Höhe kam -- seit er flach liegt, hingen
+    // Auslauf UND der Körper davor dadurch zu hoch.
+    return new THREE.Vector3(se.x, se.y + SLIDE_END_LIFT, se.z);
   }
 
   // Legt einen Rutschenkoerper als EINE durchgehende U-Rinne (Boden + 2 hochgezogene
