@@ -269,15 +269,18 @@ export function parseQDF(text, opts = {}) {
     return best;
   }
   function diagonalEndNode(x, y, z) {
-    // Sitzt an dieser Position bereits eine bekannte (importierte) Kupplung?
-    // Dann ist das eine normale, 45-Grad-gedrehte Kupplung – KEIN C45-Adapter.
     const existing = snapToConnector(round(x), round(y), round(z), false);
-    if (existing) return existing;
     // Liegt das Rohrende in Arm-Reichweite eines connector45_2-Eck-Knotens?
-    // Dann sitzt hier der C45-Adapter-Koerper (c45body).
+    // Dann sitzt hier der C45-Adapter-Koerper (c45body) -- AUCH wenn dort schon
+    // eine Kupplung steht: die Herstellersoftware schreibt an das freie Ende
+    // einer Schraege eine connector3-Zeile, die Winkelkupplung steckt trotzdem
+    // dort (Basic II_Auto mit Garage: 2 Enden mit Zeile, 2 ohne, alle vier sind
+    // Winkelkupplungen). Nur eine ECK-Kupplung selbst wird nicht umgedeutet.
     const corner = nearestC45Corner(x, y, z);
-    if (!corner) return snapToConnector(round(x), round(y), round(z));
-    const body = nodeAt(round(x), round(y), round(z)); // Adapter-Koerper am Rohrende
+    if (!corner || (existing && existing._c45corner)) {
+      return existing || snapToConnector(round(x), round(y), round(z));
+    }
+    const body = existing || nodeAt(round(x), round(y), round(z)); // Adapter-Koerper am Rohrende
     body.c45 = true;
     body.c45body = true;
     if (!connectorNodes.includes(body)) connectorNodes.push(body); // L3-fix: c45body als Snap-Ziel
