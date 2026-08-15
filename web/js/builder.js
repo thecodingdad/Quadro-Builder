@@ -738,24 +738,30 @@ export class Builder {
         this.scene.addHandle(center, { clampOpening: true, center, dir: c.dir }, "dir");
       }
     }
-    const node = this.selectedNodeId ? this.model.nodes.get(this.selectedNodeId) : null;
-    if (!node) return;
+    // Ohne gewaehlte Kupplung zeigen ALLE ihre Ankerpunkte -- so sieht man auf
+    // einen Blick, wo sich weiterbauen laesst. Ein Klick auf eine Kupplung
+    // waehlt sie, danach sind nur noch ihre Punkte zu sehen.
+    const nodes = this.selectedNodeId
+      ? [this.model.nodes.get(this.selectedNodeId)].filter(Boolean)
+      : [...this.model.nodes.values()];
+    for (const node of nodes) this._addBuildHandles(node, gap);
+  }
+
+  /** Ankerpunkte einer einzelnen Kupplung (Bau-Modus). */
+  _addBuildHandles(node, gap) {
     // Die 45-Grad-Winkelkupplung gibt es nur einarmig: Huelse auf das Rohrende,
     // ein Arm in die Schraege. Von ihr aus laesst sich nichts weiterbauen.
     if (node.c45body) return;
 
     // Rotierte Kupplung (armDirs aus QDF-Import): eigene Arm-Richtungen verwenden,
-    // kein C45-Adapter noetig – die Kupplung ist bereits korrekt ausgerichtet.
+    // kein C45-Adapter noetig - die Kupplung ist bereits korrekt ausgerichtet.
     const hasArmDirs = node.armDirs && node.armDirs.length > 0;
-    // Schräg-Konnektor: liegt auf einer Schräge (hat schon ein Diagonalrohr) =
-    // ist bereits 45-Grad gedreht. Bietet automatisch Diagonal-Richtungen an und
-    // baut OHNE neuen C45-Adapter weiter (snappt an vorhandene Schräg-Kupplungen).
+    // Schraeg-Konnektor: liegt auf einer Schraege (hat schon ein Diagonalrohr) =
+    // ist bereits 45-Grad gedreht.
     const isSlope = !hasArmDirs && this._hasDiagonalTube(node);
     const occupied = this._occupiedDirs(node);
     const useDiag = !hasArmDirs && (this.diagonal || isSlope);
     const isC45 = useDiag && !isSlope; // C45-Adapter nur an einer NICHT-schraegen Kupplung
-    // Schräg-Konnektor: nur seine eigene gedrehte 90°-Arm-Basis (Schräge + Quer
-    // in der Ebene + die zwei Kardinalen senkrecht dazu), NICHT beliebige Diagonalen.
     // Lochzapfenkupplung: genau EIN offenes Ende, dorthin geht das Rohr. Die
     // Lagerkupplung traegt dagegen eine ganze Kupplung -- von der geht es in
     // jede freie Richtung weiter.
@@ -766,9 +772,8 @@ export class Builder {
       : (this.diagonal ? DIAGONAL_DIRECTIONS : DIRECTIONS);
     for (const d of dirs) {
       if (occupied.has(d.name)) continue;
-      // Unter dem Boden wird nicht gebaut -> dort auch keinen Ankerpunkt zeigen.
       if (this._targetBelowGround(node, d.vec)) continue;
-      // C45-Schräge nur anbieten, wenn ein freier Arm fuer die Winkelkupplung da ist.
+      // C45-Schraege nur anbieten, wenn ein freier Arm fuer die Winkelkupplung da ist.
       if (isC45 && !this._diagSleeveAxis(node, d.vec)) continue;
       const isCardDir = Math.max(Math.abs(d.vec[0]), Math.abs(d.vec[1]), Math.abs(d.vec[2])) > DIR_ALIGN_TOL;
       const hg = (useDiag && !isCardDir) ? gap * 1.6 : gap;
@@ -784,8 +789,6 @@ export class Builder {
     }
   }
 
-  // Wuerde ein Anbau in dieser Richtung unter der Nullebene landen? Gerechnet
-  // mit dem gerade gewaehlten Rohr -- die endgueltige Pruefung sitzt im Modell.
   _targetBelowGround(node, vec) {
     if (vec[1] >= 0) return false;
     const tube = getTube(this.tubeId);
