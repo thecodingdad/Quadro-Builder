@@ -589,7 +589,11 @@ export function parseQDF(text, opts = {}) {
       if (!nodesFound) { skipped[p.name] = (skipped[p.name] || 0) + 1; continue; }
       const mat = typeof p.rest[0] === "number" ? p.rest[0] : null;
       panels.push({ id: "p" + seq++, nodes: nodesFound.map((n) => n.id), panelId,
-        color: materials.get(mat) || FALLBACK_COLOR, side: sideFromQuat(q, nodesFound) });
+        color: materials.get(mat) || FALLBACK_COLOR, side: sideFromQuat(q, nodesFound),
+        // Eigene Lage wie beim Rohr: auf Schraegen liegt die Platte in der Datei
+        // bis zu 1,2 cm anders als aus dem Rohrpaar gerechnet.
+        geom: { quat: [q[1], q[2], q[3], q[0]].map((v) => Math.round(v * 1e4) / 1e4),
+          p: [round(cx), round(cy), round(cz)], w: round(dimW), h: round(dimH) } });
 
     } else if (p.name === "textil2") {
       // Netz/Stoff: gleiche Struktur wie panel2 (Zentrum + Maße + Quat). Maße z.B.

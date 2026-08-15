@@ -437,6 +437,14 @@ export function buildQDF(model) {
       }
       continue;
     }
+    // Eingelesene Platte: sie liegt da, wo die Datei sie hinschreibt. Auf
+    // Schraegen weicht die aus dem Rohrpaar gerechnete Mitte um bis zu 1,2 cm ab.
+    if (p.geom && p.geom.p && p.geom.quat) {
+      const g = p.geom;
+      lines.push(`panel2{${panelMat(p.color)}, ${tuple(encodeQuat([g.quat[3], g.quat[0], g.quat[1], g.quat[2]]), g.p[0], g.p[1], g.p[2])}, 1, ${mm(g.h)}, 0., ${mm(g.w)}, 0., 0}`);
+      stats.panels++;
+      continue;
+    }
     const def = getPanel(p.panelId);
     const line = rectLine("panel2", model.panelCorners(p), panelMat(p.color), def ? [def.w, def.h] : null, p.side);
     if (line) { lines.push(line); stats.panels++; }

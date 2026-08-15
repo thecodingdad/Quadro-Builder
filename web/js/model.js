@@ -483,6 +483,9 @@ export class BuildModel {
     const p = this.panels.get(id) || this.textiles.get(id);
     if (!p) return null;
     p.side = (p.side || 1) < 0 ? 1 : -1;
+    // Die eigene Lage aus der Datei kennt die alte Seite -- ab jetzt rechnet
+    // sich die Platte wieder aus ihrem Rohrpaar.
+    delete p.geom;
     return p.side;
   }
 
@@ -617,7 +620,9 @@ export class BuildModel {
     const branch = this._branchFrom(nodeId).map((n) => ({ n, p: turn([n.x, n.y, n.z]) }));
     if (branch.some((e) => this.isBelowGround(e.p[1]))) return false;
     for (const e of branch) { e.n.x = round(e.p[0]); e.n.y = round(e.p[1]); e.n.z = round(e.p[2]); }
-    this._moveTubeGeom(new Set(branch.map((e) => e.n.id)));
+    const gedreht = new Set(branch.map((e) => e.n.id));
+    this._moveTubeGeom(gedreht);
+    this._movePanelGeom(gedreht);
     const st = node.stub;
     const c = cross3(u, st), d = dot3(u, st) * (1 - co);
     const ns = [st[0] * co + c[0] * si + u[0] * d, st[1] * co + c[1] * si + u[1] * d, st[2] * co + c[2] * si + u[2] * d];
@@ -982,6 +987,7 @@ export class BuildModel {
       moved.add(n.id);
     }
     this._moveTubeGeom(moved, d);
+    this._movePanelGeom(moved, d);
     node.clampOn.t = round(g.t);
     return true;
   }
@@ -1561,6 +1567,30 @@ export class BuildModel {
         s.hook = [round(s.hook[0] + dx), round(s.hook[1] + dy), round(s.hook[2] + dz)];
     }
     this._moveTubeGeom(tg.nodes, [dx, dy, dz]);
+    this._movePanelGeom(tg.nodes, [dx, dy, dz]);
+  }
+
+  /**
+   * Eigene Lage der Platten nach einer Knotenbewegung nachziehen -- gleiche
+   * Regel wie bei den Rohren: wandern alle vier Ecken mit, wandert sie mit,
+   * sonst gilt sie nicht mehr.
+   */
+  _movePanelGeom(movedIds, delta = null) {
+    for (const p of this.panels.values()) {
+      if (!p.geom) continue;
+      const ecken = this.panelCorners(p);
+      if (!ecken) { delete p.geom; continue; }
+      const traeger = [this.tubes.get(p.a), this.tubes.get(p.b)].filter(Boolean);
+      const ids = traeger.flatMap((t) => [t.a, t.b]);
+      const bewegt = ids.filter((id) => movedIds.has(id)).length;
+      if (!bewegt) continue;
+      if (bewegt === ids.length && delta) {
+        p.geom = { ...p.geom, p: [round(p.geom.p[0] + delta[0]),
+          round(p.geom.p[1] + delta[1]), round(p.geom.p[2] + delta[2])] };
+      } else {
+        delete p.geom;
+      }
+    }
   }
 
   /**
@@ -1943,6 +1973,7 @@ export class BuildModel {
     const side = p.side < 0 ? -1 : 1;
     if (p.a && p.b) {
       const r = { id: p.id, a: p.a, b: p.b, t0: p.t0 || 0, len: p.len || 0, color: p.color, side };
+      if (p.geom) r.geom = p.geom;
       if (p.pool) r.pool = p.pool;
       if (p.poolPart) r.poolPart = true;
       return r;
@@ -2045,6 +2076,7 @@ export class BuildModel {
       panels: [...this.panels.values()].map((p) => {
         const o = { id: p.id, a: p.a, b: p.b, t0: round(p.t0), len: round(p.len), panelId: p.panelId, color: p.color };
         if ((p.side || 1) < 0) o.side = -1;   // Standard ist oben/aussen
+        if (p.geom) o.geom = p.geom;          // eigene Lage aus der Datei
         if (p.pool) o.pool = p.pool;          // Original-Zeile des Baellebads
         if (p.poolPart) o.poolPart = true;    // Wand/Boden eines Baellebads
         return o;
@@ -2121,6 +2153,7 @@ export class BuildModel {
       const rec = this._panelRecord(p);
       if (!rec) continue;
       rec.panelId = p.panelId;
+      if (p.geom) rec.geom = p.geom;
       if (p.pool) rec.pool = p.pool;
       if (p.poolPart) rec.poolPart = true;
       this.panels.set(p.id, rec);
