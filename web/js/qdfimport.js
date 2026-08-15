@@ -59,7 +59,7 @@ const FITTING_KINDS = {
   "multi-wheel2":    { renderBase: 4 },   // Speichenrad
   "floating-wheel2": { renderBase: 4 },   // schwarzes Laufrad
   "hub-cap2":        { renderBase: 4 },   // Nabenkappe
-  "casters2":        { renderBase: 4 },   // Lenkrolle
+  "casters2":        { renderBase: 4 },   // Laufrolle
   "steering-lock2":  { renderBase: 4 },   // Lenkarretierung
   "adapter2":        { renderBase: 4 },
   "textil-round2":   { renderBase: 5 },   // gebogene Wand (Viertelzylinder)
@@ -434,7 +434,7 @@ export function parseQDF(text, opts = {}) {
         stub: nearestCardinal([-ey[0], -ey[1], -ey[2]]),
       });
     } else if (FITTING_KINDS[p.name]) {
-      // Anbauteile: Raeder, Radkappen, Lenkrollen, Lager, Lochzapfen- und
+      // Anbauteile: Raeder, Radkappen, Laufrollen, Lager, Lochzapfen- und
       // offene Kupplungen, Rundwaende, grosse Daecher, Gitter, Saecke. Alle
       // tragen Punkt + Ausrichtung; einige zusaetzlich Masse oder eine
       // Arm-Maske. Sie haengen am Geruest, greifen aber nicht in Knoten und

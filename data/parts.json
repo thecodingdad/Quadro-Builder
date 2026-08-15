@@ -618,11 +618,11 @@
     {
       "id": "caster",
       "code": "",
-      "name": "Lenkrolle",
+      "name": "Laufrolle",
       "name_en": "Caster",
       "price": 0,
       "qdf": "casters2",
-      "note": "haengt unter einer Kupplung · Preis noch offen"
+      "note": "sitzt auf ihrem Adapter an einer Kupplung · Preis noch offen"
     },
     {
       "id": "steering_lock",

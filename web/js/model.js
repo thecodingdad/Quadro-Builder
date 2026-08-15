@@ -139,7 +139,7 @@ export class BuildModel {
     this.textiles = new Map(); // id -> { id, nodes:[4 ids], w, h, color } (Netz/Stoff, textil2)
     this.slides = new Map();   // id -> { id, x, y, z, dir, kind } (Rutsche, slide*/roof2, dekorativ)
     // Anbauteile: alles, was mit Punkt und Ausrichtung am Geruest haengt --
-    // Raeder, Radkappen, Lenkrollen, Lager, Lochzapfen- und offene Kupplungen,
+    // Raeder, Radkappen, Laufrollen, Lager, Lochzapfen- und offene Kupplungen,
     // Rundwaende, grosse Daecher, Gitter, Saecke.
     // id -> { id, kind, x, y, z, quat, color, w?, h?, mask? }
     this.fittings = new Map();
@@ -779,7 +779,7 @@ export class BuildModel {
   }
 
   // An der Kupplung: jede kardinale Richtung ohne Rohr, nicht unter den Boden.
-  // Die Lenkrolle haengt immer nach unten, sie kennt nur diese eine Stelle.
+  // Die Laufrolle haengt immer nach unten, sie kennt nur diese eine Stelle.
   _fittingNodeMounts(spec) {
     const out = [];
     for (const n of this.nodes.values()) {
