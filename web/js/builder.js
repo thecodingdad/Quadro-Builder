@@ -483,7 +483,6 @@ export class Builder {
   suggestionCount() { return this.model.reinforcementSuggestions().size; }
 
   // Anzahl der Rohre, die sich mit einem anderen ueberlagern.
-  collisionCount() { return this.model.collisions().size; }
 
   // Rohr fuer eine Schraege: die in der Toolbar gewaehlte Laenge. Nur wenn dort
   // ein Bogenrohr steht (keine gerade Laenge), greift der Katalog-Standard.
@@ -713,11 +712,10 @@ export class Builder {
     const reinforce = this.mode === "reinforce";
     // Kollisions-Modus: immer ein Set (auch leeres), damit die Szene den Modus
     // erkennt und die uebrigen Rohre grau zeichnet.
-    const collide = this.mode === "collision" ? this.model.collisions() : null;
     const selected = (this.mode === "select" || this.mode === "assembly") && this.selection.size
       ? this.selection : null;
     this.scene.renderModel(this.model, this.selectedNodeId,
-      { labelFor, slideNameFor, labelIds, soloId, soloLabel, assembly, suggest, reinforce, collide,
+      { labelFor, slideNameFor, labelIds, soloId, soloLabel, assembly, suggest, reinforce,
         hintDim: this.showHints,
         selected, highlight: this.highlight });
     this._buildHandles();

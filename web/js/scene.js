@@ -1538,17 +1538,6 @@ export class SceneManager {
     return this._materials["tubeGray"];
   }
 
-  // Kollisions-Modus: sich ueberlagernde Rohre leuchtend rot.
-  _tubeCollision() {
-    if (!this._materials["tubeCollision"]) {
-      this._materials["tubeCollision"] = new THREE.MeshStandardMaterial({
-        color: new THREE.Color(0xe0342b), roughness: 0.35, metalness: 0.1,
-        emissive: new THREE.Color(0x5a0400),
-      });
-    }
-    return this._materials["tubeCollision"];
-  }
-
   // Reinforce-Modus: Rohre, die bereits verstärkt sind (blau-metallic).
   _tubeReinforceActive() {
     if (!this._materials["tubeReinforceActive"]) {
@@ -1853,9 +1842,7 @@ export class SceneManager {
     const reinforce = opts.reinforce || false;
     // Kollisions-Modus: betroffene Rohre rot, alle anderen grau. Platten und
     // Netze bleiben aussen vor, damit die Ueberlagerungen sichtbar sind.
-    const collide = opts.collide || null;
-    const collision = !!collide;
-    const hideFlat = reinforce || collision;
+    const hideFlat = reinforce;
     const cs = geometry().connectorSize;
     // Echte Kupplungs-Arme (aus variant2 importiert, node.arms): kurze Stutzen
     // mit Arm-Durchmesser (~42 mm). Offene Arme ragen heraus; von Rohren belegte
@@ -2122,9 +2109,8 @@ export class SceneManager {
       if (bowCurve) {
         const bowMat = st === "future" ? this._ghostMaterial()
           : st === "current" ? this._tubeHighlight(t.color)
-          : (collide && collide.has(t.id)) ? this._tubeCollision()
           : (suggest && suggest.has(t.id)) ? this._tubeSuggest()
-          : (reinforce || collision) ? this._tubeGray()
+          : reinforce ? this._tubeGray()
           : (asm && st === "done") ? this._fadedMaterial(colorHex(t.color))
           : this._tubeMaterial(t.color);
         const bowFinalMat = matFor(t.id, bowMat);
@@ -2169,10 +2155,9 @@ export class SceneManager {
         : geo;
       const mat = st === "future" ? this._ghostMaterial()
         : st === "current" ? this._tubeHighlight(t.color)
-        : (collide && collide.has(t.id)) ? this._tubeCollision()
         : isReinforceActive ? this._tubeReinforceActive()
         : (suggest && suggest.has(t.id)) ? this._tubeSuggest()
-        : (reinforce || collision) ? this._tubeGray()
+        : reinforce ? this._tubeGray()
         : (asm && st === "done") ? this._fadedMaterial(colorHex(t.color))
         : this._tubeMaterial(t.color);
       const dir = vb.clone().sub(va).normalize();

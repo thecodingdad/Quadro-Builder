@@ -355,14 +355,6 @@ export function initUI({ scene, model, builder }) {
     syncDeleteButton();
   });
   $("mode-reinforce").addEventListener("click", () => setMode(builder.mode === "reinforce" ? "select" : "reinforce"));
-  $("mode-collision").addEventListener("click", () => {
-    const on = builder.mode !== "collision";
-    setMode(on ? "collision" : "select");
-    if (on) {
-      const n = builder.collisionCount();
-      flash(n ? t("flash_collisions_n", n) : t("flash_collisions_0"));
-    }
-  });
   $("mode-assembly").addEventListener("click", () => setMode("assembly"));
   $("btn-labels").addEventListener("click", () => toggleLabels());
   $("btn-hints").addEventListener("click", () => toggleHints());
@@ -425,7 +417,6 @@ export function initUI({ scene, model, builder }) {
     $("mode-select").classList.toggle("active", m === "select");
     $("mode-clamp").classList.toggle("active", m === "clamp");
     $("mode-reinforce").classList.toggle("active", m === "reinforce");
-    $("mode-collision").classList.toggle("active", m === "collision");
     $("mode-assembly").classList.toggle("active", m === "assembly");
     $("toolbar-ctx").hidden = m === "assembly";
     // Aufbau-Modus zeigt das Aufbau-Panel; beim Verlassen zurück zum zuletzt
@@ -446,7 +437,6 @@ export function initUI({ scene, model, builder }) {
       add: "status_add",
       panel: "status_panel",
       reinforce: "status_reinforce",
-      collision: "status_collision",
       clamp: "status_clamp",
       fitting: "status_fitting",
       assembly: "status_assembly",
@@ -1532,7 +1522,6 @@ export function initUI({ scene, model, builder }) {
       case "p": setMode("panel"); break;
       case "s": setMode("select"); break;
       case "v": setMode("reinforce"); break;
-      case "x": $("mode-collision").click(); break;
       case "a": setMode("assembly"); break;
       case "k": setMode("clamp"); break;
       case "d": toggleDiagonal(); break;
