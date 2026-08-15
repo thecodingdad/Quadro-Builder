@@ -135,8 +135,9 @@ Koordinaten in **cm**, Three.js-Konvention **y = oben**, Boden bei y = 0.
 - **Neue Bau-Richtung/Logik:** `config.js` + `builder.js` (+ ggf. `scene.js`).
 - **Tastatur:** zentral in `ui.js` (`keydown`). Pfeiltasten sind kamera-relativ über
   `scene.getHorizontalAxes()`.
-- **Code-Stil:** ES2022+, Kommentare auf Deutsch **ohne Umlaute** (ASCII: „Aenderung", „Loeschen"),
-  Bezeichner auf Englisch. Keine neuen externen Abhängigkeiten.
+- **Code-Stil:** ES2022+, Kommentare auf Deutsch **mit Umlauten** („Änderung", „Löschen", „Körper"),
+  Bezeichner auf Englisch. Das gilt auch für Namen und Notizen in `data/parts.json`.
+  Keine neuen externen Abhängigkeiten.
 - Nur ändern, was gefragt ist – kein Over-Engineering.
 
 ## Fallstricke

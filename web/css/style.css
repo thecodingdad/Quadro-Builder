@@ -337,6 +337,24 @@ body.resizing { cursor: col-resize; user-select: none; }
 #sidebar-resizer:hover, body.resizing #sidebar-resizer { opacity: 1; background: var(--accent); }
 body.sidebar-hidden #sidebar, body.sidebar-hidden #sidebar-resizer { display: none; }
 
+/* Gewähltes Bauteil: oben mittig über der Szene, Gegenstück zur Statuszeile
+   unten links. Zeigt, was gerade "in der Hand" liegt. */
+.current-part {
+  position: absolute;
+  top: 12px; left: 50%;
+  transform: translateX(-50%);
+  background: rgba(31, 38, 48, 0.82);
+  color: #fff;
+  padding: 6px 14px;
+  border-radius: 8px;
+  font-size: 13px;
+  max-width: 60%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  pointer-events: none;
+}
+
 .status {
   position: absolute;
   left: 12px; bottom: 12px;

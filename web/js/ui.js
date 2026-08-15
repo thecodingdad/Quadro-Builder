@@ -1,6 +1,6 @@
 // Verkabelt die Bedienoberflaeche (Toolbar, Tastatur, Stueckliste, Bestand).
 
-import { buildableTubes, buildableCurvedTubes, buildablePanels, tubeColors, geometry, allTubes, allConnectors, panels, reinforcements, slideKindName, partName, partForFitting, accessories } from "./catalog.js";
+import { buildableTubes, buildableCurvedTubes, buildablePanels, tubeColors, geometry, allTubes, allConnectors, panels, reinforcements, slideKindName, partName, partForFitting, accessories, getPartById } from "./catalog.js";
 import { PLACEABLE_FITTINGS } from "./model.js";
 import { computeBOM, compareInventory, connectorsForNode } from "./bom.js";
 import { computeBuildPlan, BUILD_ORDERS } from "./buildplan.js";
@@ -389,6 +389,7 @@ export function initUI({ scene, model, builder }) {
   }
 
   function syncPartHighlights() {
+    renderCurrentPart();
     const inAdd = builder.mode === "add";
     const inPanel = builder.mode === "panel";
     // Die Buttons zeigen die Auswahl (auch wenn sie per Tastatur kam) und
@@ -451,7 +452,40 @@ export function initUI({ scene, model, builder }) {
       assembly: "status_assembly",
     };
     $("status").textContent = t(statusMap[m] || "status_add");
+    renderCurrentPart();
     if (m === "assembly") renderAssembly();
+  }
+
+  /**
+   * Zeigt oben mittig über der Szene, welches Bauteil gerade gewählt ist --
+   * Gegenstück zur Statuszeile unten links. Die Gruppen-Knöpfe in der Leiste
+   * tragen nur noch den Gruppennamen, die Variante steht hier.
+   */
+  function renderCurrentPart() {
+    const box = $("current-part");
+    if (!box) return;
+    let text = null;
+    if (builder.mode === "add") {
+      const tube = getPartById(builder.tubeId);
+      if (tube) text = `${partName(tube)}${builder.diagonal ? " · 45°" : ""}`;
+    } else if (builder.mode === "panel") {
+      const pan = getPartById(builder.panelId);
+      if (pan) text = partName(pan);
+    } else if (builder.mode === "slide") {
+      text = slideKindName(builder.slideKind);
+    } else if (builder.mode === "clamp") {
+      const def = allConnectors().find((c) => c.id === builder.clampPart)
+        || accessories().find((a) => a.id === builder.clampPart);
+      text = def ? partName(def) : null;
+    } else if (builder.mode === "fitting") {
+      const def = partForFitting(builder.fittingKind);
+      text = def ? partName(def) : null;
+    } else if (builder.mode === "reinforce") {
+      const def = reinforcements()[0];
+      text = def ? partName(def) : null;
+    }
+    box.textContent = text || "";
+    box.hidden = !text;
   }
 
   // Schwarz gibt es nur fuer Platten, nicht fuer Rohre.
@@ -679,8 +713,10 @@ export function initUI({ scene, model, builder }) {
   function renderPartButtons() {
     if (tubes.some((x) => x.id === builder.tubeId)) lastStraightTubeId = builder.tubeId;
     const tube = tubes.find((x) => x.id === lastStraightTubeId) || tubes[0];
+    // Der Gruppen-Knopf trägt den Gruppennamen, nicht die gewählte Variante --
+    // welches Teil in der Hand liegt, steht oben mittig über der Szene.
     tubeBtn.innerHTML = tubeIcon(tube) + `<span></span>`;
-    tubeBtn.lastChild.textContent = tubeShortLabel(tube);
+    tubeBtn.lastChild.textContent = t("label_tubes");
     tubeBtn.title = `${t("label_tube")}: ${partName(tube)} – ${eur(tube.price)}`;
 
     if (bowBtn) {
@@ -692,7 +728,7 @@ export function initUI({ scene, model, builder }) {
 
     const pan = panelList.find((x) => x.id === builder.panelId) || panelList[0];
     panelBtn.innerHTML = panelIcon(pan) + `<span></span>`;
-    panelBtn.lastChild.textContent = `${pan.w}×${pan.h}`;
+    panelBtn.lastChild.textContent = t("label_panels");
     panelBtn.title = `${t("label_panel")}: ${partName(pan)} – ${eur(pan.price)}`;
   }
 
@@ -754,6 +790,48 @@ export function initUI({ scene, model, builder }) {
       `<rect x="2.5" y="2.5" width="11" height="11" rx="2" fill="none" stroke="currentColor" stroke-width="1.5"/>` +
       `<line x1="2.5" y1="8" x2="13.5" y2="8" stroke="currentColor" stroke-width="1.3"/>`],
   ];
+  // Eigenes Sinnbild je Teil -- vorher trug jede Zeile einer Gruppe dasselbe
+  // Gruppen-Icon, in der aufgeklappten Liste war damit nichts zu unterscheiden.
+  const FITTING_ICONS = {
+    // Räder
+    "multi-wheel2": `<circle cx="8" cy="8" r="5.6" fill="none" stroke="currentColor" stroke-width="1.5"/>` +
+      `<circle cx="8" cy="8" r="1.5" fill="currentColor"/>` +
+      `<path d="M8 2.4 L8 13.6 M2.4 8 L13.6 8 M4 4 L12 12 M12 4 L4 12" stroke="currentColor" stroke-width="0.9"/>`,
+    "floating-wheel2": `<circle cx="8" cy="8" r="6" fill="none" stroke="currentColor" stroke-width="2.6"/>` +
+      `<circle cx="8" cy="8" r="1.8" fill="currentColor"/>`,
+    "casters2": `<path d="M8 1.6 L8 5.4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>` +
+      `<path d="M4.4 5.4 L11.6 5.4 L10.4 9 L5.6 9 Z" fill="none" stroke="currentColor" stroke-width="1.3"/>` +
+      `<circle cx="8" cy="11.6" r="3" fill="none" stroke="currentColor" stroke-width="1.5"/>`,
+    "bearing2": `<rect x="2.2" y="5.2" width="5.6" height="5.6" rx="1" fill="none" stroke="currentColor" stroke-width="1.4"/>` +
+      `<rect x="7.8" y="6.6" width="6" height="2.8" rx="1.2" fill="currentColor"/>`,
+    "hub-cap2": `<circle cx="8" cy="8" r="5.6" fill="none" stroke="currentColor" stroke-width="1.2"/>` +
+      `<circle cx="8" cy="8" r="3" fill="currentColor"/>`,
+    "steering-lock2": `<circle cx="8" cy="8" r="5.6" fill="none" stroke="currentColor" stroke-width="1.2"/>` +
+      `<path d="M8 2.6 L8 8 L11.6 9.8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" fill="none"/>`,
+    // Verbindungen
+    "bearing-clamp": `<line x1="1.5" y1="10.5" x2="14.5" y2="10.5" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/>` +
+      `<rect x="5.4" y="7.4" width="5.2" height="6.2" rx="1.2" fill="none" stroke="currentColor" stroke-width="1.3"/>` +
+      `<rect x="6.6" y="2.4" width="2.8" height="5.4" rx="1.2" fill="currentColor"/>`,
+    "hole-connector4": `<line x1="1.5" y1="10.5" x2="14.5" y2="10.5" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/>` +
+      `<rect x="5.4" y="7.4" width="5.2" height="6.2" rx="1.2" fill="none" stroke="currentColor" stroke-width="1.3"/>` +
+      `<circle cx="8" cy="4" r="2.4" fill="none" stroke="currentColor" stroke-width="1.4"/>`,
+    "double_tube": `<line x1="1.5" y1="5.5" x2="14.5" y2="5.5" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/>` +
+      `<line x1="1.5" y1="10.5" x2="14.5" y2="10.5" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/>` +
+      `<rect x="5.6" y="2.6" width="4.8" height="10.8" rx="2.2" fill="none" stroke="currentColor" stroke-width="1.3"/>`,
+    "tube_clamp": `<line x1="1.5" y1="8" x2="14.5" y2="8" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/>` +
+      `<circle cx="8" cy="8" r="3.4" fill="none" stroke="currentColor" stroke-width="1.4"/>`,
+    "open-connector2": `<line x1="1.5" y1="8" x2="9.5" y2="8" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/>` +
+      `<ellipse cx="11.4" cy="8" rx="2.2" ry="3.4" fill="currentColor"/>`,
+    // Sonstiges
+    "bag2": `<path d="M3 4 L13 4 L11.6 13 L4.4 13 Z" fill="none" stroke="currentColor" stroke-width="1.4"/>` +
+      `<line x1="3" y1="4" x2="13" y2="4" stroke="currentColor" stroke-width="1.8"/>`,
+    "lattice2": `<rect x="2.5" y="4" width="11" height="8" rx="1" fill="none" stroke="currentColor" stroke-width="1.3"/>` +
+      `<path d="M6 4 L6 12 M9.5 4 L9.5 12 M2.5 6.7 L13.5 6.7 M2.5 9.3 L13.5 9.3" stroke="currentColor" stroke-width="0.8"/>`,
+    "textil-round2": `<path d="M3 13 L3 8 A8 8 0 0 1 11 13 Z" fill="none" stroke="currentColor" stroke-width="1.4"/>` +
+      `<path d="M3 8 A8 8 0 0 1 11 13" fill="none" stroke="currentColor" stroke-width="1.6"/>`,
+    "roof-large2": `<path d="M2 11 L8 4 L14 11" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>` +
+      `<line x1="2" y1="12.6" x2="14" y2="12.6" stroke="currentColor" stroke-width="1.2"/>`,
+  };
   const fittingGroupBtns = [];
   for (const [key, kinds, path] of FITTING_GROUPS) {
     const items = kinds.map((k) => {
@@ -762,7 +840,10 @@ export function initUI({ scene, model, builder }) {
       return def ? { ...def, id: k, qdf: k } : null;
     }).filter(Boolean);
     if (!items.length) continue;
-    const icon = () => `<svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true">${path}</svg>`;
+    // Der Gruppen-Knopf trägt das Gruppen-Sinnbild, jede Zeile der Liste ihr
+    // eigenes.
+    const icon = (item) => `<svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true">` +
+      `${(item && FITTING_ICONS[item.qdf]) || path}</svg>`;
     const btn = el("button", "btn part");
     btn.addEventListener("click", (e) => {
       e.stopPropagation();

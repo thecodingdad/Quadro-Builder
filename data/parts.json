@@ -4,7 +4,7 @@
     "source": "quadroshop.com (Kupplungen + Rohre), Stand Mai 2026",
     "currency": "EUR",
     "units": "cm",
-    "note": "Preise/Verfuegbarkeit koennen abweichen. Geometrie fuer den Editor vereinfacht (Stecksystem als Knoten-/Kanten-Graph)."
+    "note": "Preise/Verfügbarkeit können abweichen. Geometrie für den Editor vereinfacht (Stecksystem als Knoten-/Kanten-Graph)."
   },
   "geometry": {
     "connectorSize": 5.0,
@@ -27,7 +27,7 @@
       },
       {
         "id": "green",
-        "name": "Gruen",
+        "name": "Grün",
         "name_en": "Green",
         "hex": "#2e9e4a"
       },
@@ -61,7 +61,7 @@
       "kind": "space",
       "price": 2.49,
       "buildable": true,
-      "note": "Wuerfel-Knoten, 6 Richtungen"
+      "note": "Würfel-Knoten, 6 Richtungen"
     },
     {
       "id": "5way",
@@ -83,7 +83,7 @@
       "kind": "space",
       "price": 2.49,
       "buildable": true,
-      "note": "raeumlich (nicht in einer Ebene)"
+      "note": "räumlich (nicht in einer Ebene)"
     },
     {
       "id": "3way",
@@ -94,12 +94,12 @@
       "kind": "space",
       "price": 2.49,
       "buildable": true,
-      "note": "Ecke, raeumlich"
+      "note": "Ecke, räumlich"
     },
     {
       "id": "cross",
       "code": "CF4",
-      "name": "Flaechenkupplung 4-armig",
+      "name": "Flächenkupplung 4-armig",
       "name_en": "Surface connector 4-way",
       "arms": 4,
       "kind": "planar",
@@ -110,30 +110,30 @@
     {
       "id": "t",
       "code": "CF3",
-      "name": "Flaechenkupplung 3-armig",
+      "name": "Flächenkupplung 3-armig",
       "name_en": "Surface connector 3-way",
       "arms": 3,
       "kind": "planar",
       "price": 2.49,
       "buildable": true,
-      "note": "T-Stueck in einer Ebene"
+      "note": "T-Stück in einer Ebene"
     },
     {
       "id": "straight",
       "code": "CF2",
-      "name": "Flaechenkupplung 2-armig (180 Grad)",
+      "name": "Flächenkupplung 2-armig (180 Grad)",
       "name_en": "Surface connector 2-way (180°)",
       "arms": 2,
       "kind": "planar",
       "angle": 180,
       "price": 2.49,
       "buildable": true,
-      "note": "gerade Verlaengerung"
+      "note": "gerade Verlängerung"
     },
     {
       "id": "elbow",
       "code": "CS2",
-      "name": "Flaechenkupplung 2-armig (90 Grad)",
+      "name": "Flächenkupplung 2-armig (90 Grad)",
       "name_en": "Surface connector 2-way (90°)",
       "arms": 2,
       "kind": "planar",
@@ -152,7 +152,7 @@
       "angle": 45,
       "price": 2.49,
       "buildable": true,
-      "note": "Aufsteck-Adapter: wird mit der Huelse auf eine vorhandene Kupplung gesteckt und bietet auf der Gegenseite einen einzelnen, um 45 Grad gedrehten Rohrstutzen (fuer Schraegen/Rampen). Wird daher zusaetzlich zur Basiskupplung gezaehlt."
+      "note": "Aufsteck-Adapter: wird mit der Hülse auf eine vorhandene Kupplung gesteckt und bietet auf der Gegenseite einen einzelnen, um 45 Grad gedrehten Rohrstutzen (für Schraegen/Rampen). Wird daher zusaetzlich zur Basiskupplung gezaehlt."
     },
     {
       "id": "flexi",
@@ -219,7 +219,7 @@
       "kind": "special",
       "price": 6.49,
       "buildable": false,
-      "note": "klemmt um ein Rohr und traegt eine Kupplung"
+      "note": "klemmt um ein Rohr und trägt eine Kupplung"
     },
     {
       "id": "double_tube",
@@ -230,7 +230,7 @@
       "kind": "special",
       "price": 4.49,
       "buildable": true,
-      "note": "verbindet zwei Rohre laengs; ermoeglicht Klappen/bewegliche und schraege Elemente"
+      "note": "verbindet zwei Rohre längs; ermöglicht Klappen/bewegliche und schräge Elemente"
     },
     {
       "id": "tube_clamp",
@@ -336,86 +336,93 @@
     {
       "id": "TS1",
       "code": "TS1",
-      "name": "Rohr 15 cm 90 Grad (4 Loecher)",
+      "name": "Rohr 15 cm 90 Grad (4 Löcher)",
       "name_en": "Tube 15 cm 90° (4 holes)",
       "length_cm": 15,
       "shape": "angled",
       "angle": 90,
       "price": 11.49,
-      "buildable": true,
-      "colored": true
+      "buildable": false,
+      "colored": true,
+      "note": "steht nicht in der Toolbar (gelochte Winkelrohre lassen sich nicht sinnvoll ins Raster bauen), zählt aber in der Stückliste vorhandener Modelle"
     },
     {
       "id": "TS2",
       "code": "TS2",
-      "name": "Rohr 15 cm 135 Grad (3 Loecher)",
+      "name": "Rohr 15 cm 135 Grad (3 Löcher)",
       "name_en": "Tube 15 cm 135° (3 holes)",
       "length_cm": 15,
       "shape": "angled",
       "angle": 135,
       "price": 11.49,
-      "buildable": true,
-      "colored": true
+      "buildable": false,
+      "colored": true,
+      "note": "steht nicht in der Toolbar (gelochte Winkelrohre lassen sich nicht sinnvoll ins Raster bauen), zählt aber in der Stückliste vorhandener Modelle"
     },
     {
       "id": "TS3",
       "code": "TS3",
-      "name": "Rohr 15 cm 180 Grad (4 Loecher)",
+      "name": "Rohr 15 cm 180 Grad (4 Löcher)",
       "name_en": "Tube 15 cm 180° (4 holes)",
       "length_cm": 15,
       "shape": "angled",
       "angle": 180,
       "price": 11.49,
-      "buildable": true,
-      "colored": true
+      "buildable": false,
+      "colored": true,
+      "note": "steht nicht in der Toolbar (gelochte Winkelrohre lassen sich nicht sinnvoll ins Raster bauen), zählt aber in der Stückliste vorhandener Modelle"
     },
     {
       "id": "TS4",
       "code": "TS4",
-      "name": "Rohr 35 cm 90 Grad (4 Loecher)",
+      "name": "Rohr 35 cm 90 Grad (4 Löcher)",
       "name_en": "Tube 35 cm 90° (4 holes)",
       "length_cm": 35,
       "shape": "angled",
       "angle": 90,
       "price": 11.49,
-      "buildable": true,
-      "colored": true
+      "buildable": false,
+      "colored": true,
+      "note": "steht nicht in der Toolbar (gelochte Winkelrohre lassen sich nicht sinnvoll ins Raster bauen), zählt aber in der Stückliste vorhandener Modelle"
     },
     {
       "id": "TS5",
       "code": "TS5",
-      "name": "Rohr 35 cm 135 Grad (3 Loecher)",
+      "name": "Rohr 35 cm 135 Grad (3 Löcher)",
       "name_en": "Tube 35 cm 135° (3 holes)",
       "length_cm": 35,
       "shape": "angled",
       "angle": 135,
       "price": 11.49,
-      "buildable": true,
-      "colored": true
+      "buildable": false,
+      "colored": true,
+      "note": "steht nicht in der Toolbar (gelochte Winkelrohre lassen sich nicht sinnvoll ins Raster bauen), zählt aber in der Stückliste vorhandener Modelle"
     },
     {
       "id": "TS6",
       "code": "TS6",
-      "name": "Rohr 35 cm 180 Grad (4 Loecher)",
+      "name": "Rohr 35 cm 180 Grad (4 Löcher)",
       "name_en": "Tube 35 cm 180° (4 holes)",
       "length_cm": 35,
       "shape": "angled",
       "angle": 180,
       "price": 11.49,
-      "buildable": true,
-      "colored": true
+      "buildable": false,
+      "colored": true,
+      "note": "steht nicht in der Toolbar (gelochte Winkelrohre lassen sich nicht sinnvoll ins Raster bauen), zählt aber in der Stückliste vorhandener Modelle"
     },
     {
       "id": "TS7",
       "code": "TS7",
-      "name": "Bogenrohr 135 Grad (3 Loecher)",
+      "name": "Bogenrohr 135 Grad (3 Löcher)",
       "name_en": "Curved tube 135° (3 holes)",
       "length_cm": null,
       "shape": "curved",
       "angle": 135,
       "price": 22.99,
-      "buildable": true,
-      "colored": true
+      "buildable": false,
+      "colored": true,
+      "note": "steht nicht in der Toolbar (gelochte Winkelrohre lassen sich nicht sinnvoll ins Raster bauen), zählt aber in der Stückliste vorhandener Modelle"
     }
   ],
   "panels": [
@@ -453,7 +460,7 @@
       "price": 12.99,
       "buildable": true,
       "colored": true,
-      "note": "grosses Feld aus vier 75er-Rohren"
+      "note": "großes Feld aus vier 75er-Rohren"
     },
     {
       "id": "panel_80x20",
@@ -490,7 +497,7 @@
       "price": 6.99,
       "buildable": true,
       "colored": true,
-      "note": "gleiches Feld wie panel_40x40, aber mit 3x3-Lochraster; holes steuert die Darstellung und haelt sie beim QDF-Import aus der Groessen-Zuordnung heraus"
+      "note": "gleiches Feld wie panel_40x40, aber mit 3x3-Lochraster; holes steuert die Darstellung und hält sie beim QDF-Import aus der Größen-Zuordnung heraus"
     },
     {
       "id": "panel_70x120",
@@ -502,7 +509,7 @@
       "price": 0,
       "buildable": true,
       "colored": true,
-      "note": "grosses Rechteck-Panel; L2-fix"
+      "note": "großes Rechteck-Panel; L2-fix"
     },
     {
       "id": "pool_wall",
@@ -533,12 +540,12 @@
     {
       "id": "reinforce40",
       "code": "RV4",
-      "name": "Verstaerkungsprofil 40 cm (Holz)",
+      "name": "Verstärkungsprofil 40 cm (Holz)",
       "name_en": "Reinforcement profile 40 cm (wood)",
       "length_cm": 40,
       "material": "Holz",
       "price": 4.49,
-      "note": "Stab, der in ein Rohr geschoben wird und es versteift; kommt in 40-cm-Laengen; heute aus Holz (frueher Alu, guenstiger); noetig bei frei tragenden, von unten ungestuetzten Ebenen"
+      "note": "Stab, der in ein Rohr geschoben wird und es versteift; kommt in 40-cm-Längen; heute aus Holz (früher Alu, günstiger); nötig bei frei tragenden, von unten ungestuetzten Ebenen"
     }
   ],
   "accessories": [
@@ -549,14 +556,14 @@
       "name_en": "Wheel bearing",
       "price": 0,
       "qdf": "bearing2",
-      "note": "5 cm langes Rohrstueck an einer Kupplung, traegt das Multirad · Preis noch offen"
+      "note": "5 cm langes Rohrstück an einer Kupplung, trägt das Multirad · Preis noch offen"
     },
     {
       "id": "tube_cap",
       "code": "TCP",
       "name": "Rohrkappe",
       "price": 2.49,
-      "note": "runde Kappe, verschliesst ein offenes Rohrende",
+      "note": "runde Kappe, verschließt ein offenes Rohrende",
       "name_en": "Tube cap",
       "qdf": "open-connector2"
     },
@@ -606,7 +613,7 @@
       "name_en": "Wheel cap",
       "price": 0,
       "qdf": "hub-cap2",
-      "note": "haelt das Schwimmrad fest, wie die Radarretierung beim Multirad · Preis noch offen"
+      "note": "hält das Schwimmrad fest, wie die Radarretierung beim Multirad · Preis noch offen"
     },
     {
       "id": "caster",
@@ -624,7 +631,7 @@
       "name_en": "Multi wheel lock",
       "price": 0,
       "qdf": "steering-lock2",
-      "note": "sitzt am Ende eines Kupplungs-Stutzens und haelt das Multirad · Preis noch offen"
+      "note": "sitzt am Ende eines Kupplungs-Stutzens und hält das Multirad · Preis noch offen"
     },
     {
       "id": "wheel_adapter",
@@ -678,21 +685,21 @@
       "name_en": "Integral slide",
       "price": 0,
       "qdf": "slide-new2",
-      "note": "eigenstaendige Rutsche ohne Anbauten · Preis noch offen"
+      "note": "eigenständige Rutsche ohne Anbauten · Preis noch offen"
     },
     {
       "id": "slide_module",
       "code": "",
-      "name": "Modularrutschen-Koerper",
+      "name": "Modularrutschen-Körper",
       "name_en": "Modular slide body",
       "price": 0,
       "qdf": "slide2",
-      "note": "leicht gewellte Bahn, mehrere hintereinander moeglich; am Ende der Kette der Auslauf · Preis noch offen"
+      "note": "leicht gewellte Bahn, mehrere hintereinander möglich; am Ende der Kette der Auslauf · Preis noch offen"
     },
     {
       "id": "slide_curved",
       "code": "",
-      "name": "Bogenrutschen-Koerper",
+      "name": "Bogenrutschen-Körper",
       "name_en": "Curved slide body",
       "price": 0,
       "qdf": "curved-slide2",
@@ -705,7 +712,7 @@
       "name_en": "Slide run-out",
       "price": 0,
       "qdf": "slide-end2",
-      "note": "schliesst eine Kette aus Modular- oder Bogenrutschen-Koerpern ab · Preis noch offen"
+      "note": "schließt eine Kette aus Modular- oder Bogenrutschen-Körpern ab · Preis noch offen"
     }
   ]
 }

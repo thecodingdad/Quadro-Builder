@@ -58,7 +58,10 @@ const CURVED_SLIDE_ENTRY = new THREE.Vector3(0, 0, 1);
 const STRAIGHT_SLIDE_DROP = new THREE.Vector3(0, -80, 120);
 // Austrittsrichtung am Ende des Bogens: lokales +X, rund 33 Grad abwaerts --
 // dasselbe Gefaelle wie die gerade Rutsche (80 cm auf 120 cm).
-const CURVED_SLIDE_EXIT = new THREE.Vector3(1, -0.55, 0).normalize();
+// Austrittsrichtung der Bogenrutsche: WAAGERECHT in der lokalen +X-Richtung.
+// Dahinter sitzt der flach liegende Auslauf -- käme der Bogen schräg an, gäbe
+// es dort einen Knick.
+const CURVED_SLIDE_EXIT = new THREE.Vector3(1, 0, 0);
 // Flaechige Anbauteile verschwinden im Verstaerken- und Kollisions-Modus, wie
 // Platten und Netze auch.
 const FLAT_FITTINGS = new Set(["lattice2", "textil-round2", "roof-large2"]);
@@ -2428,16 +2431,23 @@ export class SceneManager {
         : P1.clone().addScaledVector(fwd, SLIDE_RUN).setY(P1.y + SLIDE_RISE);
     }
     if (P0.distanceTo(P1) < 1) { this._slideChainFrame = null; this._slideChainNextId = null; return; }
-    // Plan-Verlauf GERADE (Kontrollpunkt horizontal mittig), aber Seitenprofil
-    // leicht KONKAV (Gregor: "oben steiler angesetzt, unten flacher auslaufend"):
-    // Kontrollpunkt auf ~1/3-Hoehe -> steiler Einstieg oben, flacheres Ende unten.
-    const C = new THREE.Vector3((P0.x + P1.x) / 2, P1.y + (P0.y - P1.y) * 0.32, (P0.z + P1.z) / 2);
+    // Die Bahn läuft am Ende WAAGERECHT aus: der Rutschenauslauf liegt flach,
+    // ein schräg ankommender Körper hätte dort einen Knick. Kubische Bézier mit
+    // steilem Einstieg (entlang der Sehne) und waagerechter Ausfahrt -- dadurch
+    // hängt die Mitte etwas tiefer als die gerade Verbindung, genau wie am
+    // echten Teil.
+    const sehne = P1.clone().sub(P0);
+    const lauf = new THREE.Vector3(sehne.x, 0, sehne.z);
+    const waagerecht = lauf.lengthSq() > 0.01 ? lauf.clone().normalize() : new THREE.Vector3(1, 0, 0);
+    const laenge = sehne.length();
+    const C1 = P0.clone().addScaledVector(sehne.clone().normalize(), laenge * 0.42);
+    const C2 = P1.clone().addScaledVector(waagerecht, -laenge * 0.42);
     const bez = (t) => {
-      const u = 1 - t;
+      const u = 1 - t, a = u * u * u, b = 3 * u * u * t, c = 3 * u * t * t, d = t * t * t;
       return new THREE.Vector3(
-        u * u * P0.x + 2 * u * t * C.x + t * t * P1.x,
-        u * u * P0.y + 2 * u * t * C.y + t * t * P1.y,
-        u * u * P0.z + 2 * u * t * C.z + t * t * P1.z);
+        a * P0.x + b * C1.x + c * C2.x + d * P1.x,
+        a * P0.y + b * C1.y + c * C2.y + d * P1.y,
+        a * P0.z + b * C1.z + c * C2.z + d * P1.z);
     };
     // U-Rinne mit hohen Seitenwangen entlang der leicht gebogenen Rampe.
     const hint = this._slideChainNextId === sl.id ? this._slideChainFrame : null;
@@ -2471,12 +2481,25 @@ export class SceneManager {
       : new THREE.Vector3(0, -1, 0);
     // Horizontale Auslaufrichtung = horizontale (kardinale) Komponente der Einlauf-
     // tangente -> der Auslauf laeuft in DERSELBEN Richtung weiter wie die Rutsche.
-    let h = new THREE.Vector3(entryT.x, 0, entryT.z);
-    if (h.lengthSq() < 0.04 && feeder) h.set(P0.x - feeder.x, 0, P0.z - feeder.z);
-    if (h.lengthSq() < 0.01) h.set(1, 0, 0);
-    const fwd = Math.abs(h.z) >= Math.abs(h.x)
-      ? new THREE.Vector3(0, 0, Math.sign(h.z) || -1)
-      : new THREE.Vector3(Math.sign(h.x) || -1, 0, 0);
+    // Laufrichtung: die lokale +Z-Achse des Auslaufs selbst. In allen 73
+    // Vorkommen hinter einem Modularkörper zeigt sie genau dorthin, wo der
+    // Auslauf hinläuft -- hinter einem Bogenkörper ist der Weg diagonal, und
+    // aus ihm die Richtung zu raten ging dort schief (der Auslauf drehte sich
+    // zum Einstieg statt zum Ausgang).
+    let fwd = null;
+    if (sl.quat && sl.quat.length === 4) {
+      const z = new THREE.Vector3(0, 0, 1).applyQuaternion(this._slideQuat(sl));
+      z.y = 0;
+      if (z.lengthSq() > 0.04) fwd = z.normalize();
+    }
+    if (!fwd) {
+      let h = new THREE.Vector3(entryT.x, 0, entryT.z);
+      if (h.lengthSq() < 0.04 && feeder) h.set(P0.x - feeder.x, 0, P0.z - feeder.z);
+      if (h.lengthSq() < 0.01) h.set(1, 0, 0);
+      fwd = Math.abs(h.z) >= Math.abs(h.x)
+        ? new THREE.Vector3(0, 0, Math.sign(h.z) || -1)
+        : new THREE.Vector3(Math.sign(h.x) || -1, 0, 0);
+    }
     // Kubische Bézier: P0 (Anschluss, Tangente=Rutschenrichtung) -> abfallend ->
     // flacher, offener Auslauf am Boden in fwd-Richtung.
     const front = new THREE.Vector3(P0.x + fwd.x * 50, groundY, P0.z + fwd.z * 50);
