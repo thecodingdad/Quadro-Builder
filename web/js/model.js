@@ -9,7 +9,6 @@ import { round2 as round, quatFromXAxis, quatFromBasis } from "./util.js";
 // cm entlang der gewaehlten Achse. Die Achse ist immer die lokale +X des Teils.
 const FITTING_MOUNTS = {
   "bearing2":        { at: "node", offset: 0 },   // Lagerkupplung sitzt auf der Kupplung
-  "steering-lock2":  { at: "node", offset: 0 },
   "adapter2":        { at: "node", offset: 0 },
   "open-connector2": { at: "node", offset: 0 },
   "hole-connector4": { at: "node", offset: 5 },   // 50 mm neben der Kupplung
@@ -24,7 +23,9 @@ const FITTING_MOUNTS = {
 // oder einem Rohr (FITTING_MOUNTS); das Gitter spannt wie eine Platte zwischen
 // zwei Rohren und hat deshalb einen eigenen Ablauf.
 export const PLACEABLE_FITTINGS = [
-  ...Object.keys(FITTING_MOUNTS), "lattice2", "textil-round2", "roof-large2",
+  ...Object.keys(FITTING_MOUNTS),
+  "steering-lock2",   // in der Radmitte, siehe _wheelLockMounts
+  "lattice2", "textil-round2", "roof-large2",
 ];
 
 // Abstand der beiden Bogenrohre, ueber die eine Rundabdeckung gespannt wird:
@@ -460,11 +461,26 @@ export class BuildModel {
    * Liefert je Stelle { pos:[x,y,z], dir:[x,y,z], nodeId?, tubeId? }.
    */
   fittingMounts(kind) {
+    if (kind === "steering-lock2") return this._wheelLockMounts();
     if (kind === "textil-round2") return this._roundCoverMounts();
     if (kind === "roof-large2") return this._roofMounts();
     const spec = FITTING_MOUNTS[kind];
     if (!spec) return [];
     return spec.at === "tube" ? this._fittingTubeMounts(spec) : this._fittingNodeMounts(spec);
+  }
+
+  /**
+   * Radarretierung: sitzt in der MITTE eines gesetzten Rades und verbindet es
+   * fest mit der Kupplung. Es gibt sie also nur dort, wo ein Rad steckt, und
+   * sie uebernimmt dessen Achse.
+   */
+  _wheelLockMounts() {
+    const out = [];
+    for (const f of this.fittings.values()) {
+      if (f.kind !== "multi-wheel2" && f.kind !== "floating-wheel2") continue;
+      out.push({ pos: [f.x, f.y, f.z], dir: [1, 0, 0], quat: f.quat ? f.quat.slice() : null });
+    }
+    return out;
   }
 
   /**

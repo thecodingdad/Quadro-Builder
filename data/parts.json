@@ -619,20 +619,20 @@
     {
       "id": "steering_lock",
       "code": "",
-      "name": "Lenkarretierung",
-      "name_en": "Steering lock",
+      "name": "Radarretierung",
+      "name_en": "Wheel lock",
       "price": 0,
       "qdf": "steering-lock2",
-      "note": "Preis noch offen"
+      "note": "sitzt in der Radmitte und verbindet das Rad fest mit der Kupplung · Preis noch offen"
     },
     {
       "id": "wheel_adapter",
       "code": "",
-      "name": "Radadapter",
-      "name_en": "Wheel adapter",
+      "name": "Laufrolle Adapter",
+      "name_en": "Caster adapter",
       "price": 0,
       "qdf": "adapter2",
-      "note": "Preis noch offen"
+      "note": "sitzt auf einem Kupplungs-Stutzen und nimmt die Laufrolle auf · Preis noch offen"
     },
     {
       "id": "textile_round",

@@ -52,6 +52,9 @@ const CURVED_SLIDE_EXIT = new THREE.Vector3(1, -0.55, 0).normalize();
 // Flaechige Anbauteile verschwinden im Verstaerken- und Kollisions-Modus, wie
 // Platten und Netze auch.
 const FLAT_FITTINGS = new Set(["lattice2", "textil-round2", "roof-large2"]);
+// Anbauteile, die auf einem Stutzen der Kupplung sitzen: die Kupplung bekommt
+// dort denselben Stutzen wie fuer ein Rohr.
+const ARM_FITTINGS = new Set(["multi-wheel2", "floating-wheel2", "adapter2", "bearing2"]);
 
 const HIGHLIGHT_COLOR = 0x9b30ff;
 const HIGHLIGHT_EMISSIVE = 0x3a0066;
@@ -1651,6 +1654,19 @@ export class SceneManager {
       if (!tubeDirsAt.has(nodeId)) tubeDirsAt.set(nodeId, []);
       tubeDirsAt.get(nodeId).push({ d: [vx / L, vy / L, vz / L], bow: !!bow });
     };
+    // Ein Rad sitzt auf einem Stutzen der Kupplung -- also bekommt die Kupplung
+    // dort auch einen, so wie bei einem Rohr. Der Anker ist die naechstgelegene
+    // Kupplung, die Richtung die eigene Achse des Teils (lokales +X).
+    for (const f of (model.fittings ? model.fittings.values() : [])) {
+      if (!ARM_FITTINGS.has(f.kind) || !f.quat) continue;
+      let near = null, nd = 16;
+      for (const n of model.nodes.values()) {
+        const d = Math.hypot(n.x - f.x, n.y - f.y, n.z - f.z);
+        if (d < nd) { nd = d; near = n; }
+      }
+      if (!near) continue;
+      pushDir(near.id, f.x - near.x, f.y - near.y, f.z - near.z, false);
+    }
     for (const t of model.tubes.values()) {
       const na = model.nodes.get(t.a), nb = model.nodes.get(t.b);
       if (!na || !nb) continue;
