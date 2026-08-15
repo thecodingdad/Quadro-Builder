@@ -158,8 +158,15 @@ export function connectorsForNode(model, node) {
   // ganze Kupplung, die zusaetzlich in die Liste gehoert.
   if (node.part === "hole_1") return [node.part];
   if (node.part) {
-    const t = connectorTypeForDirs(neighborDirs(model, node));
-    return t && t !== "end" ? [node.part, t] : [node.part];
+    // Die getragene Kupplung steckt mit einem Arm IN der Lagerkupplung -- der
+    // zaehlt mit, sonst faende die Heuristik bei einem einzigen Rohr nur ein
+    // freies Ende und die Kupplung fehlte in der Liste.
+    const dirs = neighborDirs(model, node);
+    if (node.stub) dirs.push([-node.stub[0], -node.stub[1], -node.stub[2]]);
+    // Sie ist immer da (sie wird auch gezeichnet); haengt noch kein Rohr daran,
+    // zaehlt die kleinste Kupplung des Sortiments.
+    const t = connectorTypeForDirs(dirs);
+    return [node.part, t && t !== "end" ? t : "straight"];
   }
   const dirs = neighborDirs(model, node);
   if (dirs.length === 0) return [];
