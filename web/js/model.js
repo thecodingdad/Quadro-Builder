@@ -1276,7 +1276,8 @@ export class BuildModel {
     // Ein Koerper einer Kette endet nicht hier: hinter ihm kommt das naechste
     // Teil, sein Fuss muss also nichts tragen. Nur die Integralrutsche braucht
     // Boden oder Geruest unter dem Auslauf.
-    const braucthAuflage = !(SLIDE_PARTS[kind] && SLIDE_PARTS[kind].chain);
+    const kette = !!(SLIDE_PARTS[kind] && SLIDE_PARTS[kind].chain);
+    const braucthAuflage = !kette;
     const out = [];
     const seen = new Set();
     const groundY = this._groundLevel();
@@ -1305,7 +1306,11 @@ export class BuildModel {
         // Fuss in den Boden laufen. Nach oben ist alles erlaubt -- die Rutsche
         // endet dann auf einer Plattform statt auf dem Boden.
         if (p.low - groundY < SLIDE_DROP - 1) continue;
-        const hook = [(p.x + q.x) / 2, p.low + SLIDE_HOOK_LIFT, (p.z + q.z) / 2];
+        // Die Integralrutsche hängt 5 cm über der unteren Kupplung ein; die
+        // Kettenteile führen ihren Punkt direkt auf der Kupplung -- so stehen
+        // sie in den Herstellerdateien (Rasterhöhen 80, 120, 200) und nur so
+        // landet das nächste Kettenglied wieder auf dem Raster.
+        const hook = [(p.x + q.x) / 2, p.low + (kette ? 0 : SLIDE_HOOK_LIFT), (p.z + q.z) / 2];
         const key = [Math.round(hook[0]), Math.round(hook[1]), Math.round(hook[2])].join("|");
         if (seen.has(key)) continue;
         seen.add(key);
