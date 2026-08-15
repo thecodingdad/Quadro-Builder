@@ -153,9 +153,14 @@ export function inferConnectorType(model, node) {
 // alle Arme zusammen als eine normale Kupplung. Ein reines, freies Rohrende
 // ("end") liefert eine leere Liste.
 export function connectorsForNode(model, node) {
-  // Klemm-Kupplungen (Lochzapfen-, Lagerkupplung) sind ein festes Katalogteil:
-  // sie sitzen auf einem Rohr und zaehlen unabhaengig von ihren Armen.
-  if (node.part) return [node.part];
+  // Klemm-Kupplungen sind ein festes Katalogteil. Die Lochzapfenkupplung nimmt
+  // das Rohr selbst auf -- sie zaehlt allein. Die Lagerkupplung traegt eine
+  // ganze Kupplung, die zusaetzlich in die Liste gehoert.
+  if (node.part === "hole_1") return [node.part];
+  if (node.part) {
+    const t = connectorTypeForDirs(neighborDirs(model, node));
+    return t && t !== "end" ? [node.part, t] : [node.part];
+  }
   const dirs = neighborDirs(model, node);
   if (dirs.length === 0) return [];
   // Adapter-Koerper (c45body): genau HIER sitzt die 45-Grad-Winkelkupplung --

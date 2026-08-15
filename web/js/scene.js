@@ -1726,11 +1726,12 @@ export class SceneManager {
       // Adapter-Koerper (importierte C45, n.c45body) sind keine eigenstaendige
       // Kupplung -> kein dunkler Wuerfel; sie werden unten in Adapter-Farbe
       // gezeichnet (Huelse + Koerper + 45°-Arm).
-      if (n.stub && n.part) {
-        // Klemm-Kupplung: Huelse um das umschlossene Rohr, quer dazu der offene
-        // Anschluss. Kein Wuerfel -- das Teil sitzt frei auf dem Rohr.
-        this._addTubeClamp(model, n, matFor(n.id, mat), st);
-      } else if (!n.c45body) {
+      // Klemm-Kupplung: Huelse um das umschlossene Rohr, quer dazu der offene
+      // Anschluss. Die Lochzapfenkupplung nimmt dort direkt ein Rohr auf und
+      // braucht keinen Wuerfel; die Lagerkupplung traegt eine ganze Kupplung --
+      // die wird unten zusaetzlich gezeichnet.
+      if (n.stub && n.part) this._addTubeClamp(model, n, matFor(n.id, mat), st);
+      if (!n.c45body && n.part !== "hole_1") {
         const pos = new THREE.Vector3(n.x, n.y, n.z);
         const quat = new THREE.Quaternion();
         // Importierte Kupplung: Wuerfel exakt um ihre Quaternion drehen, damit die

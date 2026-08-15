@@ -8,7 +8,7 @@ import { t } from "./i18n.js";
 import { round2, panelNormal, modelMiddle } from "./util.js";
 
 // Kupplungen, die auf einem Rohr sitzen statt im Raster: QDF-Art -> Katalogteil.
-const TUBE_CLAMP_PARTS = { "hole-connector4": "hole_1" };
+const TUBE_CLAMP_PARTS = { "hole-connector4": "hole_1", "bearing2": "bearing" };
 
 const CLICK_TOLERANCE = 9; // px: groessere Bewegung = Kamera drehen, kein Klick (Touch-tauglich)
 
@@ -656,9 +656,11 @@ export class Builder {
     const isC45 = useDiag && !isSlope; // C45-Adapter nur an einer NICHT-schraegen Kupplung
     // Schräg-Konnektor: nur seine eigene gedrehte 90°-Arm-Basis (Schräge + Quer
     // in der Ebene + die zwei Kardinalen senkrecht dazu), NICHT beliebige Diagonalen.
-    // Klemm-Kupplung: sie hat genau EIN offenes Ende, dorthin geht das Rohr.
-    const dirs = node.stub
-      ? DIRECTIONS.filter((d) => d.vec[0] * node.stub[0] + d.vec[1] * node.stub[1] + d.vec[2] * node.stub[2] > 0.9)
+    // Lochzapfenkupplung: genau EIN offenes Ende, dorthin geht das Rohr. Die
+    // Lagerkupplung traegt dagegen eine ganze Kupplung -- von der geht es in
+    // jede freie Richtung weiter.
+    const dirs = (node.stub && node.part === "hole_1")
+      ? [{ name: "stub", vec: node.stub }]   // auch nach 45-Grad-Drehungen gueltig
       : hasArmDirs ? node.armDirs
       : isSlope ? (this._slopeArmDirs(node) || DIAGONAL_DIRECTIONS)
       : (this.diagonal ? DIAGONAL_DIRECTIONS : DIRECTIONS);
@@ -1079,7 +1081,6 @@ export class Builder {
       const p = this.scene.pickForDelete(x, y);
       if (h && (!p || h.distance <= p.distance)) obj = h.object;
       else if (p && p.data.kind === "fitting") obj = p.object;
-      else if (p && p.data.kind === "tube" && this.fittingKind === "bearing2") obj = p.object;
       else obj = null;
     } else if (this.mode === "clamp") {
       obj = handle() || build(["tube", "clamp"])?.object || null;
@@ -1205,19 +1206,6 @@ export class Builder {
     if (TUBE_CLAMP_PARTS[this.fittingKind]) { this._clickTubeClamp(e); return; }
     const h = this.scene.pickHandle(e.clientX, e.clientY);
     const p = this.scene.pickForDelete(e.clientX, e.clientY);
-    // Lagerkupplung laesst sich auch ueber ein ROHRENDE schieben: dann zaehlt
-    // das angeklickte Rohr, nicht ein Ankerpunkt an der Kupplung.
-    if (this.fittingKind === "bearing2" && p && p.data.kind === "tube" && p.point
-        && (!h || p.distance < h.distance)) {
-      const mount = this.model.tubeEndMount(p.data.id, [p.point.x, p.point.y, p.point.z]);
-      let added = null;
-      if (mount) this.recordHistory(() => {
-        added = this.model.addFittingAt("bearing2", mount, this.colorFor("fitting"));
-      });
-      if (!added) this.onNotice(t("notice_fitting_exists"));
-      this.refresh();
-      return;
-    }
     if (h && h.data && h.data.fittingMount && (!p || h.distance <= p.distance)) {
       let added = null;
       this.recordHistory(() => {

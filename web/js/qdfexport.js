@@ -208,7 +208,7 @@ export function buildQDF(model) {
     // Muendung des offenen Anschlusses, das lokale -Y zeigt in ihn hinein und
     // das lokale X laeuft am umschlossenen Rohr entlang -- so steht es in allen
     // 51 Vorkommen der Herstellerdateien (Maskenfelder dort immer 11, 8, 3840).
-    if (n.part === "hole_1" && n.stub) {
+    if (n.part && n.stub) {
       const tb = n.clampOn ? model.tubes.get(n.clampOn.tubeId) : null;
       const ta = tb && node(tb.a), tbb = tb && node(tb.b);
       // Ohne bekanntes Rohr irgendeine Achse quer zum Anschluss.
@@ -216,9 +216,15 @@ export function buildQDF(model) {
         : (Math.abs(n.stub[1]) > 0.5 ? [1, 0, 0] : [0, 1, 0]);
       const ey = [-n.stub[0], -n.stub[1], -n.stub[2]];
       const ez = [ex[1] * ey[2] - ex[2] * ey[1], ex[2] * ey[0] - ex[0] * ey[2], ex[0] * ey[1] - ex[1] * ey[0]];
-      lines.push(`hole-connector4{${CONNECTOR_MAT}, ${tuple(encodeQuat(quatFromAxes(ex, ey, ez)), n.x, n.y, n.z)}, 0, 0, 11, 8, 3840, 0, 0}`);
+      if (n.part === "hole_1") {
+        lines.push(`hole-connector4{${CONNECTOR_MAT}, ${tuple(encodeQuat(quatFromAxes(ex, ey, ez)), n.x, n.y, n.z)}, 0, 0, 11, 8, 3840, 0, 0}`);
+        stats.fittings++;
+        continue;   // die Lochzapfenkupplung IST die Kupplung
+      }
+      // Lagerkupplung: eigene Zeile PLUS die normale Kupplung, die sie traegt --
+      // genau so stehen beide in den Herstellerdateien am selben Punkt.
+      lines.push(`bearing2{${CONNECTOR_MAT}, ${tuple(encodeQuat(quatFromX(n.stub)), n.x, n.y, n.z)}, 1, ${mm(cs50)}, 0., 0}`);
       stats.fittings++;
-      continue;
     }
     // Eine gedrehte Kupplung (aus dem Import) behaelt ihre Lage. Die Arm-Maske
     // zaehlt die LOKALEN Wuerfelachsen -- bei einer gedrehten Kupplung sind das

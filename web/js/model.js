@@ -519,18 +519,30 @@ export class BuildModel {
     const L = Math.hypot(ab[0], ab[1], ab[2]) || 1;
     const u = [ab[0] / L, ab[1] / L, ab[2] / L];
     const axis = [node.x - node.stub[0] * cs, node.y - node.stub[1] * cs, node.z - node.stub[2] * cs];
-    // 90 Grad um die Rohrachse (Rodrigues, cos = 0, sin = 1).
+    // 45 Grad um die Rohrachse (Rodrigues). Acht Stellungen -- die Kupplungen
+    // sitzen am Rohr, sie muessen sich nicht ins Achsraster fuegen.
+    const co = Math.SQRT1_2, si = Math.SQRT1_2;
     const turn = (p) => {
       const r = [p[0] - axis[0], p[1] - axis[1], p[2] - axis[2]];
       const c = cross3(u, r);
-      const d = dot3(u, r);
-      return [axis[0] + c[0] + u[0] * d, axis[1] + c[1] + u[1] * d, axis[2] + c[2] + u[2] * d];
+      const d = dot3(u, r) * (1 - co);
+      return [
+        axis[0] + r[0] * co + c[0] * si + u[0] * d,
+        axis[1] + r[1] * co + c[1] * si + u[1] * d,
+        axis[2] + r[2] * co + c[2] * si + u[2] * d,
+      ];
     };
     const branch = this._branchFrom(nodeId).map((n) => ({ n, p: turn([n.x, n.y, n.z]) }));
     if (branch.some((e) => this.isBelowGround(e.p[1]))) return false;
     for (const e of branch) { e.n.x = round(e.p[0]); e.n.y = round(e.p[1]); e.n.z = round(e.p[2]); }
-    const s = cross3(u, node.stub);
-    node.stub = [round(s[0]), round(s[1]), round(s[2])];
+    const st = node.stub;
+    const c = cross3(u, st), d = dot3(u, st) * (1 - co);
+    const ns = [st[0] * co + c[0] * si + u[0] * d, st[1] * co + c[1] * si + u[1] * d, st[2] * co + c[2] * si + u[2] * d];
+    // Die Richtung feiner runden als Koordinaten: bei 45-Grad-Schritten summiert
+    // sich der Rundungsfehler sonst ueber mehrere Drehungen sichtbar auf.
+    const L2 = Math.hypot(ns[0], ns[1], ns[2]) || 1;
+    const r4 = (v) => Math.round((v / L2) * 1e4) / 1e4;
+    node.stub = [r4(ns[0]), r4(ns[1]), r4(ns[2])];
     return true;
   }
 
