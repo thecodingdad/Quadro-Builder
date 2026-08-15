@@ -309,7 +309,9 @@ export function buildQDF(model) {
     }
     // Ein Adapter-Koerper mit eigener Kupplung ist in der Datei eine gewoehnliche
     // connector3 -- die Winkelkupplung steckt an der Ecke, nicht hier.
-    const c45 = (n.c45 || carriesAdapter) && !n.ownConnector;
+    // c45file: die Datei hatte hier eine Winkelkupplung, auch wenn wir daraus
+    // keinen Adapter-Koerper ableiten konnten.
+    const c45 = (n.c45 || carriesAdapter || n.c45file) && !n.ownConnector;
     const q = quat ? encodeQuat(quat) : IDENTITY;
     // Die Eck-Kupplung der 45-Grad-Winkelkupplung fuehrt NUR drei Felder hinter
     // dem Tupel -- in allen 732 Vorkommen der Herstellerdateien. Schreibt man

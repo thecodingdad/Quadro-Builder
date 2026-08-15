@@ -2018,6 +2018,7 @@ export class BuildModel {
       nodes: [...this.nodes.values()].map((n) => {
         const o = { id: n.id, x: round(n.x), y: round(n.y), z: round(n.z) };
         if (n.c45) o.c45 = true; // Knoten traegt eine 45-Grad-Winkelkupplung
+        if (n.c45file) o.c45file = true; // Winkelkupplung stand so in der QDF-Datei
         if (n.c45body) o.c45body = true; // Adapter-Koerper am Arm-Ende der C45
         if (n.c45axis) o.c45axis = n.c45axis; // kardinale Huelsenachse des Adapters
         if (n.armDirs) o.armDirs = n.armDirs; // gespeicherte Arm-Richtungen (rotierte Kupplung)
@@ -2100,7 +2101,7 @@ export class BuildModel {
       this.nodes.set(n.id, { id: n.id, x: n.x, y: n.y, z: n.z, c45: !!n.c45, c45body: !!n.c45body,
         c45axis: n.c45axis || null, armDirs: n.armDirs || null, arms: n.arms || null, quat: n.quat || null,
         part: n.part || null, clampOn: n.clampOn || null, stub: n.stub || null,
-        ownConnector: !!n.ownConnector });
+        ownConnector: !!n.ownConnector, c45file: !!n.c45file });
       maxSeq = Math.max(maxSeq, parseSeq(n.id));
     }
     for (const t of data.tubes || []) {

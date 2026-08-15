@@ -325,6 +325,10 @@ export function parseQDF(text, opts = {}) {
       // _c45corner ist transient (nur Import-intern, wird nicht serialisiert).
       if (p.name === "connector45_2") {
         nd._c45corner = true;
+        // Die Datei fuehrt hier eine Winkelkupplung -- unabhaengig davon, ob
+        // wir daraus einen Adapter-Koerper ableiten koennen. Ohne diese Notiz
+        // fiele sie beim Speichern weg (38 Stueck im Bestand).
+        nd.c45file = true;
         // Kardinale Huelsenachse: Richtung, in der die C45-Huelse auf einen Arm
         // der Basiskupplung gesteckt ist (= +X-Arm des connector45-Quaternions,
         // auf die naechste Achse gerundet). Steuert die Adapter-Darstellung.
@@ -864,6 +868,7 @@ export function parseQDF(text, opts = {}) {
     nodes: nodes.map((n) => {
       const o = { id: n.id, x: n.x, y: n.y, z: n.z };
       if (n.c45) o.c45 = true;
+      if (n.c45file) o.c45file = true;   // Winkelkupplung stand so in der Datei
       if (n.c45body) o.c45body = true;
       if (n.c45axis) o.c45axis = n.c45axis;
       if (n.armDirs) o.armDirs = n.armDirs; // rotierte Arm-Richtungen (45-gedrehte Kupplung)
