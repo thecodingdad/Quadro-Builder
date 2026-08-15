@@ -64,6 +64,11 @@ const STRAIGHT_SLIDE_DROP = new THREE.Vector3(0, -80, 120);
 const CURVED_SLIDE_EXIT = new THREE.Vector3(1, 0, 0);
 // Höhe der Rutschbahn des Auslaufs über seinem Bezugspunkt (halbe Kupplung).
 const SLIDE_END_LIFT = 2.5;
+// Auslauf: waagerechtes Stück, dann eine nach unten geneigte Lippe. Zusammen
+// reichen sie 47,5 cm nach vorn -- so lang ist das Teil.
+const SLIDE_END_LIP = 5;                          // cm Lippenlänge
+const SLIDE_END_LIP_ANGLE = 30 * Math.PI / 180;   // Neigung der Lippe
+const SLIDE_END_FLAT = 47.5 - SLIDE_END_LIP * Math.cos(SLIDE_END_LIP_ANGLE);
 // Flaechige Anbauteile verschwinden im Verstaerken- und Kollisions-Modus, wie
 // Platten und Netze auch.
 const FLAT_FITTINGS = new Set(["lattice2", "textil-round2", "roof-large2"]);
@@ -2506,23 +2511,21 @@ export class SceneManager {
         ? new THREE.Vector3(0, 0, Math.sign(h.z) || -1)
         : new THREE.Vector3(Math.sign(h.x) || -1, 0, 0);
     }
-    // Der Auslauf liegt FLACH: Anschluss und offenes Ende auf derselben Höhe,
-    // die Bahn dazwischen waagerecht. Der Rutschenkörper davor endet ebenfalls
-    // waagerecht, der Übergang bleibt also knickfrei. (Vorher fiel der Auslauf
-    // um die 12 cm des Anschlusspunkts ab und stand damit schräg.)
-    const front = new THREE.Vector3(P0.x + fwd.x * 50, P0.y, P0.z + fwd.z * 50);
-    const C1 = P0.clone().addScaledVector(fwd, 14);
-    const C2 = front.clone().addScaledVector(fwd, -18);
-    const bez = (t) => {
-      const u = 1 - t, a = u * u * u, b = 3 * u * u * t, c = 3 * u * t * t, e = t * t * t;
-      return new THREE.Vector3(
-        a * P0.x + b * C1.x + c * C2.x + e * front.x,
-        a * P0.y + b * C1.y + c * C2.y + e * front.y,
-        a * P0.z + b * C1.z + c * C2.z + e * front.z);
-    };
+    // Der Auslauf liegt FLACH und endet in einer nach unten geneigten Lippe:
+    // erst SLIDE_END_FLAT waagerecht, dann SLIDE_END_LIP schräg abwärts. Der
+    // Rutschenkörper davor endet ebenfalls waagerecht, der Übergang bleibt also
+    // knickfrei.
+    const lippeVor = SLIDE_END_LIP * Math.cos(SLIDE_END_LIP_ANGLE);
+    const lippeAb = SLIDE_END_LIP * Math.sin(SLIDE_END_LIP_ANGLE);
+    const front = new THREE.Vector3(P0.x + fwd.x * SLIDE_END_FLAT, P0.y, P0.z + fwd.z * SLIDE_END_FLAT);
+    const lippe = new THREE.Vector3(front.x + fwd.x * lippeVor, front.y - lippeAb, front.z + fwd.z * lippeVor);
+    const anteil = SLIDE_END_FLAT / (SLIDE_END_FLAT + SLIDE_END_LIP);
+    const bez = (t) => (t <= anteil
+      ? P0.clone().lerp(front, t / anteil)
+      : front.clone().lerp(lippe, (t - anteil) / (1 - anteil)));
     const hint = this._slideChainNextId === sl.id ? this._slideChainFrame : null;
-    this._slideChainFrame = this._addSlideAlongCurve(mat, st, sl.id, bez, 7, hint);
-    this._slideChainNextId = null; // Endstueck: Kette stoppt hier.
+    this._slideChainFrame = this._addSlideAlongCurve(mat, st, sl.id, bez, 10, hint);
+    this._slideChainNextId = null; // Endstück: Kette stoppt hier.
   }
 
   // Dach-Tuch (roof2) als GIEBEL: findet First (hoechste Knoten nahe roof2) + die
