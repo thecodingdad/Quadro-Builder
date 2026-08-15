@@ -1078,7 +1078,9 @@ export class Builder {
       const h = this.scene.pickHandle(x, y);
       const p = this.scene.pickForDelete(x, y);
       if (h && (!p || h.distance <= p.distance)) obj = h.object;
-      else obj = p && p.data.kind === "fitting" ? p.object : null;
+      else if (p && p.data.kind === "fitting") obj = p.object;
+      else if (p && p.data.kind === "tube" && this.fittingKind === "bearing2") obj = p.object;
+      else obj = null;
     } else if (this.mode === "clamp") {
       obj = handle() || build(["tube", "clamp"])?.object || null;
     } else if (this.mode === "reinforce") {
@@ -1203,6 +1205,19 @@ export class Builder {
     if (TUBE_CLAMP_PARTS[this.fittingKind]) { this._clickTubeClamp(e); return; }
     const h = this.scene.pickHandle(e.clientX, e.clientY);
     const p = this.scene.pickForDelete(e.clientX, e.clientY);
+    // Lagerkupplung laesst sich auch ueber ein ROHRENDE schieben: dann zaehlt
+    // das angeklickte Rohr, nicht ein Ankerpunkt an der Kupplung.
+    if (this.fittingKind === "bearing2" && p && p.data.kind === "tube" && p.point
+        && (!h || p.distance < h.distance)) {
+      const mount = this.model.tubeEndMount(p.data.id, [p.point.x, p.point.y, p.point.z]);
+      let added = null;
+      if (mount) this.recordHistory(() => {
+        added = this.model.addFittingAt("bearing2", mount, this.colorFor("fitting"));
+      });
+      if (!added) this.onNotice(t("notice_fitting_exists"));
+      this.refresh();
+      return;
+    }
     if (h && h.data && h.data.fittingMount && (!p || h.distance <= p.distance)) {
       let added = null;
       this.recordHistory(() => {

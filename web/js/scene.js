@@ -710,29 +710,49 @@ export class SceneManager {
         mat = this._fittingMaterial(f.color ? hex : 0xd42e2e, false);
         break;
       }
-      case "casters2": {                // Lenkrolle: Gabel mit Raedchen darunter
+      case "casters2": {                // Laufrolle: Gabel mit Raedchen am Ende
+        // Wie bei allen Anbauteilen ist die lokale +X-Achse die Bezugsrichtung:
+        // dorthin zeigt die Gabel. In den Entwurfsdateien steht dort immer
+        // (0,-1,0) -- die Rolle haengt also nach unten.
         const dark = this._fittingMaterial(0x1c1c1c, false);
         const fork = new THREE.Mesh(this._cachedGeo("casterFork", () => {
-          const g = new THREE.BoxGeometry(4.5, 5, 3);
-          g.translate(0, -2.5, 0);
+          const g = new THREE.BoxGeometry(5, 4.5, 3);
+          g.translate(2.5, 0, 0);
           return g;
         }), dark);
         const roll = new THREE.Mesh(this._cachedGeo("casterRoll", () => {
           const g = new THREE.CylinderGeometry(3.2, 3.2, 2.2, Math.max(10, this._q().tube));
-          g.rotateZ(Math.PI / 2);
-          g.translate(0, -6.5, 0);
+          g.translate(6.5, 0, 0);
           return g;
         }), dark);
         return [fork, roll].map((m) => this._placeFitting(m, f, q));
       }
       case "bearing2":
-      case "steering-lock2":
-      case "adapter2":
+      case "adapter2": {                // Topf, der ueber den Stutzen der Kupplung greift
+        const r = geometry().tubeRadius * 1.3;
+        geo = this._cachedGeo("fitcup", () => {
+          const g = new THREE.CylinderGeometry(r, r, cs * 1.2, Math.max(10, this._q().tube));
+          g.rotateZ(Math.PI / 2);                 // Achse auf lokales +X
+          g.translate(cs * 0.4, 0, 0);
+          return g;
+        });
+        mat = this._fittingMaterial(0x2b2b2b, false);
+        break;
+      }
+      case "steering-lock2": {          // Radarretierung: kleine Scheibe in der Nabe
+        geo = this._cachedGeo("wheellock", () => {
+          const g = new THREE.CylinderGeometry(3.4, 3.4, 1.6, Math.max(10, this._q().tube));
+          g.rotateZ(Math.PI / 2);
+          return g;
+        });
+        mat = this._fittingMaterial(0xd42e2e, false);
+        break;
+      }
       case "open-connector2":
       case "hole-connector4": {         // Kupplungsnahe Teile: Wuerfel in Teilegroesse
-        const sz = f.kind === "steering-lock2" ? cs * 0.55 : cs * 0.9;
+        const sz = cs * 0.9;
         geo = this._cachedGeo("fitbox" + sz.toFixed(2), () => new THREE.BoxGeometry(sz, sz, sz));
-        mat = this._fittingMaterial(f.kind === "steering-lock2" ? 0xd42e2e : 0x2b2b2b, false);
+        mat = this._fittingMaterial(0x2b2b2b, false);
         break;
       }
       case "lattice2": {                // Gitter: Rechteck in der lokalen XY-Ebene

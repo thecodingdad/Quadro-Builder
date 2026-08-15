@@ -14,7 +14,6 @@ const FITTING_MOUNTS = {
   "hole-connector4": { at: "node", offset: 5 },   // 50 mm neben der Kupplung
   "multi-wheel2":    { at: "node", offset: 5 },   // Rad auf der Lagerachse
   "hub-cap2":        { at: "node", offset: 5 },   // Nabenkappe in der Radmitte
-  "casters2":        { at: "node", offset: 0, dirs: "down" },  // haengt immer nach unten
   "floating-wheel2": { at: "tube", offset: 10 },  // 100 mm vom Rohrende, auf dem Rohr
   "bag2":            { at: "tube", offset: 20 },  // 200 mm vom Rohrende
 };
@@ -470,6 +469,24 @@ export class BuildModel {
   }
 
   /**
+   * Lagerkupplung auf ein Rohrende schieben: sie umschliesst das ENDE des
+   * angeklickten Rohrs. Genommen wird das naehere der beiden Enden, die Achse
+   * zeigt vom Rohr weg.
+   */
+  tubeEndMount(tubeId, point) {
+    const t = this.tubes.get(tubeId);
+    if (!t) return null;
+    const a = this.nodes.get(t.a), b = this.nodes.get(t.b);
+    if (!a || !b) return null;
+    const da = Math.hypot(point[0] - a.x, point[1] - a.y, point[2] - a.z);
+    const db = Math.hypot(point[0] - b.x, point[1] - b.y, point[2] - b.z);
+    const end = da <= db ? a : b, other = da <= db ? b : a;
+    const d = [end.x - other.x, end.y - other.y, end.z - other.z];
+    const L = Math.hypot(d[0], d[1], d[2]) || 1;
+    return { pos: [end.x, end.y, end.z], dir: [d[0] / L, d[1] / L, d[2] / L], nodeId: end.id };
+  }
+
+  /**
    * Radarretierung: sitzt in der MITTE eines gesetzten Rades und verbindet es
    * fest mit der Kupplung. Es gibt sie also nur dort, wo ein Rad steckt, und
    * sie uebernimmt dessen Achse.
@@ -776,8 +793,15 @@ export class BuildModel {
       if (f.kind !== kind) continue;
       if (Math.hypot(f.x - mount.pos[0], f.y - mount.pos[1], f.z - mount.pos[2]) < 2) return null;
     }
-    return this.addFitting(kind, mount.pos[0], mount.pos[1], mount.pos[2],
+    const f = this.addFitting(kind, mount.pos[0], mount.pos[1], mount.pos[2],
       { quat: mount.quat || quatFromXAxis(mount.dir), color: color || null });
+    // An einen Laufrollen-Adapter passt genau eine Laufrolle -- sie kommt
+    // deshalb im selben Zug mit. In der Stueckliste bleiben es zwei Teile.
+    if (f && kind === "adapter2") {
+      this.addFitting("casters2", mount.pos[0], mount.pos[1], mount.pos[2],
+        { quat: mount.quat || quatFromXAxis(mount.dir) });
+    }
+    return f;
   }
 
   // Montagestellen fuer eine Rutsche: zwei parallele SENKRECHTE Rohre. Die

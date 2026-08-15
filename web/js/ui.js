@@ -714,6 +714,7 @@ export function initUI({ scene, model, builder }) {
   // Rolle beim Zubehoer. id = QDF-Art, damit das Popup die aktive Zeile findet.
   const fittingList = PLACEABLE_FITTINGS
     .map((k) => { const p = partForFitting(k); return p ? { ...p, id: k, qdf: k } : null; })
+    // Die Laufrolle kommt mit ihrem Adapter mit, sie hat keinen eigenen Eintrag.
     .filter(Boolean);
   if (fittingList.length) {
     const fittingIcon = () =>
