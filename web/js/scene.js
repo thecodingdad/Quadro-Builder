@@ -1445,10 +1445,11 @@ export class SceneManager {
     sleeve.userData = { kind: "node", id: n.id };
     this.buildGroup.add(sleeve);
     if (st !== "future") this.pickNodes.push(sleeve);
-    // Der Hals reicht von der Huelse bis zum Knoten -- bei der Lagerkupplung
-    // also eine Kupplungslaenge weiter als bei der Lochzapfenkupplung.
+    // Der Hals ist bei beiden Klemm-Kupplungen gleich lang: eine Kupplungslaenge
+    // ab der Rohrachse. Bei der Lagerkupplung schliesst dahinter der Wuerfel der
+    // getragenen Kupplung an, die eine weitere Laenge weiter aussen sitzt.
     const sockR = g.tubeRadius * 1.18;
-    const neck = off * 1.4;
+    const neck = cs * 1.4;
     const socket = new THREE.Mesh(
       this._cachedGeo(`clampSocket${seg}:${neck.toFixed(1)}`, () => new THREE.CylinderGeometry(sockR, sockR, neck, seg)), mat);
     const sv = new THREE.Vector3(stub[0], stub[1], stub[2]);
