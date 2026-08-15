@@ -2424,8 +2424,12 @@ export class SceneManager {
     // Im Editor gesetzte Rutsche: Der Einhaengepunkt am senkrechten Rohrpaar ist
     // bekannt, es muss nichts aus Quaternion/Kette hergeleitet werden.
     if (sl.hook && sl.hook.length === 3) {
-      P1 = P0.clone();                                  // Auslauf = gespeicherte Position
-      P0 = new THREE.Vector3(sl.hook[0], sl.hook[1], sl.hook[2]);
+      // Auslauf = gespeicherte Position, die Rutschfläche liegt eine halbe
+      // Kupplung darüber (wie beim Rutschenauslauf der Kette).
+      P1 = P0.clone().setY(P0.y + SLIDE_END_LIFT);
+      // Der Einstieg liegt OBEN auf dem Rohr, an dem die Rutsche hängt -- wie
+      // bei den Kettenteilen eine halbe Kupplung über dem Einhängepunkt.
+      P0 = new THREE.Vector3(sl.hook[0], sl.hook[1] + SLIDE_BODY_LIFT, sl.hook[2]);
       const C0 = new THREE.Vector3((P0.x + P1.x) / 2, P1.y + (P0.y - P1.y) * 0.32, (P0.z + P1.z) / 2);
       const bez0 = (t) => {
         const u = 1 - t;
