@@ -35,6 +35,9 @@ const MATERIALS = [
   'material3{7,"green", 2, 0.,0.4941,0.0941, 0.6,0.5,0.5,7.5, 0.6,0.5,0.5,7.5, "", 0}',
   'material3{8,"blue", 2, 0.,0.,1., 0.6,0.5,0.5,7.5, 0.6,0.5,0.5,7.5, "", 0}',
   'material3{9,"yellow", 2, 1.,1.,0., 0.6,0.5,0.5,7.5, 0.6,0.5,0.5,7.5, "", 0}',
+  // 11 ist die Nummer, unter der die Herstellerdateien das Alu-Profil fuehren
+  // (218 von 239 Dateien) -- die alu2-Zeilen verweisen darauf.
+  'material3{11,"alu", 1, 0.8,0.8,0.8, 0.5,0.4,0.7,7.5, 0.3,0.,0.,7.5, "", 0}',
   'material3{13,"Aluminium", 1, 0.8,0.8,0.8, 0.5,0.4,0.7,7.5, 0.3,0.,0.,7.5, "", 0}',
   'material3{14,"white", 2, 1.,1.,1., 0.6,0.5,0.5,7.5, 0.6,0.5,0.5,7.5, "", 0}',
 ];
@@ -58,20 +61,9 @@ const ARM_BITS = [
   [0x10, [0, 0, 1]], [0x20, [0, 0, -1]],
 ];
 
-// Die vier Blickwinkel-Voreinstellungen der Herstellersoftware. Sie legen nicht
-// nur die Kamera fest, sondern auch, wie weit sich herauszoomen laesst: das
-// vorletzte Zahlenfeld (Index 21) begrenzt den Bereich. In den 945 Kamerazeilen
-// der Beispieldateien steht dort 735-mal genau 40; kleinere Werte wie 4,54
-// schneiden grosse Modelle beim Herauszoomen ab. Uebernommen aus einer Datei,
-// die die Software selbst geschrieben hat -- alle vier Zeilen mit 40.
-// Unser eigener Import ueberliest camera2.
-const CAMERAS = [
-  "camera2{520, 70, 0, 0, 0, 0, 0, 0, 0, 255, 0, 0, 379, 595, 40, 60, 33, 3000, 10, 10, 1.571152, 40.000000, 0, 1.000000, 1.000000}",
-  "camera2{520, 130, 0, 0, 0, 0, 0, 0, 300, 15, 55, 0, 233, 366, 40, 60, 33, 3000, 10, 10, 1.571152, 40.000000, 0, 1.000000, 1.000000}",
-  "camera2{320, 130, 0, 0, 0, 0, 0, 0, 355, 0, 55, 0, 233, 0, 40, 0, 33, 3000, 10, 10, 0.000000, 40.000000, 0, 1.000000, 1.000000}",
-  "camera2{320, 130, 0, 0, 0, 0, 0, 0, 355, 0, 55, 0, 233, 0, 40, 0, 33, 3000, 10, 10, 0.000000, 40.000000, 0, 1.000000, 1.000000}",
-];
-
+// Kamerazeilen (camera2) schreiben wir NICHT: die Herstellersoftware hat eine
+// eigene Standardansicht, und was die 25 Felder im Einzelnen steuern, wissen
+// wir nicht. Unser Import ueberliest sie ohnehin.
 const EOL = "\r\n";
 
 /** Zahl im Stil der Originaldateien: ganze Werte mit angehaengtem Punkt. */
@@ -236,7 +228,7 @@ function reinforcementProfiles(model) {
 
 export function buildQDF(model) {
   const conn = geometry().connectorSize;
-  const lines = ["0, 0;", ...MATERIALS, ...CAMERAS];
+  const lines = ["0, 0;", ...MATERIALS];
   const stats = { connectors: 0, tubes: 0, bows: 0, panels: 0, textiles: 0, clamps: 0, slides: 0, alu: 0, fittings: 0 };
   // Das Lager fuehrt eine feste Laenge (50 mm in allen Herstellerdateien).
   const cs50 = 5;
