@@ -782,8 +782,21 @@ export class SceneManager {
         mat = this._fittingMaterial(0xd42e2e, false);
         break;
       }
-      case "open-connector2":
-      case "hole-connector4": {         // Kupplungsnahe Teile: Wuerfel in Teilegroesse
+      case "open-connector2": {         // Offenes Ende: runde Kappe auf dem Rohr
+        // Sie verschliesst das Rohrende, ist also nur so dick wie noetig und hat
+        // den Durchmesser des Rohrs. Sie sitzt auf der Schnittflaeche des Rohrs,
+        // eine halbe Kupplungslaenge vor dem Knoten.
+        const rc = geometry().tubeRadius;
+        geo = this._cachedGeo("endcap", () => {
+          const g = new THREE.CylinderGeometry(rc, rc, 1, Math.max(12, this._q().tube));
+          g.rotateZ(Math.PI / 2);
+          g.translate(-cs / 2 + 0.5, 0, 0);
+          return g;
+        });
+        mat = this._fittingMaterial(0x2b2b2b, false);
+        break;
+      }
+      case "hole-connector4": {         // Kupplungsnahes Teil: Wuerfel in Teilegroesse
         const sz = cs * 0.9;
         geo = this._cachedGeo("fitbox" + sz.toFixed(2), () => new THREE.BoxGeometry(sz, sz, sz));
         mat = this._fittingMaterial(0x2b2b2b, false);

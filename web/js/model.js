@@ -595,7 +595,7 @@ export class BuildModel {
   fittingMounts(kind) {
     if (kind === "multi-wheel2") return this._wheelMounts();
     if (kind === "steering-lock2") return this._wheelLockMounts("multi-wheel2");
-    if (kind === "hub-cap2") return this._wheelCapMounts();
+    if (kind === "hub-cap2" || kind === "open-connector2") return this._wheelCapMounts();
     if (kind === "textil-round2") return this._roundCoverMounts();
     if (kind === "roof-large2") return this._roofMounts();
     const spec = FITTING_MOUNTS[kind];
@@ -685,8 +685,15 @@ export class BuildModel {
    * Sitzt an diesem Knoten eine Radkappe? Dann ersetzt sie dort die Kupplung --
    * das Rohrende steckt in der Kappe, eine Kupplung gibt es nicht mehr.
    */
+  /**
+   * Steckt auf diesem Knoten eine Kappe, die die Kupplung ersetzt? Radkappe und
+   * offener Anschluss verschliessen ein Rohrende -- an einem Ende mit nur einem
+   * Rohr sitzt dann keine Kupplung mehr. Hat der Knoten mehrere Arme, bleibt die
+   * Kupplung: dort schliesst das Teil nur einen freien Stutzen ab.
+   */
   hasWheelCap(node) {
-    return this._fittingAt(node, "hub-cap2");
+    if (!this._fittingAt(node, "hub-cap2") && !this._fittingAt(node, "open-connector2")) return false;
+    return this.degree(node.id) <= 1;
   }
 
   /**
