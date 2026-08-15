@@ -82,6 +82,12 @@ export function quatFromBasis(ex, ey, ez) {
   return [r4(q[0]), r4(q[1]), r4(q[2]), r4(q[3])];
 }
 
+/** Lokale +X-Achse in Weltkoordinaten (quat in Three-Reihenfolge x,y,z,w). */
+export function xAxisOf(q) {
+  const [x, y, z, w] = q;
+  return [1 - 2 * (y * y + z * z), 2 * (x * y + z * w), 2 * (x * z - y * w)];
+}
+
 /** Mittelpunkt aller Kupplungen -- Bezugspunkt fuer panelNormal. */
 export function modelMiddle(nodes) {
   const m = [0, 0, 0];

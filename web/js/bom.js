@@ -1,13 +1,18 @@
 // Stueckliste (BOM) + Kupplungstyp-Heuristik + Bestands-/Machbarkeitscheck.
 
 import { getTube, getConnector, getPanel, colorName, partName, reinforcementPart, reinforcementRunName, partForFitting, getPartById } from "./catalog.js";
-import { round2 } from "./util.js";
+import { round2, xAxisOf } from "./util.js";
 
 // Einheitsvektoren der Nachbarn eines Knotens. Doppelrohr-Verbindungen (link)
 // sind KEIN Arm der Kupplung und zaehlen nicht in die Kupplungstyp-Heuristik
 // (sonst werden offene Rohrenden faelschlich als 2-armige Kupplung gezaehlt).
 // Der C45-Adapter-Arm (arm) bleibt dagegen drin -- er gehoert zur Klassifizierung
 // des Adapter-Koerpers (c45body).
+// Anbauteile, die einen ARM der Kupplung belegen -- sie stecken auf einem
+// Stutzen, genau wie ein Rohr, und gehoeren deshalb in die Armzahl. Die
+// Laufrolle sitzt auf ihrem Adapter und zaehlt nicht doppelt.
+const ARM_FITTINGS = new Set(["bearing2", "adapter2", "steering-lock2"]);
+
 function neighborDirs(model, node) {
   const dirs = [];
   for (const t of model.tubes.values()) {
@@ -19,6 +24,12 @@ function neighborDirs(model, node) {
     const dx = nb.x - node.x, dy = nb.y - node.y, dz = nb.z - node.z;
     const len = Math.hypot(dx, dy, dz) || 1;
     dirs.push([dx / len, dy / len, dz / len]);
+  }
+  for (const f of (model.fittings ? model.fittings.values() : [])) {
+    if (!ARM_FITTINGS.has(f.kind) || !f.quat) continue;
+    if (Math.hypot(f.x - node.x, f.y - node.y, f.z - node.z) > 2) continue;
+    const d = xAxisOf(f.quat);
+    if (!dirs.some((e) => e[0] * d[0] + e[1] * d[1] + e[2] * d[2] > 0.9)) dirs.push(d);
   }
   return dirs;
 }
