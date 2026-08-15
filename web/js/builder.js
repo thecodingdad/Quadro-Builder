@@ -359,6 +359,21 @@ export class Builder {
     this._afterMove(d.before, d.result || { merged: 0, detached: 0 });
   }
 
+  // Anbauteil loeschen -- die Laufrolle geht mit ihrem Adapter, sie sitzt auf ihm
+  // und ist ohne ihn nicht zu gebrauchen.
+  _removeFittingWithRider(id) {
+    const f = this.model.fittings.get(id);
+    if (!f) return;
+    if (f.kind === "adapter2") {
+      for (const o of [...this.model.fittings.values()]) {
+        if (o.kind === "casters2" && Math.hypot(o.x - f.x, o.y - f.y, o.z - f.z) < 2) {
+          this.model.removeFitting(o.id);
+        }
+      }
+    }
+    this.model.removeFitting(id);
+  }
+
   /** Loescht alle ausgewaehlten Teile. Kupplungen zuletzt (nehmen Rohre mit). */
   deleteSelection() {
     if (!this.selection.size) return 0;
@@ -370,6 +385,7 @@ export class Builder {
         else if (kind === "textile") this.model.removeTextile(id);
         else if (kind === "slide") this.model.removeSlide(id);
         else if (kind === "clamp") this.model.removeClamp(id);
+        else if (kind === "fitting") this._removeFittingWithRider(id);
       }
       for (const [id, kind] of entries) if (kind === "node") this.model.removeNode(id);
     });
