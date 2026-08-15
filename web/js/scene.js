@@ -2440,8 +2440,11 @@ export class SceneManager {
     const lauf = new THREE.Vector3(sehne.x, 0, sehne.z);
     const waagerecht = lauf.lengthSq() > 0.01 ? lauf.clone().normalize() : new THREE.Vector3(1, 0, 0);
     const laenge = sehne.length();
-    const C1 = P0.clone().addScaledVector(sehne.clone().normalize(), laenge * 0.42);
-    const C2 = P1.clone().addScaledVector(waagerecht, -laenge * 0.42);
+    // Kurze Griffe: die Bahn bleibt dicht an der Sehne, die Welle ist nur noch
+    // angedeutet (Wunsch: "leicht gewellt", nicht buckelig). Das Ende bleibt
+    // trotzdem waagerecht -- dafür sorgt die Richtung von C2.
+    const C1 = P0.clone().addScaledVector(sehne.clone().normalize(), laenge * 0.26);
+    const C2 = P1.clone().addScaledVector(waagerecht, -laenge * 0.34);
     const bez = (t) => {
       const u = 1 - t, a = u * u * u, b = 3 * u * u * t, c = 3 * u * t * t, d = t * t * t;
       return new THREE.Vector3(
@@ -2462,7 +2465,6 @@ export class SceneManager {
   _addSlideEnd(sl, model, mat, st) {
     // Start = GLEICHER Anschlusspunkt, an dem der Rutschenkoerper endet (kein Versatz).
     const P0 = this._slideEndConnectPoint(sl);
-    const groundY = sl.y; // QDF-Bodenhoehe des Auslaufs
     // Einlaufende Rutsche (naechstes Rutschenteil OBERHALB).
     let feeder = null, bestD = Infinity;
     for (const s2 of model.slides.values()) {
@@ -2500,10 +2502,12 @@ export class SceneManager {
         ? new THREE.Vector3(0, 0, Math.sign(h.z) || -1)
         : new THREE.Vector3(Math.sign(h.x) || -1, 0, 0);
     }
-    // Kubische Bézier: P0 (Anschluss, Tangente=Rutschenrichtung) -> abfallend ->
-    // flacher, offener Auslauf am Boden in fwd-Richtung.
-    const front = new THREE.Vector3(P0.x + fwd.x * 50, groundY, P0.z + fwd.z * 50);
-    const C1 = P0.clone().addScaledVector(entryT, 14);
+    // Der Auslauf liegt FLACH: Anschluss und offenes Ende auf derselben Höhe,
+    // die Bahn dazwischen waagerecht. Der Rutschenkörper davor endet ebenfalls
+    // waagerecht, der Übergang bleibt also knickfrei. (Vorher fiel der Auslauf
+    // um die 12 cm des Anschlusspunkts ab und stand damit schräg.)
+    const front = new THREE.Vector3(P0.x + fwd.x * 50, P0.y, P0.z + fwd.z * 50);
+    const C1 = P0.clone().addScaledVector(fwd, 14);
     const C2 = front.clone().addScaledVector(fwd, -18);
     const bez = (t) => {
       const u = 1 - t, a = u * u * u, b = 3 * u * u * t, c = 3 * u * t * t, e = t * t * t;
