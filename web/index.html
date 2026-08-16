@@ -309,8 +309,16 @@
     <div id="sidebar-resizer" title="Breite ziehen"></div>
 
     <aside id="sidebar">
+      <div id="side-tabs" class="side-tabs">
+        <button class="side-tab" data-panel="bom" data-i18n="side_tab_bom">Stückliste &amp; Bestand</button>
+        <button class="side-tab" data-panel="library" data-i18n="side_tab_models">Modelle</button>
+        <button class="side-tab" data-panel="assembly" data-i18n="side_tab_assembly" hidden>Aufbau</button>
+      </div>
+
       <section class="panel" id="panel-bom">
-        <h2 data-i18n="bom_title">Stückliste</h2>
+        <div id="model-size" class="model-size" hidden></div>
+        <div id="feasibility-banner" class="feasibility"></div>
+        <h2 data-i18n="bom_title">Stückliste &amp; Bestand</h2>
         <h3 data-i18n="bom_tubes">Rohre</h3>
         <div id="bom-tubes" class="bom-list"></div>
         <h3 data-i18n="bom_connectors">Kupplungen</h3>
@@ -332,14 +340,6 @@
           <div><span data-i18n="total_reinforcements">Verstärkungen</span><strong id="sum-reinf">0</strong></div>
           <div><span data-i18n="total_price">Materialpreis ca.</span><strong id="sum-price">0,00 €</strong></div>
         </div>
-      </section>
-
-      <section class="panel" id="panel-inventory">
-        <h2 data-i18n="inv_title">Bestand &amp; Machbarkeit</h2>
-        <div id="model-size" class="model-size" hidden></div>
-        <div id="feasibility-banner" class="feasibility"></div>
-        <div id="inventory-body" class="inv-list"></div>
-        <p class="hint" data-i18n="inv_hint">Trag ein, wie viele Teile du besitzt – der Editor prüft, ob dein Entwurf damit baubar ist.</p>
 
         <div class="inv-editor-head">
           <h3 data-i18n="inv_edit_title">Bestand bearbeiten</h3>
@@ -350,11 +350,20 @@
             <input id="inv-file-import" type="file" accept=".json,application/json" hidden>
           </div>
         </div>
+        <div id="inventory-body" class="inv-list" hidden></div>
         <div id="inventory-editor" class="inv-editor" hidden></div>
       </section>
 
+
+
       <section class="panel" id="panel-library" hidden>
-        <h2 data-i18n="lib_title">Modelle</h2>
+        <h2 data-i18n="lib_own_title">Meine Modelle</h2>
+        <div class="lib-actions">
+          <button id="own-new" class="btn ghost small" data-i18n="btn_doc_new">Neu…</button>
+        </div>
+        <div id="own-list" class="lib-list"></div>
+
+        <h2 data-i18n="lib_title">Sammlung</h2>
         <p class="hint" data-i18n="lib_hint">Lies deine eigene QDF-Sammlung ein (z. B. den Beispiel-Ordner der QUADRO-Software). Die Dateien bleiben im Browser.</p>
         <div class="lib-actions">
           <button id="lib-add-folder" class="btn ghost small" data-i18n="btn_lib_folder" data-i18n-title="btn_lib_folder_title">📂 Ordner…</button>

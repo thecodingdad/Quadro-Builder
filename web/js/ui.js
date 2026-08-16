@@ -1224,22 +1224,60 @@ export function initUI({ scene, model, builder }) {
     }
   }
 
+  /** Meine Modelle: gespeicherte Dateien, Klick öffnet sie in einem Tab. */
+  async function renderOwnModels() {
+    const box = $("own-list");
+    if (!box) return;
+    box.innerHTML = "";
+    let liste = [];
+    try { liste = await docs.listDocs(); } catch (e) { console.warn("Dateien:", e); }
+    if (!liste.length) { box.appendChild(el("div", "muted", t("saves_empty"))); return; }
+    for (const d of liste) {
+      const offen = tabs.some((x) => x.docId === d.id);
+      const row = el("div", "lib-row" + (offen ? " active" : ""));
+      const head = el("div", "lib-head");
+      head.appendChild(el("span", "lib-name", d.name));
+      const knoten = (d.data && d.data.nodes) ? d.data.nodes.length : 0;
+      const rohre = (d.data && d.data.tubes) ? d.data.tubes.length : 0;
+      head.appendChild(el("span", "lib-badge", `${knoten}/${rohre}`));
+      row.appendChild(head);
+      row.appendChild(el("span", "lib-meta", new Date(d.updatedAt || Date.now()).toLocaleString()));
+      const zeile = el("div", "lib-actions");
+      const umbenennen = el("button", "btn ghost small", t("btn_doc_rename"));
+      umbenennen.addEventListener("click", async (e) => {
+        e.stopPropagation();
+        const gewaehlt = await askName(d.name, { eigeneId: d.id });
+        if (!gewaehlt) return;
+        await docs.renameDoc(d.id, gewaehlt.name);
+        for (const tab of tabs) if (tab.docId === d.id) tab.name = gewaehlt.name;
+        renderTabs(); renderOwnModels(); refreshDocList();
+      });
+      const loeschen = el("button", "btn ghost small danger", "🗑");
+      loeschen.title = t("btn_doc_delete_title");
+      loeschen.addEventListener("click", async (e) => {
+        e.stopPropagation();
+        if (!confirm(t("confirm_delete_save", d.name))) return;
+        await docs.removeDoc(d.id);
+        for (const tab of tabs) if (tab.docId === d.id) { tab.docId = null; tab.dirty = true; }
+        renderTabs(); renderOwnModels(); refreshDocList();
+      });
+      zeile.appendChild(umbenennen); zeile.appendChild(loeschen);
+      row.appendChild(zeile);
+      row.addEventListener("click", () => openDocById(d.id));
+      box.appendChild(row);
+    }
+  }
+
   function openFromLibrary(entry) {
-    if (!model.isEmpty() && !confirm(t("confirm_replace_model"))) return;
     const data = parseDesign(entry.qdf);
     if (!data) { flash(t("lib_load_failed")); return; }
-    let loadRes;
-    builder.modelReplaced();
-    builder.recordHistory(() => { loadRes = model.loadJSON(data); });
-    if (!loadRes.ok) {
-      flash(t(loadRes.reason === "format" ? "load_error_format" : "load_error_data"));
-      return;
-    }
-    builder.selectedNodeId = null;
-    builder.refresh();
+    // Die Sammlung bleibt, wie sie ist: geöffnet wird eine KOPIE in einem
+    // eigenen Tab, die noch zu keiner Datei gehört.
+    openTab({ name: entry.name, data, dirty: true });
     scene.resetCamera();
     flash(t("lib_loaded", entry.name));
   }
+
 
   $("lib-add-folder").addEventListener("click", () => $("lib-file-folder").click());
   $("lib-add-files").addEventListener("click", () => $("lib-file-list").click());
@@ -1285,28 +1323,42 @@ export function initUI({ scene, model, builder }) {
   const savedW = parseInt(localStorage.getItem(SIDEBAR_W_KEY), 10);
   if (savedW >= 240 && savedW <= 640) root.style.setProperty("--sidebar-w", savedW + "px");
 
-  let currentPanel = null; // 'bom' | 'inventory' | 'library' | 'assembly' | null
+  let currentPanel = null;      // 'bom' | 'library' | 'assembly' | null
+  let vorAufbauPanel = "bom";   // wohin die Leiste nach dem Aufbau zurückkehrt
 
   function applyPanelVisibility() {
     $("panel-bom").hidden = currentPanel !== "bom";
-    $("panel-inventory").hidden = currentPanel !== "inventory";
     $("panel-library").hidden = currentPanel !== "library";
     $("panel-assembly").hidden = currentPanel !== "assembly";
     document.body.classList.toggle("sidebar-hidden", currentPanel === null);
     $("toggle-sidebar").classList.toggle("active", currentPanel !== null);
+    renderSideTabs();
     requestAnimationFrame(() => scene.onResize());
   }
   // name: 'bom' | 'inventory' | 'library' | 'assembly' | null.
   // Nur bom/inventory/library/zu wird gemerkt.
   function showSidebarPanel(name) {
     currentPanel = name;
-    if (name === "library" && !libLoaded) loadLibrary();
-    if (name === "bom" || name === "inventory" || name === "library" || name === null)
+    if (name === "library") { renderOwnModels(); if (!libLoaded) loadLibrary(); }
+    if (name === "bom" || name === "library" || name === null)
       localStorage.setItem(SIDEBAR_PANEL_KEY, name || "");
     applyPanelVisibility();
   }
   function toggleSidebarPanel(name) {
     showSidebarPanel(currentPanel === name ? null : name);
+  }
+
+  // Tab-Leiste in der Seitenleiste: Stückliste & Bestand, Modelle, Aufbau.
+  // "Aufbau" gibt es nur im Aufbau-Modus und wird dort automatisch gewählt.
+  function renderSideTabs() {
+    for (const b of $("side-tabs").querySelectorAll(".side-tab")) {
+      const name = b.dataset.panel;
+      b.classList.toggle("active", currentPanel === name);
+      if (name === "assembly") b.hidden = builder.mode !== "assembly";
+    }
+  }
+  for (const b of $("side-tabs").querySelectorAll(".side-tab")) {
+    b.addEventListener("click", () => showSidebarPanel(b.dataset.panel));
   }
 
   // EIN Knopf oben rechts: Leiste auf oder zu. Welcher Inhalt zu sehen ist,
@@ -1683,8 +1735,16 @@ export function initUI({ scene, model, builder }) {
     return c ? c.hex : "#888";
   }
 
-  function bomRow(container, name, colorId, count, subtotal) {
-    const row = el("div", "bom-row");
+  /**
+   * Eine Zeile der Stückliste. `invKey` verbindet sie mit dem Bestand
+   * ("gruppe:id"): dann zeigt die Zeile zusätzlich, wie viele Teile davon
+   * vorhanden sind, färbt sich rot, wenn sie nicht reichen, und hebt auf Klick
+   * die zugehörigen Teile im Modell hervor.
+   */
+  function bomRow(container, name, colorId, count, subtotal, invKey = null) {
+    const inv = invKey ? invIndex.get(invKey) : null;
+    const row = el("div", "bom-row" + (inv && !inv.ok ? " bad" : "")
+      + (invKey && invKey === invHighlightKey ? " marked" : ""));
     const label = el("span", "bom-name");
     if (colorId) {
       const dot = el("span", "dot"); dot.style.background = colorHex(colorId);
@@ -1693,9 +1753,21 @@ export function initUI({ scene, model, builder }) {
     label.appendChild(document.createTextNode(name));
     row.appendChild(label);
     row.appendChild(el("span", "bom-count", `${count}×`));
+    if (inv) {
+      row.appendChild(el("span", "inv-status", inv.ok ? "✓" : t("inv_missing", inv.need - inv.owned)));
+      row.title = t("inv_have", inv.owned, inv.need);
+      row.addEventListener("click", () => {
+        setInventoryHighlight(invKey === invHighlightKey ? null : inv);
+      });
+    } else {
+      row.appendChild(el("span", "inv-status", ""));
+    }
     row.appendChild(el("span", "bom-sub", subtotal == null ? "" : eur(subtotal)));
     container.appendChild(row);
   }
+
+  // Bestand je Katalogteil, aufgeschlüsselt für die Stücklisten-Zeilen.
+  let invIndex = new Map();
 
 
   function update() {
@@ -1704,14 +1776,19 @@ export function initUI({ scene, model, builder }) {
     // die gewaehlte Kupplung) -- die Toolbar muss das nachziehen.
     syncPartHighlights();
     const bom = computeBOM(model);
+    // Stückliste und Bestand stehen in EINER Liste: erst rechnen, welche Teile
+    // reichen, dann jede Zeile damit beschriften.
+    const cmp = compareInventory(bom, inventory);
+    invIndex = new Map(cmp.rows.map((r) => [r.group + ":" + r.key, r]));
+    lastInvRows = cmp.rows;
 
     const tb = $("bom-tubes"); tb.innerHTML = "";
     if (bom.tubes.length === 0) tb.appendChild(el("div", "muted", "–"));
-    for (const r of bom.tubes) bomRow(tb, `${r.name} · ${r.colorName}`, r.color, r.count, r.subtotal);
+    for (const r of bom.tubes) bomRow(tb, `${r.name} · ${r.colorName}`, r.color, r.count, r.subtotal, "tubes:" + r.tubeId);
 
     const cb = $("bom-connectors"); cb.innerHTML = "";
     if (bom.connectors.length === 0) cb.appendChild(el("div", "muted", "–"));
-    for (const r of bom.connectors) bomRow(cb, r.name, null, r.count, r.subtotal);
+    for (const r of bom.connectors) bomRow(cb, r.name, null, r.count, r.subtotal, "connectors:" + r.type);
     if (bom.openEnds > 0) {
       const row = el("div", "bom-row muted");
       row.appendChild(el("span", "bom-name", t("bom_open_ends")));
@@ -1722,7 +1799,7 @@ export function initUI({ scene, model, builder }) {
 
     const pb = $("bom-panels"); pb.innerHTML = "";
     if (bom.panels.length === 0) pb.appendChild(el("div", "muted", "–"));
-    for (const r of bom.panels) bomRow(pb, `${r.name} · ${r.colorName}`, r.color, r.count, r.subtotal);
+    for (const r of bom.panels) bomRow(pb, `${r.name} · ${r.colorName}`, r.color, r.count, r.subtotal, "panels:" + r.panelId);
 
     const xb = $("bom-textiles"); xb.innerHTML = "";
     const textiles = bom.textiles || [];
@@ -1737,12 +1814,12 @@ export function initUI({ scene, model, builder }) {
     const fb = $("bom-fittings"); fb.innerHTML = "";
     const fits = bom.fittings || [];
     if (fits.length === 0) fb.appendChild(el("div", "muted", "–"));
-    for (const r of fits) bomRow(fb, r.name, null, r.count, r.subtotal || null);
+    for (const r of fits) bomRow(fb, r.name, null, r.count, r.subtotal || null, "fittings:" + r.id);
 
     const rb = $("bom-reinforcements"); rb.innerHTML = "";
     const reinf = bom.reinforcements || [];
     if (reinf.length === 0) rb.appendChild(el("div", "muted", "–"));
-    for (const r of reinf) bomRow(rb, r.name, null, r.count, r.subtotal);
+    for (const r of reinf) bomRow(rb, r.name, null, r.count, r.subtotal, "reinforcements:" + r.id);
 
     $("sum-tubes").textContent = bom.totals.tubes;
     $("sum-conn").textContent = bom.totals.connectors;
@@ -1754,7 +1831,7 @@ export function initUI({ scene, model, builder }) {
     if (!$("inventory-editor").hidden) renderInventoryEditor();
     // Die Bibliothek zeigt je Modell, ob der Bestand reicht -- nach einer
     // Bestandsaenderung muessen die Haken neu gerechnet werden.
-    if (currentPanel === "library") renderLibrary();
+    if (currentPanel === "library") { renderLibrary(); renderOwnModels(); }
     if (builder.mode === "assembly") renderAssembly();
     showSaved();
   }
@@ -1814,12 +1891,11 @@ export function initUI({ scene, model, builder }) {
 
   let lastInvRows = [];
 
+  /** Kopf des vereinten Panels: Modellmaße und Machbarkeit. */
   function renderInventory(bom) {
     renderModelSize();
-    const body = $("inventory-body"); body.innerHTML = "";
     const banner = $("feasibility-banner");
     if (bom.totals.tubes === 0 && bom.totals.connectors === 0 && bom.totals.panels === 0) {
-      body.appendChild(el("div", "muted", t("inv_empty_build")));
       banner.className = "feasibility";
       banner.textContent = "";
       lastInvRows = [];
@@ -1827,38 +1903,11 @@ export function initUI({ scene, model, builder }) {
       return;
     }
     const cmp = compareInventory(bom, inventory);
-    lastInvRows = cmp.rows;
-    // Modell kann sich geaendert haben -> ids der markierten Zeile neu bestimmen,
-    // sonst zeigt die Hervorhebung auf geloeschte oder veraltete Teile.
-    const stillThere = cmp.rows.find((r) => r.group + ":" + r.key === invHighlightKey);
+    // Hervorhebung nachziehen: das Modell kann sich geändert haben.
+    const nochDa = cmp.rows.find((r) => r.group + ":" + r.key === invHighlightKey);
     if (invHighlightKey) {
-      if (stillThere) builder.highlight = partsForInventoryRow(stillThere);
+      if (nochDa) builder.highlight = partsForInventoryRow(nochDa);
       else { invHighlightKey = null; builder.highlight = null; }
-    }
-    for (const r of cmp.rows) {
-      const rowKey = r.group + ":" + r.key;
-      const row = el("div", "inv-row" + (r.ok ? "" : " bad") + (rowKey === invHighlightKey ? " marked" : ""));
-      // Klick auf die Zeile hebt die zugehoerigen Teile im Modell hervor.
-      row.addEventListener("click", (e) => {
-        if (e.target.tagName === "INPUT") return;   // Mengenfeld nicht abfangen
-        setInventoryHighlight(rowKey === invHighlightKey ? null : r);
-      });
-      row.appendChild(el("span", "inv-name", r.name));
-      row.appendChild(el("span", "inv-need", t("inv_need", r.need)));
-      const inp = document.createElement("input");
-      inp.type = "number"; inp.min = "0"; inp.className = "inv-input";
-      inp.value = r.owned;
-      inp.addEventListener("change", () => {
-        const v = Math.max(0, parseInt(inp.value || "0", 10));
-        // r.group ist jetzt direkt der Bucket-Schlüssel (tubes/connectors/...)
-        const bucket = r.group;
-        inventory[bucket][r.key] = v;
-        saveInv(inventory);
-        update();
-      });
-      row.appendChild(inp);
-      row.appendChild(el("span", "inv-status", r.ok ? "✓" : t("inv_missing", r.need - r.owned)));
-      body.appendChild(row);
     }
     banner.className = "feasibility " + (cmp.feasible ? "ok" : "no");
     banner.textContent = cmp.feasible ? t("inv_feasible") : t("inv_infeasible");
@@ -2196,6 +2245,7 @@ export function initUI({ scene, model, builder }) {
 
   $("tab-new").addEventListener("click", () => openTab({ name: naechsterFreierName() }));
   $("empty-new").addEventListener("click", () => $("btn-doc-new").click());
+  $("own-new").addEventListener("click", () => $("btn-doc-new").click());
   $("empty-open").addEventListener("click", () => { toggleFileMenu(true); $("doc-select").focus(); });
   $("empty-import").addEventListener("click", () => $("file-import").click());
 
