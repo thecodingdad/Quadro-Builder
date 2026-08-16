@@ -8,6 +8,7 @@ import { parseQDF } from "./qdfimport.js";
 import { QUALITY_LEVELS } from "./scene.js";
 import { RANDOM_COLOR } from "./builder.js";
 import * as storage from "./storage.js";
+import * as docs from "./docs.js";
 import { designEntry, parseDesign, checkAgainstInventory, missingCount } from "./library.js";
 import { buildQDF } from "./qdfexport.js";
 import { t, getLang, setLang, applyTranslations } from "./i18n.js";
@@ -1837,8 +1838,204 @@ export function initUI({ scene, model, builder }) {
     e.target.value = "";
   });
 
+  // --- Dateien in Tabs ---------------------------------------------------
+  // Ein Tab hält ein Modell samt seiner Werkzeugleiste, Ansicht und Schritt-
+  // speicher. Umgeschaltet wird über EIN Modell und EINEN Builder: der Stand
+  // des alten Tabs wird gesichert, der des neuen eingesetzt.
+  let tabs = [];            // { tabId, docId, name, dirty, model, view }
+  let activeTabId = null;
+  let sessionTimer = null;
+
+  function activeTab() { return tabs.find((x) => x.tabId === activeTabId) || null; }
+
+  /** Ansicht und Werkzeugleiste des laufenden Tabs einsammeln. */
+  function viewState() {
+    return {
+      ...builder.uiState(),
+      slice: JSON.parse(JSON.stringify(slice)),
+      camera: scene.cameraState() || null,
+    };
+  }
+
+  function applyViewState(v = {}) {
+    builder.setUiState(v);
+    if (v.slice && ["x", "y", "z"].includes(v.slice.axis)) {
+      Object.assign(slice, { on: !!v.slice.on, axis: v.slice.axis, value: v.slice.value || 0,
+        flip: !!v.slice.flip, values: { ...slice.values, ...(v.slice.values || {}) } });
+    } else {
+      slice.on = false;
+    }
+    setMode(v.mode || "select");     // setzt auch die Knöpfe
+    applySlice();
+    syncPartHighlights();
+    if (v.camera) scene.restoreCameraState(v.camera); else scene.resetCamera();
+    $("btn-labels").classList.toggle("active", builder.showLabels);
+    $("btn-hints").classList.toggle("active", builder.showHints);
+    $("btn-diagonal").classList.toggle("active", builder.mode === "add" && builder.diagonal);
+    renderColorButtons();
+    updateUndoButton();
+  }
+
+  /** Stand des laufenden Tabs festhalten (vor jedem Wechsel und vor dem Sichern). */
+  function captureActiveTab() {
+    const tab = activeTab();
+    if (!tab) return null;
+    tab.model = model.toJSON();
+    tab.view = viewState();
+    return tab;
+  }
+
+  function renderTabs() {
+    const list = $("tab-list");
+    if (!list) return;
+    list.innerHTML = "";
+    for (const tab of tabs) {
+      const item = el("div", "tab" + (tab.tabId === activeTabId ? " active" : ""));
+      item.title = tab.name;
+      if (tab.dirty) item.appendChild(el("span", "tab-dirty"));
+      item.appendChild(el("span", "tab-name", tab.name));
+      const zu = el("button", "tab-close", "×");
+      zu.title = t("btn_doc_close");
+      zu.addEventListener("click", (e) => { e.stopPropagation(); closeTab(tab.tabId); });
+      item.appendChild(zu);
+      item.addEventListener("click", () => activateTab(tab.tabId));
+      list.appendChild(item);
+    }
+    document.body.classList.toggle("no-doc", tabs.length === 0);
+  }
+
+  function activateTab(tabId) {
+    if (tabId === activeTabId) return;
+    captureActiveTab();
+    const tab = tabs.find((x) => x.tabId === tabId);
+    if (!tab) return;
+    activeTabId = tabId;
+    builder.modelReplaced();
+    model.loadJSON(tab.model || { format: 1, nodes: [], tubes: [] });
+    applyViewState(tab.view || {});
+    builder.refresh();
+    renderTabs();
+    update();
+    scheduleSessionSave();
+  }
+
+  /**
+   * Neuen Tab anlegen und öffnen. `view` gibt den Startzustand vor -- ein neues
+   * Modell startet im Bau-Modus mit einem 35er Rohr, ein geöffnetes oder
+   * importiertes im Auswahl-Modus.
+   */
+  function openTab({ name, data, docId = null, view = null, dirty = false }) {
+    captureActiveTab();
+    const tab = {
+      tabId: docs.newTabId(), docId, name: name || t("doc_untitled"), dirty,
+      model: data || { format: 1, nodes: [], tubes: [] },
+      view: view || defaultView(!data),
+    };
+    tabs.push(tab);
+    activeTabId = tab.tabId;
+    builder.modelReplaced();
+    model.loadJSON(tab.model);
+    applyViewState(tab.view);
+    builder.refresh();
+    renderTabs();
+    update();
+    scheduleSessionSave();
+    return tab;
+  }
+
+  /** Startzustand: leeres Modell -> bauen mit 35er Rohr und zufälliger Farbe. */
+  function defaultView(leer) {
+    const st = builder.uiState();
+    st.undo = []; st.redo = [];
+    st.slice = { on: false, axis: "z", value: 0, flip: false, values: { x: null, y: null, z: null } };
+    st.camera = null;
+    if (leer) {
+      st.mode = "add";
+      st.tubeId = geometry().defaultTube;
+      st.color = RANDOM_COLOR;
+    } else {
+      st.mode = "select";
+    }
+    return st;
+  }
+
+  function closeTab(tabId) {
+    const i = tabs.findIndex((x) => x.tabId === tabId);
+    if (i < 0) return;
+    if (tabId === activeTabId) captureActiveTab();
+    tabs.splice(i, 1);
+    if (tabId === activeTabId) {
+      activeTabId = null;
+      const naechster = tabs[i] || tabs[i - 1] || null;
+      if (naechster) {
+        activeTabId = naechster.tabId;
+        builder.modelReplaced();
+        model.loadJSON(naechster.model || { format: 1, nodes: [], tubes: [] });
+        applyViewState(naechster.view || {});
+        builder.refresh();
+      } else {
+        builder.modelReplaced();
+        model.loadJSON({ format: 1, nodes: [], tubes: [] });
+        builder.refresh();
+      }
+    }
+    renderTabs();
+    update();
+    scheduleSessionSave();
+  }
+
+  /** Der laufende Tab hat sich geändert: Markierung setzen, Sitzung sichern. */
+  function touchActiveTab() {
+    const tab = activeTab();
+    if (!tab) return;
+    tab.dirty = true;
+    renderTabs();
+    scheduleSessionSave();
+  }
+
+  function scheduleSessionSave() {
+    clearTimeout(sessionTimer);
+    sessionTimer = setTimeout(() => {
+      captureActiveTab();
+      docs.saveSession({ tabs, activeTabId }).catch((e) => console.warn("Sitzung:", e));
+    }, 600);
+  }
+
+  /** Beim Start: Migration, Sitzung wiederherstellen, sonst leerer Zustand. */
+  async function start() {
+    try { await docs.migrateOldDrafts(); } catch (e) { console.warn("Migration:", e); }
+    let sitzung = null;
+    try { sitzung = await docs.loadSession(); } catch (e) { console.warn("Sitzung:", e); }
+    if (sitzung && sitzung.tabs.length) {
+      tabs = sitzung.tabs;
+      activeTabId = sitzung.activeTabId && tabs.some((x) => x.tabId === sitzung.activeTabId)
+        ? sitzung.activeTabId : tabs[0].tabId;
+      const tab = activeTab();
+      builder.modelReplaced();
+      model.loadJSON(tab.model || { format: 1, nodes: [], tubes: [] });
+      applyViewState(tab.view || {});
+      builder.refresh();
+    } else {
+      const alt = storage.loadAutosave();
+      openTab({ name: t("doc_untitled"), data: alt && alt.nodes && alt.nodes.length ? alt : null });
+    }
+    renderTabs();
+    update();
+  }
+
+  $("tab-new").addEventListener("click", () => openTab({ name: naechsterFreierName() }));
+
+  /** "Modell 1", "Modell 2", ... -- der erste Name, den noch kein Tab trägt. */
+  function naechsterFreierName() {
+    const belegt = new Set(tabs.map((x) => x.name));
+    for (let i = 1; ; i++) {
+      const name = t("doc_default_name", i);
+      if (!belegt.has(name)) return name;
+    }
+  }
+
   refreshSavedList();
-  setMode("select");   // Start im Cursor-Modus, nicht mit einem Rohr in der Hand
   updateUndoButton();
-  return { update };
+  return { update, start, touchActiveTab, openTab, captureActiveTab,
+    get tabs() { return tabs; }, get activeTab() { return activeTab(); } };
 }

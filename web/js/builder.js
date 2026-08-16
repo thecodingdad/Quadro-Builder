@@ -443,6 +443,49 @@ export class Builder {
   }
 
   /**
+   * Zustand, der zu EINEM Modell gehört: gewähltes Bauteil, Modus, Ansichts-
+   * schalter und die Schrittspeicher. Beim Wechsel zwischen Tabs wird er
+   * gesichert und wieder eingesetzt -- jede Datei behält so ihre eigene
+   * Werkzeugleiste. Alles darin ist JSON-tauglich (die Schrittspeicher halten
+   * ohnehin nur Modell-Abzüge).
+   */
+  uiState() {
+    return {
+      mode: this.mode, tubeId: this.tubeId, panelId: this.panelId,
+      fittingKind: this.fittingKind, clampPart: this.clampPart, slideKind: this.slideKind,
+      color: this.color, diagonal: this.diagonal,
+      showLabels: this.showLabels, showHints: this.showHints,
+      assemblyOrder: this.assemblyOrder, assemblyStep: this.assemblyStep,
+      assemblyLabels: this.assemblyLabels,
+      undo: this._undoStack.slice(), redo: this._redoStack.slice(),
+    };
+  }
+
+  /** Gegenstück zu uiState(). Der Modus wird NICHT hier gesetzt -- das macht
+   *  die Oberfläche über setMode(), damit die Knöpfe mitziehen. */
+  setUiState(s = {}) {
+    if (s.tubeId) this.tubeId = s.tubeId;
+    if (s.panelId) this.panelId = s.panelId;
+    if (s.fittingKind) this.fittingKind = s.fittingKind;
+    if (s.clampPart) this.clampPart = s.clampPart;
+    if (s.slideKind) this.slideKind = s.slideKind;
+    if (s.color) this.color = s.color;
+    this.diagonal = !!s.diagonal;
+    this.showLabels = !!s.showLabels;
+    this.showHints = !!s.showHints;
+    if (s.assemblyOrder) this.assemblyOrder = s.assemblyOrder;
+    this.assemblyStep = s.assemblyStep || 0;
+    this.assemblyLabels = s.assemblyLabels !== false;
+    this._undoStack = Array.isArray(s.undo) ? s.undo.slice() : [];
+    this._redoStack = Array.isArray(s.redo) ? s.redo.slice() : [];
+    this.selection.clear();
+    this.selectedNodeId = null;
+    this.highlight = null;
+    this.panelRail = null;
+    this.onHistoryChange();
+  }
+
+  /**
    * Teile fuer eine reine Sicht-Hervorhebung markieren (z. B. eine Zeile im
    * Bestand). Unabhaengig von der Cursor-Auswahl: nichts wird dadurch
    * loeschbar oder umfaerbbar, und es gilt in jedem Modus.
