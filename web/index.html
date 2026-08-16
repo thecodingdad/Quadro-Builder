@@ -28,27 +28,26 @@
           </button>
           <div id="file-pop" class="menu-pop" hidden>
             <div class="menu-section">
-              <span class="menu-label" data-i18n="menu_named">Benannter Entwurf</span>
-              <button id="btn-save" class="btn ghost full" data-i18n="btn_save">Als Entwurf speichern…</button>
+              <span class="menu-label" data-i18n="menu_doc">Modell</span>
+              <button id="btn-doc-new" class="btn ghost full" data-i18n="btn_doc_new">Neu…</button>
               <div class="menu-row">
-                <select id="load-select"></select>
-                <button id="btn-load" class="btn ghost" data-i18n="btn_load">Laden</button>
-                <button id="btn-delete-save" class="btn ghost" data-i18n-title="btn_delete_save_title">🗑</button>
+                <select id="doc-select"></select>
+                <button id="btn-doc-open" class="btn ghost" data-i18n="btn_doc_open">Öffnen</button>
+                <button id="btn-doc-delete" class="btn ghost" data-i18n-title="btn_doc_delete_title">🗑</button>
               </div>
+              <button id="btn-doc-save" class="btn ghost full" data-i18n="btn_doc_save">Speichern</button>
+              <button id="btn-doc-saveas" class="btn ghost full" data-i18n="btn_doc_saveas">Speichern unter…</button>
             </div>
             <div class="menu-section">
               <span class="menu-label" data-i18n="menu_file">Datei</span>
-              <div class="menu-row">
-                <button id="btn-export-qdf" class="btn ghost full" data-i18n="btn_export_qdf" data-i18n-title="btn_export_qdf_title">Export QDF</button>
-              </div>
-              <div class="menu-row">
-                <button id="btn-import" class="btn ghost full" data-i18n="btn_import" data-i18n-title="btn_import_title">Import QDF</button>
-              </div>
+              <button id="btn-export-qdf" class="btn ghost full" data-i18n="btn_export_qdf" data-i18n-title="btn_export_qdf_title">Export QDF</button>
+              <button id="btn-export-all" class="btn ghost full" data-i18n="btn_export_all" data-i18n-title="btn_export_all_title">Alle exportieren…</button>
+              <button id="btn-import" class="btn ghost full" data-i18n="btn_import" data-i18n-title="btn_import_title">Import QDF</button>
               <input id="file-import" type="file" accept=".qdf,application/json,.json" hidden />
             </div>
             <button id="btn-clear" class="btn ghost full danger" data-i18n="btn_clear" data-i18n-title="btn_clear_title">Modell leeren</button>
           </div>
-        </div>
+        </div><!-- #file-menu -->
         <span class="divider"></span>
         <div class="group seg">
           <button id="mode-add" class="btn active" data-i18n="btn_build" data-i18n-title="btn_build_title">Bauen</button>
@@ -114,6 +113,14 @@
                 <span class="menu-label" data-i18n="settings_quality">Render-Qualität</span>
                 <select id="quality-select" class="lang-select"></select>
                 <span class="hint" data-i18n="settings_quality_hint">Betrifft die Rundung der Kupplungen und Rohre.</span>
+              </div>
+              <div class="menu-section">
+                <span class="menu-label" data-i18n="settings_saving">Speichern</span>
+                <label class="asm-opt">
+                  <input type="checkbox" id="opt-autosave" checked>
+                  <span data-i18n="settings_autosave">Automatisch speichern</span>
+                </label>
+                <span class="hint" data-i18n="settings_autosave_hint">Aus: Änderungen bleiben nur in der Sitzung, bis du speicherst.</span>
               </div>
             </div>
           </div>
@@ -271,6 +278,19 @@
       <div id="current-part" class="current-part" hidden></div>
 
       <div id="status" class="status"></div>
+
+      <!-- Rückfrage beim Schließen eines Tabs mit ungespeicherten Änderungen -->
+      <div id="ask-overlay" class="help-overlay" hidden>
+        <div class="help-card">
+          <h3 id="ask-title" data-i18n="ask_close_title">Ungespeicherte Änderungen</h3>
+          <p id="ask-text"></p>
+          <div class="ask-actions">
+            <button id="ask-save" class="btn" data-i18n="ask_save">Speichern</button>
+            <button id="ask-discard" class="btn ghost" data-i18n="ask_discard">Verwerfen</button>
+            <button id="ask-cancel" class="btn ghost" data-i18n="ask_cancel">Abbrechen</button>
+          </div>
+        </div>
+      </div>
 
       <div id="help-overlay" class="help-overlay" hidden>
         <div class="help-card">

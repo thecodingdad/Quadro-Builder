@@ -888,11 +888,59 @@ export function initUI({ scene, model, builder }) {
     toggleFileMenu(false);
   });
   $("btn-export-qdf").addEventListener("click", () => {
+    const tab = ui.activeTab;
+    if (!tab) return;
     const { text, stats } = buildQDF(model);
-    storage.exportText(text, "quadro-entwurf.qdf");
+    storage.exportText(text, `${dateiName(tab.name)}.qdf`);
     const parts = `${stats.connectors} + ${stats.tubes + stats.bows} + ${stats.panels}`;
     flash(t("flash_exported_qdf", parts));
     toggleFileMenu(false);
+  });
+
+  /** Aus einem Entwurfsnamen einen brauchbaren Dateinamen machen. */
+  function dateiName(name) {
+    return (name || "quadro").replace(/[\\/:*?"<>|]/g, "-").trim() || "quadro";
+  }
+
+  // Alle Modelle auf einmal: mit Ordner-Auswahl (Chrome/Edge) in einen Rutsch,
+  // sonst nacheinander als einzelne Downloads.
+  $("btn-export-all").addEventListener("click", async () => {
+    toggleFileMenu(false);
+    ui.captureActiveTab();
+    let liste = [];
+    try { liste = await docs.listDocs(); } catch (e) { console.warn("Dateien:", e); }
+    // Offene, noch nicht gespeicherte Tabs kommen mit ihrem Arbeitsstand dazu.
+    const alle = liste.map((d) => ({ name: d.name, data: d.data }));
+    for (const tab of tabs) {
+      if (tab.docId && !tab.dirty) continue;
+      const i = alle.findIndex((x) => x.name === tab.name);
+      const eintrag = { name: tab.name, data: tab.model };
+      if (i >= 0) alle[i] = eintrag; else alle.push(eintrag);
+    }
+    if (!alle.length) { flash(t("flash_export_all_empty")); return; }
+    const texte = alle.map((d) => {
+      const m2 = new (model.constructor)();
+      m2.loadJSON(d.data);
+      return { name: dateiName(d.name), text: buildQDF(m2).text };
+    });
+    if (window.showDirectoryPicker) {
+      try {
+        const ordner = await window.showDirectoryPicker({ mode: "readwrite" });
+        for (const f of texte) {
+          const handle = await ordner.getFileHandle(`${f.name}.qdf`, { create: true });
+          const w = await handle.createWritable();
+          await w.write(f.text);
+          await w.close();
+        }
+        flash(t("flash_exported_all", texte.length));
+        return;
+      } catch (e) {
+        if (e && e.name === "AbortError") return;      // Dialog abgebrochen
+        console.warn("Ordner-Export:", e);
+      }
+    }
+    for (const f of texte) storage.exportText(f.text, `${f.name}.qdf`);
+    flash(t("flash_exported_all", texte.length));
   });
 
   $("btn-import").addEventListener("click", () => $("file-import").click());
@@ -900,7 +948,9 @@ export function initUI({ scene, model, builder }) {
     const f = e.target.files[0];
     if (!f) return;
     try {
-      let info = "";
+      // Importiertes landet in einem EIGENEN Tab -- das offene Modell bleibt,
+      // wie es ist. Der Dateiname wird zum Modellnamen.
+      let daten = null, info = "";
       if (/\.qdf$/i.test(f.name)) {
         const text = await f.text();
         const data = parseQDF(text, {
@@ -910,90 +960,166 @@ export function initUI({ scene, model, builder }) {
           mergeEps: 2,
         });
         if (!data.nodes.length) throw new Error(t("qdf_no_parts"));
-        let loadRes;
-        builder.modelReplaced();
-        builder.recordHistory(() => { loadRes = model.loadJSON(data); });
-        if (!loadRes.ok) throw new Error(t(loadRes.reason === "format" ? "load_error_format" : "load_error_data"));
-        builder.selectedNodeId = null;
-        builder.refresh();
-        scene.resetCamera();
-        const s = data.stats;
-        const skip = Object.entries(s.skipped || {});
+        daten = data;
+        const st = data.stats;
+        const skip = Object.entries(st.skipped || {});
         const skipTxt = skip.length
           ? t("qdf_skipped", skip.map(([k, v]) => `${v}× ${k.replace(/2$|-new2$|-end2$/, "")}`).join(", "))
           : "";
-        const panelTxt = s.panels ? `, ${s.panels} ${t("bom_panels").toLowerCase()}` : "";
-        const clampTxt = s.clamps ? `, ${s.clamps} ${t("btn_clamp").toLowerCase()}` : "";
-        const stats = `${s.nodes} ${t("bom_connectors").split(" ")[0].toLowerCase()}, ${s.tubes} ${t("bom_tubes").toLowerCase()}${panelTxt}${clampTxt}`;
+        const panelTxt = st.panels ? `, ${st.panels} ${t("bom_panels").toLowerCase()}` : "";
+        const clampTxt = st.clamps ? `, ${st.clamps} ${t("btn_clamp").toLowerCase()}` : "";
+        const stats = `${st.nodes} ${t("bom_connectors").split(" ")[0].toLowerCase()}, ${st.tubes} ${t("bom_tubes").toLowerCase()}${panelTxt}${clampTxt}`;
         info = t("qdf_imported", stats, skipTxt);
       } else {
-        const data = await storage.importFile(f);
-        let loadRes;
-        builder.modelReplaced();
-        builder.recordHistory(() => { loadRes = model.loadJSON(data); });
-        if (!loadRes.ok) throw new Error(t(loadRes.reason === "format" ? "load_error_format" : "load_error_data"));
-        builder.selectedNodeId = null;
-        builder.refresh();
+        daten = await storage.importFile(f);
         info = t("flash_imported_json");
       }
-      // Import als NEUEN Entwurf ablegen (Name = Datei + Datum/Zeit), damit alte
-      // Staende erhalten bleiben; auf diesem Entwurf wird weitergearbeitet.
-      const base = f.name.replace(/\.[^.]+$/, "").trim() || "Import";
-      const draftName = `${base} ${importStamp()}`;
-      try {
-        storage.saveNamed(draftName, model.toJSON());
-        refreshSavedList();
-        $("load-select").value = draftName;
-        flash(`${info} · ${t("flash_import_draft", draftName)}`);
-      } catch (err) {
-        // Import selbst war erfolgreich (das Modell ist geladen) – nur die
-        // zusaetzliche Entwurfs-Sicherung ist fehlgeschlagen.
-        flash(`${info} · ${err.name === "QuotaError" ? t("flash_save_quota") : t("flash_save_failed", err.message)}`);
-      }
+      const name = f.name.replace(/\.[^.]+$/, "").trim() || t("doc_untitled");
+      openTab({ name, data: daten, dirty: true });
+      scene.resetCamera();
+      flash(info);
     } catch (err) {
-      alert(err.name === "QuotaError" ? t("flash_save_quota") : err.message);
+      alert(err.message);
     }
     e.target.value = "";
   });
 
-  $("btn-save").addEventListener("click", () => {
-    const name = prompt(t("prompt_save_name"));
-    if (!name) return;
+  // --- Dateien: Neu, Öffnen, Speichern, Speichern unter ------------------
+  // Ein Tab zeigt entweder eine gespeicherte Datei (docId gesetzt) oder einen
+  // noch namenlosen Stand. Gespeichert wird in dieselbe Datei; "Speichern
+  // unter" legt eine neue an.
+  const AUTOSAVE_MODE_KEY = "quadro.autosaveMode.v1";
+  let autosaveOn = localStorage.getItem(AUTOSAVE_MODE_KEY) !== "0";
+  let docSaveTimer = null;
+
+  function isAutosaveOn() { return autosaveOn; }
+  function setAutosaveOn(on) {
+    autosaveOn = !!on;
+    localStorage.setItem(AUTOSAVE_MODE_KEY, autosaveOn ? "1" : "0");
+    if (autosaveOn) scheduleDocSave();
+  }
+
+  async function refreshDocList() {
+    const sel = $("doc-select");
+    if (!sel) return;
+    const alt = sel.value;
+    sel.innerHTML = "";
+    let liste = [];
+    try { liste = await docs.listDocs(); } catch (e) { console.warn("Dateien:", e); }
+    if (!liste.length) {
+      const o = el("option", null, t("saves_empty"));
+      o.value = ""; sel.appendChild(o);
+      return;
+    }
+    for (const d of liste) {
+      const o = el("option", null, d.name); o.value = d.id; sel.appendChild(o);
+    }
+    if (alt && liste.some((d) => d.id === alt)) sel.value = alt;
+  }
+
+  /**
+   * Namen abfragen und auf Kollision prüfen. Liefert { name, doc } -- `doc` ist
+   * die vorhandene Datei, wenn überschrieben werden soll -- oder null bei
+   * Abbruch.
+   */
+  async function askName(vorschlag, { eigeneId = null } = {}) {
+    const name = (prompt(t("prompt_save_name"), vorschlag || "") || "").trim();
+    if (!name) return null;
+    const vorhanden = await docs.docByName(name);
+    if (vorhanden && vorhanden.id !== eigeneId) {
+      if (!confirm(t("confirm_overwrite", name))) return null;
+      return { name, doc: vorhanden };
+    }
+    return { name, doc: null };
+  }
+
+  /** Laufenden Tab in seine Datei schreiben (oder in eine neue). */
+  async function saveActiveTab({ name = null, docId = undefined } = {}) {
+    const tab = ui.captureActiveTab();
+    if (!tab) return null;
+    const ziel = docId !== undefined ? docId : tab.docId;
     try {
-      storage.saveNamed(name, model.toJSON());
-    } catch (err) {
-      flash(err.name === "QuotaError" ? t("flash_save_quota") : t("flash_save_failed", err.message));
-      return;
+      const doc = await docs.saveDoc({ docId: ziel, name: name || tab.name, data: tab.model });
+      tab.docId = doc.id;
+      tab.name = doc.name;
+      tab.dirty = false;
+      showSaved();
+      renderTabs();
+      refreshDocList();
+      return doc;
+    } catch (e) {
+      flash(t("flash_save_failed", e.message));
+      return null;
     }
-    refreshSavedList();
-    $("load-select").value = name;
+  }
+
+  function scheduleDocSave() {
+    if (!autosaveOn) return;
+    clearTimeout(docSaveTimer);
+    docSaveTimer = setTimeout(() => { saveActiveTab(); }, 800);
+  }
+
+  $("btn-doc-new").addEventListener("click", async () => {
+    const gewaehlt = await askName(naechsterFreierName());
+    if (!gewaehlt) return;
     toggleFileMenu(false);
-    flash(t("flash_saved", name));
+    const tab = openTab({ name: gewaehlt.name });
+    if (gewaehlt.doc) tab.docId = gewaehlt.doc.id;   // vorhandene Datei überschreiben
+    await saveActiveTab({ name: gewaehlt.name, docId: gewaehlt.doc ? gewaehlt.doc.id : null });
+    flash(t("flash_saved", gewaehlt.name));
   });
-  $("btn-load").addEventListener("click", () => {
-    const name = $("load-select").value;
-    if (!name) return;
-    const data = storage.loadNamed(name);
-    if (!data) return;
-    let loadRes;
-    builder.modelReplaced();
-        builder.recordHistory(() => { loadRes = model.loadJSON(data); });
-    if (!loadRes.ok) {
-      flash(t(loadRes.reason === "format" ? "load_error_format" : "load_error_data"));
-      toggleFileMenu(false);
-      return;
+
+  $("btn-doc-open").addEventListener("click", async () => {
+    const id = $("doc-select").value;
+    if (!id) return;
+    toggleFileMenu(false);
+    await openDocById(id);
+  });
+
+  /** Datei in einem Tab öffnen -- ist sie schon offen, wird der Tab gewählt. */
+  async function openDocById(docId) {
+    const offen = tabs.find((x) => x.docId === docId);
+    if (offen) { activateTab(offen.tabId); return offen; }
+    const doc = await docs.getDoc(docId);
+    if (!doc) { flash(t("load_error_data")); return null; }
+    const tab = openTab({ name: doc.name, data: doc.data, docId: doc.id });
+    flash(t("flash_loaded", doc.name));
+    return tab;
+  }
+
+  $("btn-doc-delete").addEventListener("click", async () => {
+    const id = $("doc-select").value;
+    if (!id) return;
+    const doc = await docs.getDoc(id);
+    if (!doc || !confirm(t("confirm_delete_save", doc.name))) return;
+    await docs.removeDoc(id);
+    for (const tab of tabs) if (tab.docId === id) { tab.docId = null; tab.dirty = true; }
+    renderTabs();
+    refreshDocList();
+  });
+
+  $("btn-doc-save").addEventListener("click", async () => {
+    const tab = ui.activeTab;
+    if (!tab) return;
+    toggleFileMenu(false);
+    if (!tab.docId) {
+      const gewaehlt = await askName(tab.name);
+      if (!gewaehlt) return;
+      await saveActiveTab({ name: gewaehlt.name, docId: gewaehlt.doc ? gewaehlt.doc.id : null });
+    } else {
+      await saveActiveTab();
     }
-    builder.selectedNodeId = null;
-    builder.refresh();
-    toggleFileMenu(false);
-    flash(t("flash_loaded", name));
+    flash(t("flash_saved", ui.activeTab.name));
   });
-  $("btn-delete-save").addEventListener("click", () => {
-    const name = $("load-select").value;
-    if (!name) return;
-    if (!confirm(t("confirm_delete_save", name))) return;
-    storage.deleteNamed(name);
-    refreshSavedList();
+
+  $("btn-doc-saveas").addEventListener("click", async () => {
+    const tab = ui.activeTab;
+    if (!tab) return;
+    const gewaehlt = await askName(tab.name);
+    if (!gewaehlt) return;
+    toggleFileMenu(false);
+    await saveActiveTab({ name: gewaehlt.name, docId: gewaehlt.doc ? gewaehlt.doc.id : null });
+    flash(t("flash_saved", gewaehlt.name));
   });
 
   // --- Hilfe-Overlay -----------------------------------------------------
@@ -1431,19 +1557,7 @@ export function initUI({ scene, model, builder }) {
     window.print();
   }
 
-  function refreshSavedList() {
-    const sel = $("load-select");
-    sel.innerHTML = "";
-    const names = storage.listNames();
-    if (names.length === 0) {
-      const o = el("option", null, t("saves_empty"));
-      o.value = ""; sel.appendChild(o);
-      return;
-    }
-    for (const n of names) {
-      const o = el("option", null, n); o.value = n; sel.appendChild(o);
-    }
-  }
+
 
   // Meldungen bleiben stehen, bis die naechste kommt -- eine Meldung, die man
   // gerade nicht angesehen hat, war sonst weg.
@@ -1838,6 +1952,10 @@ export function initUI({ scene, model, builder }) {
     e.target.value = "";
   });
 
+  // Die Datei-Handler oben greifen auf diese Sammlung zu; sie wird unten
+  // gefüllt (Tabs, aktiver Tab, Sichern).
+  const ui = {};
+
   // --- Dateien in Tabs ---------------------------------------------------
   // Ein Tab hält ein Modell samt seiner Werkzeugleiste, Ansicht und Schritt-
   // speicher. Umgeschaltet wird über EIN Modell und EINEN Builder: der Stand
@@ -1959,9 +2077,49 @@ export function initUI({ scene, model, builder }) {
     return st;
   }
 
-  function closeTab(tabId) {
+  /**
+   * Rückfrage vor dem Schließen: Speichern, Verwerfen oder Abbrechen.
+   * Liefert "save" | "discard" | "cancel".
+   */
+  function askUnsaved(name) {
+    return new Promise((resolve) => {
+      const box = $("ask-overlay");
+      $("ask-text").textContent = t("ask_close_text", name);
+      box.hidden = false;
+      const fertig = (antwort) => {
+        box.hidden = true;
+        $("ask-save").onclick = null;
+        $("ask-discard").onclick = null;
+        $("ask-cancel").onclick = null;
+        resolve(antwort);
+      };
+      $("ask-save").onclick = () => fertig("save");
+      $("ask-discard").onclick = () => fertig("discard");
+      $("ask-cancel").onclick = () => fertig("cancel");
+    });
+  }
+
+  async function closeTab(tabId) {
     const i = tabs.findIndex((x) => x.tabId === tabId);
     if (i < 0) return;
+    const tab = tabs[i];
+    // Ungespeicherte Änderungen: nachfragen. Bei eingeschaltetem Auto-Save gilt
+    // ein Tab mit Datei als gespeichert -- dort läuft der Stand ohnehin mit.
+    const offen = tab.dirty && !(autosaveOn && tab.docId);
+    if (offen) {
+      if (tabId !== activeTabId) activateTab(tabId);
+      const antwort = await askUnsaved(tab.name);
+      if (antwort === "cancel") return;
+      if (antwort === "save") {
+        if (!tab.docId) {
+          const gewaehlt = await askName(tab.name);
+          if (!gewaehlt) return;
+          await saveActiveTab({ name: gewaehlt.name, docId: gewaehlt.doc ? gewaehlt.doc.id : null });
+        } else {
+          await saveActiveTab();
+        }
+      }
+    }
     if (tabId === activeTabId) captureActiveTab();
     tabs.splice(i, 1);
     if (tabId === activeTabId) {
@@ -1991,6 +2149,9 @@ export function initUI({ scene, model, builder }) {
     tab.dirty = true;
     renderTabs();
     scheduleSessionSave();
+    // Auto-Save schreibt direkt in die Datei; ist er aus, bleibt der Stand
+    // nur in der Sitzung (überlebt einen Reload, gilt aber als ungespeichert).
+    if (tab.docId) scheduleDocSave();
   }
 
   function scheduleSessionSave() {
@@ -2034,8 +2195,25 @@ export function initUI({ scene, model, builder }) {
     }
   }
 
-  refreshSavedList();
+  Object.assign(ui, {
+    update, start, touchActiveTab, openTab, closeTab, activateTab, captureActiveTab,
+    openDocById, saveActiveTab, refreshDocList, isAutosaveOn, setAutosaveOn,
+  });
+  // Als echte Zugriffsfunktionen anlegen: Object.assign würde einen Getter
+  // sofort auswerten und den damaligen Stand einfrieren.
+  Object.defineProperties(ui, {
+    tabs: { get: () => tabs },
+    activeTab: { get: () => activeTab() },
+  });
+
+  // Auto-Save-Schalter in den Einstellungen
+  const autosaveBox = $("opt-autosave");
+  if (autosaveBox) {
+    autosaveBox.checked = autosaveOn;
+    autosaveBox.addEventListener("change", () => setAutosaveOn(autosaveBox.checked));
+  }
+
+  refreshDocList();
   updateUndoButton();
-  return { update, start, touchActiveTab, openTab, captureActiveTab,
-    get tabs() { return tabs; }, get activeTab() { return activeTab(); } };
+  return ui;
 }

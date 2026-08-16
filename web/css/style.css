@@ -748,3 +748,5 @@ body.sidebar-hidden #sidebar, body.sidebar-hidden #sidebar-resizer { display: no
   color: inherit; opacity: 0.7;
 }
 .tab-new:hover { opacity: 1; background: rgba(0, 0, 0, 0.08); }
+
+.ask-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 14px; }
