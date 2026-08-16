@@ -27,15 +27,7 @@
           <button id="btn-doc-open" class="btn ghost" data-i18n="btn_doc_open" data-i18n-title="btn_doc_open_title">Öffnen</button>
           <button id="btn-doc-save" class="btn ghost" data-i18n="btn_doc_save">Speichern</button>
           <button id="btn-doc-saveas" class="btn ghost" data-i18n="btn_doc_saveas">Speichern unter…</button>
-          <span class="divider"></span>
-          <button id="btn-export-qdf" class="btn ghost" data-i18n="btn_export_qdf" data-i18n-title="btn_export_qdf_title">Export QDF</button>
-          <button id="btn-import" class="btn ghost" data-i18n="btn_import" data-i18n-title="btn_import_title">Import QDF</button>
           <input id="file-import" type="file" accept=".qdf,application/json,.json" hidden />
-        </div>
-        <span class="divider"></span>
-        <div class="group seg">
-          <button id="mode-add" class="btn active" data-i18n="btn_build" data-i18n-title="btn_build_title">Bauen</button>
-          <button id="mode-assembly" class="btn" data-i18n="btn_assembly" data-i18n-title="btn_assembly_title">Aufbau</button>
         </div>
       </div><!-- #toolbar-left -->
 
@@ -52,7 +44,10 @@
 
         <!-- Alle Toolbar-Right-Inhalte: Desktop = inline, Mobile = Dropdown -->
         <div id="toolbar-right-inner">
-        <span class="divider"></span>
+        <div class="group seg">
+          <button id="mode-add" class="btn active" data-i18n="btn_build" data-i18n-title="btn_build_title">Bauen</button>
+          <button id="mode-assembly" class="btn" data-i18n="btn_assembly" data-i18n-title="btn_assembly_title">Aufbau</button>
+        </div>
         <!-- Icon-Buttons: Desktop = inline, Mobile-Dropdown = Zeile -->
         <div class="toolbar-icon-row">
           <!-- Seitenleiste ein-/ausblenden -->
@@ -353,7 +348,7 @@
       <section class="panel" id="panel-own" hidden>
         <h2 data-i18n="lib_own_title">Meine Modelle</h2>
         <div class="lib-actions">
-          <button id="own-new" class="btn ghost small" data-i18n="btn_doc_new">Neu…</button>
+          <button id="own-import" class="btn ghost small" data-i18n="btn_import" data-i18n-title="btn_import_title">Import QDF</button>
           <button id="btn-export-all" class="btn ghost small" data-i18n="btn_export_all" data-i18n-title="btn_export_all_title">Alle exportieren…</button>
         </div>
         <div id="own-list" class="lib-list"></div>

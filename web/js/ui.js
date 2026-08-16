@@ -867,15 +867,15 @@ export function initUI({ scene, model, builder }) {
   $("btn-redo").addEventListener("click", () => builder.redo());
   const camBtn = $("btn-camera");
   if (camBtn) camBtn.addEventListener("click", () => scene.resetCamera());
-  $("btn-export-qdf").addEventListener("click", () => {
-    const tab = ui.activeTab;
-    if (!tab) return;
-    const { text, stats } = buildQDF(model);
-    storage.exportText(text, `${dateiName(tab.name)}.qdf`);
+  /** Ein Modell als QDF anbieten. `daten` ist ein Modell-JSON. */
+  function exportiereModell(name, daten) {
+    const m2 = new (model.constructor)();
+    m2.loadJSON(daten);
+    const { text, stats } = buildQDF(m2);
+    storage.exportText(text, `${dateiName(name)}.qdf`);
     const parts = `${stats.connectors} + ${stats.tubes + stats.bows} + ${stats.panels}`;
     flash(t("flash_exported_qdf", parts));
-    toggleFileMenu(false);
-  });
+  }
 
   /** Aus einem Entwurfsnamen einen brauchbaren Dateinamen machen. */
   function dateiName(name) {
@@ -903,6 +903,7 @@ export function initUI({ scene, model, builder }) {
       m2.loadJSON(d.data);
       return { name: dateiName(d.name), text: buildQDF(m2).text };
     });
+
     if (window.showDirectoryPicker) {
       try {
         const ordner = await window.showDirectoryPicker({ mode: "readwrite" });
@@ -923,7 +924,7 @@ export function initUI({ scene, model, builder }) {
     flash(t("flash_exported_all", texte.length));
   });
 
-  $("btn-import").addEventListener("click", () => $("file-import").click());
+  $("own-import").addEventListener("click", () => $("file-import").click());
   $("file-import").addEventListener("change", async (e) => {
     const f = e.target.files[0];
     if (!f) return;
@@ -1204,37 +1205,50 @@ export function initUI({ scene, model, builder }) {
     let liste = [];
     try { liste = await docs.listDocs(); } catch (e) { console.warn("Dateien:", e); }
     if (!liste.length) { box.appendChild(el("div", "muted", t("saves_empty"))); return; }
+    const iconKnopf = (svg, titel, fn) => {
+      const b2 = el("button", "btn ghost icon-sq small");
+      b2.innerHTML = svg;
+      b2.title = titel;
+      b2.addEventListener("click", (e) => { e.stopPropagation(); fn(); });
+      return b2;
+    };
+    const STIFT = `<svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"><path d="M11.2 2.4 13.6 4.8 5.6 12.8 2.4 13.6 3.2 10.4z"/></svg>`;
+    const PFEIL = `<svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2v8"/><path d="M5 7.2 8 10.4l3-3.2"/><path d="M2.6 12.6h10.8"/></svg>`;
+    const MUELL = `<svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 4.6h10"/><path d="M4.6 4.6 5.2 13h5.6l.6-8.4"/><path d="M6.4 4.6V3h3.2v1.6"/></svg>`;
     for (const d of liste) {
       const offen = tabs.some((x) => x.docId === d.id);
-      const row = el("div", "lib-row" + (offen ? " active" : ""));
-      const head = el("div", "lib-head");
-      head.appendChild(el("span", "lib-name", d.name));
+      const row = el("div", "lib-row own-row" + (offen ? " active" : ""));
+      const links = el("div", "own-main");
+      const kopf = el("div", "lib-head");
+      kopf.appendChild(el("span", "lib-name", d.name));
       const knoten = (d.data && d.data.nodes) ? d.data.nodes.length : 0;
       const rohre = (d.data && d.data.tubes) ? d.data.tubes.length : 0;
-      head.appendChild(el("span", "lib-badge", `${knoten}/${rohre}`));
-      row.appendChild(head);
-      row.appendChild(el("span", "lib-meta", new Date(d.updatedAt || Date.now()).toLocaleString()));
-      const zeile = el("div", "lib-actions");
-      const umbenennen = el("button", "btn ghost small", t("btn_doc_rename"));
-      umbenennen.addEventListener("click", async (e) => {
-        e.stopPropagation();
+      kopf.appendChild(el("span", "lib-badge", `${knoten}/${rohre}`));
+      links.appendChild(kopf);
+      links.appendChild(el("span", "lib-meta", new Date(d.updatedAt || Date.now()).toLocaleString()));
+      row.appendChild(links);
+
+      const werkzeuge = el("div", "own-tools");
+      werkzeuge.appendChild(iconKnopf(STIFT, t("btn_doc_rename"), async () => {
         const gewaehlt = await askName(d.name, { eigeneId: d.id });
         if (!gewaehlt) return;
         await docs.renameDoc(d.id, gewaehlt.name);
         for (const tab of tabs) if (tab.docId === d.id) tab.name = gewaehlt.name;
-        renderTabs(); renderOwnModels(); refreshDocList();
-      });
-      const loeschen = el("button", "btn ghost small danger", "🗑");
-      loeschen.title = t("btn_doc_delete_title");
-      loeschen.addEventListener("click", async (e) => {
-        e.stopPropagation();
+        renderTabs(); renderOwnModels();
+      }));
+      werkzeuge.appendChild(iconKnopf(PFEIL, t("btn_export_qdf"), () => {
+        // Offener Tab? Dann den Arbeitsstand nehmen, sonst die Datei.
+        const tab = tabs.find((x) => x.docId === d.id);
+        if (tab && tab.tabId === activeTabId) captureActiveTab();
+        exportiereModell(d.name, tab ? tab.model : d.data);
+      }));
+      werkzeuge.appendChild(iconKnopf(MUELL, t("btn_doc_delete_title"), async () => {
         if (!confirm(t("confirm_delete_save", d.name))) return;
         await docs.removeDoc(d.id);
         for (const tab of tabs) if (tab.docId === d.id) { tab.docId = null; tab.dirty = true; }
-        renderTabs(); renderOwnModels(); refreshDocList();
-      });
-      zeile.appendChild(umbenennen); zeile.appendChild(loeschen);
-      row.appendChild(zeile);
+        renderTabs(); renderOwnModels();
+      }));
+      row.appendChild(werkzeuge);
       row.addEventListener("click", () => openDocById(d.id));
       box.appendChild(row);
     }
@@ -2315,7 +2329,7 @@ export function initUI({ scene, model, builder }) {
 
   $("tab-new").addEventListener("click", () => openTab({ name: naechsterFreierName() }));
   $("empty-new").addEventListener("click", () => $("btn-doc-new").click());
-  $("own-new").addEventListener("click", () => $("btn-doc-new").click());
+
   $("empty-open").addEventListener("click", () => { showSidebarPanel("own"); renderOwnModels(); });
   $("empty-import").addEventListener("click", () => $("file-import").click());
 
