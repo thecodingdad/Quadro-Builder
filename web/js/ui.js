@@ -1005,10 +1005,21 @@ export function initUI({ scene, model, builder }) {
   }
 
   /** Laufenden Tab in seine Datei schreiben (oder in eine neue). */
-  async function saveActiveTab({ name = null, docId = undefined } = {}) {
+  async function saveActiveTab({ name = null, docId = undefined, nurBeiAenderung = false } = {}) {
     const tab = ui.captureActiveTab();
     if (!tab) return null;
     const ziel = docId !== undefined ? docId : tab.docId;
+    // Automatisches Speichern soll das Datum nur anfassen, wenn sich am Modell
+    // wirklich etwas geändert hat -- sonst rutscht eine Datei allein durchs
+    // Öffnen in der Liste nach oben.
+    if (nurBeiAenderung && ziel) {
+      const alt = await docs.getDoc(ziel);
+      if (alt && JSON.stringify(alt.data) === JSON.stringify(tab.model)) {
+        tab.dirty = false;
+        renderTabs();
+        return alt;
+      }
+    }
     try {
       const doc = await docs.saveDoc({ docId: ziel, name: name || tab.name, data: tab.model });
       tab.docId = doc.id;
@@ -1026,7 +1037,10 @@ export function initUI({ scene, model, builder }) {
   function scheduleDocSave() {
     if (!autosaveOn) return;
     clearTimeout(docSaveTimer);
-    docSaveTimer = setTimeout(() => { saveActiveTab(); }, 800);
+    docSaveTimer = setTimeout(() => {
+      const tab = activeTab();
+      if (tab && tab.dirty) saveActiveTab({ nurBeiAenderung: true });
+    }, 800);
   }
 
   $("btn-doc-new").addEventListener("click", async () => {
@@ -1185,12 +1199,18 @@ export function initUI({ scene, model, builder }) {
   }
 
   /** Meine Modelle: gespeicherte Dateien, Klick öffnet sie in einem Tab. */
+  let ownRenderLauf = 0;
   async function renderOwnModels() {
     const box = $("own-list");
     if (!box) return;
-    box.innerHTML = "";
+    // Mehrere Aufrufe können sich überholen (Klick + update + Panel-Wechsel).
+    // Nur der jüngste darf die Liste schreiben, sonst hängen die Einträge
+    // mehrfach untereinander.
+    const lauf = ++ownRenderLauf;
     let liste = [];
     try { liste = await docs.listDocs(); } catch (e) { console.warn("Dateien:", e); }
+    if (lauf !== ownRenderLauf) return;
+    box.innerHTML = "";
     if (!liste.length) { box.appendChild(el("div", "muted", t("saves_empty"))); return; }
     const iconKnopf = (svg, titel, fn) => {
       const b2 = el("button", "btn ghost icon-sq small");
