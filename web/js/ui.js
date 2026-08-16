@@ -2001,12 +2001,18 @@ export function initUI({ scene, model, builder }) {
   function renderInventoryEditor() {
     const box = $("inventory-editor");
     box.innerHTML = "";
+    // Dieselben Abschnitte und dieselbe Reihenfolge wie die Stückliste --
+    // sonst sucht man ein Teil im Bestand woanders als in der Liste. Die
+    // Rutschenteile stehen im Katalog beim Zubehör und werden hier abgetrennt.
+    const zubehoer = accessories();
+    const istRutsche = (a) => typeof a.qdf === "string" && /slide/.test(a.qdf);
     const groups = [
-      [t("group_tubes"), "tubes", allTubes()],
-      [t("group_connectors"), "connectors", allConnectors()],
-      [t("group_panels"), "panels", panels()],
-      [t("group_reinforcements"), "reinforcements", reinforcements()],
-      [t("group_fittings"), "fittings", accessories()],
+      [t("bom_tubes"), "tubes", allTubes()],
+      [t("bom_connectors"), "connectors", allConnectors()],
+      [t("bom_panels"), "panels", panels()],
+      [t("bom_slides"), "fittings", zubehoer.filter(istRutsche)],
+      [t("bom_fittings"), "fittings", zubehoer.filter((a) => !istRutsche(a))],
+      [t("bom_reinforcements"), "reinforcements", reinforcements()],
     ];
     for (const [title, bucket, items] of groups) {
       if (!items.length) continue;
