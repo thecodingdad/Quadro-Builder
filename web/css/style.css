@@ -837,3 +837,12 @@ body.sidebar-hidden #sidebar, body.sidebar-hidden #sidebar-resizer { display: no
   padding: 0 6px; white-space: nowrap; cursor: pointer;
 }
 .autosave-toggle input { margin: 0; cursor: pointer; }
+
+/* Tabs umsortieren: der gezogene Tab hebt sich ab, der Rest rutscht weiter. */
+body.tab-dragging { cursor: grabbing; user-select: none; }
+body.tab-dragging .tab { cursor: grabbing; }
+.tab.dragging {
+  opacity: 0.75;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.18);
+  transform: translateY(-1px);
+}

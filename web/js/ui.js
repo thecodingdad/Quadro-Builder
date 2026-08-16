@@ -1796,6 +1796,17 @@ export function initUI({ scene, model, builder }) {
     update();
   }
 
+  // Wohin ein Zubehörteil in Stückliste und Bestand gehört. Textilien und
+  // Räder haben eigene Abschnitte, der Rest bleibt "Anbauteile".
+  const TEXTIL_ARTEN = new Set(["textil2", "lattice2", "textil-round2", "bag2", "roof-large2"]);
+  const RAD_ARTEN = new Set(["multi-wheel2", "floating-wheel2", "hub-cap2", "casters2",
+    "adapter2", "bearing2", "steering-lock2"]);
+  function zubehoerGruppe(art) {
+    if (TEXTIL_ARTEN.has(art)) return "textiles";
+    if (RAD_ARTEN.has(art)) return "wheels";
+    return "fittings";
+  }
+
   // Bestand je Katalogteil, aufgeschlüsselt für die Stücklisten-Zeilen.
   let invIndex = new Map();
   const round2Preis = (v) => Math.round(v * 100) / 100;
@@ -1877,7 +1888,6 @@ export function initUI({ scene, model, builder }) {
 
     const xb = $("bom-textiles"); xb.innerHTML = "";
     const textiles = bom.textiles || [];
-    if (textiles.length === 0) xb.appendChild(el("div", "muted", "–"));
     for (const r of textiles) {
       const name = `${t("bom_textile")} ${r.w}×${r.h} cm` + (nachFarbe ? ` · ${r.colorName}` : "");
       bomRow(xb, name, nachFarbe ? r.color : null, r.count, null, null,
@@ -1892,12 +1902,20 @@ export function initUI({ scene, model, builder }) {
         r.id ? "fittings:" + r.id : null, { kind: "slides", id: r.kind });
     }
 
-    const fb = $("bom-fittings"); fb.innerHTML = "";
+    // Zubehör auf Textilien, Räder und Anbauteile verteilen.
     const fits = bom.fittings || [];
-    if (fits.length === 0) fb.appendChild(el("div", "muted", "–"));
+    const rad = $("bom-wheels"); rad.innerHTML = "";
+    const fb = $("bom-fittings"); fb.innerHTML = "";
+    const ziele = { textiles: xb, wheels: rad, fittings: fb };
+    const zaehler = { textiles: textiles.length, wheels: 0, fittings: 0 };
     for (const r of fits) {
-      bomRow(fb, r.name, null, r.count, r.subtotal || null, "fittings:" + r.id,
+      const gruppe = zubehoerGruppe(r.kind);
+      zaehler[gruppe]++;
+      bomRow(ziele[gruppe], r.name, null, r.count, r.subtotal || null, "fittings:" + r.id,
         { kind: "fittings", id: r.id });
+    }
+    for (const [gruppe, box] of Object.entries(ziele)) {
+      if (!zaehler[gruppe]) box.appendChild(el("div", "muted", "–"));
     }
 
     const rb = $("bom-reinforcements"); rb.innerHTML = "";
@@ -2006,12 +2024,15 @@ export function initUI({ scene, model, builder }) {
     // Rutschenteile stehen im Katalog beim Zubehör und werden hier abgetrennt.
     const zubehoer = accessories();
     const istRutsche = (a) => typeof a.qdf === "string" && /slide/.test(a.qdf);
+    const ausGruppe = (name) => zubehoer.filter((a) => !istRutsche(a) && zubehoerGruppe(a.qdf) === name);
     const groups = [
       [t("bom_tubes"), "tubes", allTubes()],
       [t("bom_connectors"), "connectors", allConnectors()],
       [t("bom_panels"), "panels", panels()],
+      [t("bom_textiles"), "fittings", ausGruppe("textiles")],
       [t("bom_slides"), "fittings", zubehoer.filter(istRutsche)],
-      [t("bom_fittings"), "fittings", zubehoer.filter((a) => !istRutsche(a))],
+      [t("bom_wheels"), "fittings", ausGruppe("wheels")],
+      [t("bom_fittings"), "fittings", ausGruppe("fittings")],
       [t("bom_reinforcements"), "reinforcements", reinforcements()],
     ];
     for (const [title, bucket, items] of groups) {
@@ -2153,12 +2174,69 @@ export function initUI({ scene, model, builder }) {
     return tab;
   }
 
+  // --- Tabs umsortieren (nur waagerecht) ---------------------------------
+  // Gezogen wird mit Zeigerereignissen, damit es auch auf dem Touchscreen
+  // funktioniert. Die Reihenfolge ändert sich schon während des Ziehens: sobald
+  // der Zeiger die Mitte eines Nachbarn überschreitet, tauschen die beiden.
+  let zieh = null;   // { tabId, startX, gestartet, gezogen }
+
+  function beginneZiehen(tabId, startX) {
+    zieh = { tabId, startX, gestartet: false, gezogen: false };
+    document.addEventListener("pointermove", beimZiehen);
+    document.addEventListener("pointerup", beendeZiehen, { once: true });
+    document.addEventListener("pointercancel", beendeZiehen, { once: true });
+  }
+
+  function beimZiehen(e) {
+    if (!zieh) return;
+    if (!zieh.gestartet) {
+      if (Math.abs(e.clientX - zieh.startX) < 5) return;   // noch ein Klick
+      zieh.gestartet = true;
+      zieh.gezogen = true;
+      document.body.classList.add("tab-dragging");
+      renderTabs();
+    }
+    const list = $("tab-list");
+    const elemente = [...list.querySelectorAll(".tab")];
+    const von = tabs.findIndex((x) => x.tabId === zieh.tabId);
+    if (von < 0) return;
+    // Ziel: der Tab, über dessen Mitte der Zeiger steht.
+    let nach = von;
+    elemente.forEach((el2, i) => {
+      const r = el2.getBoundingClientRect();
+      if (e.clientX > r.left + r.width / 2 && i > nach) nach = i;
+      if (e.clientX < r.left + r.width / 2 && i < nach) nach = i;
+    });
+    if (nach !== von) {
+      const [tab] = tabs.splice(von, 1);
+      tabs.splice(nach, 0, tab);
+      renderTabs();
+    }
+  }
+
+  function beendeZiehen() {
+    document.removeEventListener("pointermove", beimZiehen);
+    document.body.classList.remove("tab-dragging");
+    if (zieh && zieh.gestartet) {
+      renderTabs();
+      scheduleSessionSave();
+      // Der Klick nach dem Loslassen gehört noch zum Ziehen -- erst danach
+      // zählen Klicks wieder als Tab-Wechsel.
+      const beendet = zieh;
+      setTimeout(() => { if (zieh === beendet) zieh = null; }, 0);
+    } else {
+      zieh = null;
+    }
+  }
+
   function renderTabs() {
     const list = $("tab-list");
     if (!list) return;
     list.innerHTML = "";
     for (const tab of tabs) {
-      const item = el("div", "tab" + (tab.tabId === activeTabId ? " active" : ""));
+      const item = el("div", "tab" + (tab.tabId === activeTabId ? " active" : "")
+        + (zieh && zieh.gestartet && zieh.tabId === tab.tabId ? " dragging" : ""));
+      item.dataset.tabId = tab.tabId;
       item.title = tab.name;
       if (tab.dirty) item.appendChild(el("span", "tab-dirty"));
       item.appendChild(el("span", "tab-name", tab.name));
@@ -2166,7 +2244,14 @@ export function initUI({ scene, model, builder }) {
       zu.title = t("btn_doc_close");
       zu.addEventListener("click", (e) => { e.stopPropagation(); closeTab(tab.tabId); });
       item.appendChild(zu);
-      item.addEventListener("click", () => activateTab(tab.tabId));
+      item.addEventListener("click", () => {
+        if (zieh && zieh.gezogen) return;    // war ein Umsortieren, kein Klick
+        activateTab(tab.tabId);
+      });
+      item.addEventListener("pointerdown", (e) => {
+        if (e.button !== 0 || e.target.closest(".tab-close")) return;
+        beginneZiehen(tab.tabId, e.clientX);
+      });
       list.appendChild(item);
     }
     // Ohne offenes Modell tritt der Einstieg an die Stelle der Szene.
