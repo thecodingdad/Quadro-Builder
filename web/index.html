@@ -266,24 +266,6 @@
 
       <div id="status" class="status"></div>
 
-      <!-- Eine Karte für alle Rückfragen und Eingaben (statt Browser-Popups).
-           Titel, Text, Feld und Knöpfe setzt ui.js je Aufruf. -->
-      <div id="dlg-overlay" class="help-overlay" hidden>
-        <div class="help-card dlg-card" role="dialog" aria-modal="true" aria-labelledby="dlg-title">
-          <h3 id="dlg-title"></h3>
-          <p id="dlg-text" class="dlg-text"></p>
-          <input id="dlg-input" class="dlg-input" type="text" autocomplete="off" spellcheck="false" hidden>
-          <div id="dlg-actions" class="ask-actions"></div>
-        </div>
-      </div>
-
-      <div id="help-overlay" class="help-overlay" hidden>
-        <div class="help-card">
-          <h3 data-i18n="help_title">Tastenkürzel</h3>
-          <table id="help-table"></table>
-          <button id="help-close" class="btn" data-i18n="help_close">Schließen</button>
-        </div>
-      </div>
     </div>
 
     </div><!-- #work -->
@@ -401,6 +383,28 @@
   </main>
 
   <div id="print-area"></div>
+
+  <!-- Tastenkürzel-Liste: wie die Rückfrage-Karte über der ganzen Seite. -->
+  <div id="help-overlay" class="dlg-overlay" hidden>
+    <div class="help-card">
+      <h3 data-i18n="help_title">Tastenkürzel</h3>
+      <table id="help-table"></table>
+      <button id="help-close" class="btn" data-i18n="help_close">Schließen</button>
+    </div>
+  </div>
+
+  <!-- Eine Karte für alle Rückfragen und Eingaben (statt Browser-Popups).
+       Titel, Text, Feld und Knöpfe setzt ui.js je Aufruf. Sie liegt bewusst
+       ausserhalb von <main>: solange sie steht, ist die ganze Seite gesperrt,
+       nicht nur die Szene. -->
+  <div id="dlg-overlay" class="dlg-overlay" hidden>
+    <div class="help-card dlg-card" role="dialog" aria-modal="true" aria-labelledby="dlg-title">
+      <h3 id="dlg-title"></h3>
+      <p id="dlg-text" class="dlg-text"></p>
+      <input id="dlg-input" class="dlg-input" type="text" autocomplete="off" spellcheck="false" hidden>
+      <div id="dlg-actions" class="ask-actions"></div>
+    </div>
+  </div>
 
   <script type="module" src="./js/main.js"></script>
 </body>

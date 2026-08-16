@@ -508,13 +508,7 @@ body.sidebar-hidden #sidebar, body.sidebar-hidden #sidebar-resizer { display: no
 .btn-row { display: flex; gap: 4px; flex-wrap: wrap; }
 .btn.small { padding: 6px 9px; font-size: 13px; min-width: 34px; font-variant-numeric: tabular-nums; }
 
-/* Hilfe-Overlay */
-.help-overlay {
-  position: absolute; inset: 0;
-  background: rgba(20, 26, 34, 0.45);
-  display: flex; align-items: center; justify-content: center;
-  z-index: 20;
-}
+/* Karten in den Overlays (Hilfe, Rückfragen) */
 .help-card {
   background: #fff; border-radius: 12px; padding: 20px 22px;
   box-shadow: 0 12px 40px rgba(0, 0, 0, 0.25);
@@ -753,9 +747,17 @@ body.sidebar-hidden #sidebar, body.sidebar-hidden #sidebar-resizer { display: no
 
 .ask-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 14px; }
 
+/* Dialog: liegt über der ganzen Seite -- Kopfzeile, Toolbar und Seitenleiste
+   sind gesperrt, solange die Karte steht. */
+.dlg-overlay {
+  position: fixed; inset: 0;
+  background: rgba(20, 26, 34, 0.45);
+  display: flex; align-items: center; justify-content: center;
+  z-index: 200;
+}
+
 /* Dialogkarte: Text und Eingabefeld der gemeinsamen Rückfrage-Karte */
 .dlg-text { margin: 0; font-size: 13px; line-height: 1.45; white-space: pre-wrap; }
-.dlg-text[hidden] { display: none; }
 .dlg-input {
   width: 100%; margin-top: 12px; padding: 7px 10px; font-size: 13px; font-family: inherit;
   border: 1px solid var(--line); border-radius: 8px; background: #fff; color: var(--ink);

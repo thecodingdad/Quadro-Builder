@@ -134,9 +134,11 @@ function renderHelpTable() {
   const table = $("help-table");
   if (!table) return;
   table.innerHTML = "";
+  // {n} = Zahl der geraden Rohre: die Zifferntasten reichen genau so weit.
+  const ziffern = String(buildableTubes().length);
   for (const [key, desc] of t("help_shortcuts")) {
     const tr = document.createElement("tr");
-    const td1 = document.createElement("td"); td1.textContent = key;
+    const td1 = document.createElement("td"); td1.textContent = key.replace("{n}", ziffern);
     const td2 = document.createElement("td"); td2.textContent = desc;
     tr.appendChild(td1); tr.appendChild(td2);
     table.appendChild(tr);
@@ -1203,6 +1205,10 @@ export function initUI({ scene, model, builder }) {
   // --- Hilfe-Overlay -----------------------------------------------------
   $("btn-help").addEventListener("click", () => { $("help-overlay").hidden = false; });
   $("help-close").addEventListener("click", () => { $("help-overlay").hidden = true; });
+  // Klick daneben schliesst die Liste -- wie bei der Rückfrage-Karte.
+  $("help-overlay").addEventListener("mousedown", (e) => {
+    if (e.target === $("help-overlay")) $("help-overlay").hidden = true;
+  });
 
   // --- Modell-Bibliothek -------------------------------------------------
   // Eigene QDF-Sammlung: einmal einlesen, danach durchsuchen, gegen den
@@ -1829,9 +1835,15 @@ export function initUI({ scene, model, builder }) {
       return;
     }
 
+    // Zifferntasten waehlen ein Rohr -- und schalten dafuer in den Bau-Modus,
+    // sonst haette die Wahl im Cursor-Modus keine sichtbare Wirkung.
     if (k >= "1" && k <= "9") {
       const idx = parseInt(k, 10) - 1;
-      if (idx < tubes.length) { builder.setTube(tubes[idx].id); syncPartHighlights(); }
+      if (idx < tubes.length) {
+        builder.setTube(tubes[idx].id);
+        if (builder.mode !== "add") setMode("add");
+        syncPartHighlights();
+      }
       return;
     }
 
