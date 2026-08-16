@@ -367,7 +367,9 @@ body.sidebar-hidden #sidebar, body.sidebar-hidden #sidebar-resizer { display: no
   background: var(--panel);
   border-left: 1px solid var(--line);
   overflow-y: auto;
-  padding: 14px;
+  /* Kein Innenabstand oben: die Tab-Leiste sitzt bündig, der Abstand kommt
+     beim Inhalt darunter (.panel). */
+  padding: 0 14px 14px;
 }
 .panel { margin-bottom: 22px; }
 .panel h2 { font-size: 15px; margin: 0 0 10px; }
@@ -860,3 +862,12 @@ body.tab-dragging .tab { cursor: grabbing; }
 /* Mengen-Spalte: rechtsbündig, damit die Zahlen aller Zeilen untereinander
    stehen (auch die Hinweiszeile "Offene Enden"). */
 .bom-count { text-align: right; min-width: 44px; }
+
+/* Die Tab-Leiste der Seitenleiste klebt oben, der Inhalt darunter bekommt Luft. */
+.side-tabs {
+  position: sticky; top: 0; z-index: 2;
+  margin: 0 -14px;
+  padding: 6px 14px 0;
+  background: var(--panel);
+}
+#sidebar .panel { margin-top: 14px; }

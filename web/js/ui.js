@@ -1389,8 +1389,10 @@ export function initUI({ scene, model, builder }) {
   sceneIcon.addEventListener("click", () => applyScene(!grassOn));
   applyScene(localStorage.getItem(SCENE_KEY) === "1", false);
 
-  // Startzustand: zuletzt gewähltes Panel (Standard: zu)
-  showSidebarPanel(localStorage.getItem(SIDEBAR_PANEL_KEY) || null);
+  // Startzustand: zuletzt gewähltes Panel. Beim allerersten Aufruf steht noch
+  // nichts im Speicher -- dann ist die Leiste offen und zeigt die Stückliste.
+  const gemerktesPanel = localStorage.getItem(SIDEBAR_PANEL_KEY);
+  showSidebarPanel(gemerktesPanel === null ? "bom" : (gemerktesPanel || null));
 
   (function initResizer() {
     const res = $("sidebar-resizer");
