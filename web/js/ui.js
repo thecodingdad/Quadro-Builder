@@ -1210,6 +1210,27 @@ export function initUI({ scene, model, builder }) {
   }
 
   /** Meine Modelle: gespeicherte Dateien, Klick öffnet sie in einem Tab. */
+  /**
+   * Kennzahlen einer gespeicherten Datei -- dieselben, die die Bibliothek je
+   * Modell zeigt: Teilezahlen, Außenmaße und ob der eigene Bestand reicht.
+   */
+  function modellKennzahlen(doc) {
+    if (!doc || !doc.data) return null;
+    try {
+      const m2 = new (model.constructor)();
+      if (!m2.loadJSON(doc.data).ok) return null;
+      const bom = computeBOM(m2);
+      const cmp = compareInventory(bom, flacherBestand());
+      const b2 = m2.bounds(geometry().connectorSize / 2);
+      return {
+        connectors: bom.totals.connectors, tubes: bom.totals.tubes, panels: bom.totals.panels,
+        size: b2 ? b2.size.map((v) => Math.round(v)) : [0, 0, 0],
+        ok: cmp.feasible,
+        fehlt: cmp.rows.reduce((s2, r) => s2 + Math.max(0, r.need - r.owned), 0),
+      };
+    } catch (e) { console.warn("Kennzahlen:", e); return null; }
+  }
+
   let ownRenderLauf = 0;
   async function renderOwnModels() {
     const box = $("own-list");
@@ -1236,13 +1257,24 @@ export function initUI({ scene, model, builder }) {
     for (const d of liste) {
       const offen = tabs.some((x) => x.docId === d.id);
       const row = el("div", "lib-row own-row" + (offen ? " active" : ""));
+      // Dieselben Angaben wie in der Bibliothek: Machbarkeit, Teilezahlen,
+      // Außenmaße -- dazu das Datum der letzten Änderung.
+      const kennzahlen = modellKennzahlen(d);
+      if (kennzahlen && kennzahlen.ok) row.classList.add("ok");
       const links = el("div", "own-main");
       const kopf = el("div", "lib-head");
       kopf.appendChild(el("span", "lib-name", d.name));
-      const knoten = (d.data && d.data.nodes) ? d.data.nodes.length : 0;
-      const rohre = (d.data && d.data.tubes) ? d.data.tubes.length : 0;
-      kopf.appendChild(el("span", "lib-badge", `${knoten}/${rohre}`));
+      if (kennzahlen) {
+        kopf.appendChild(el("span", "lib-badge", kennzahlen.ok ? "✓" : String(kennzahlen.fehlt)));
+        row.title = kennzahlen.ok ? t("lib_feasible_title") : t("lib_infeasible_title");
+      }
       links.appendChild(kopf);
+      if (kennzahlen) {
+        links.appendChild(el("span", "lib-meta",
+          t("lib_parts", kennzahlen.connectors, kennzahlen.tubes, kennzahlen.panels)));
+        links.appendChild(el("span", "lib-meta",
+          t("lib_size", kennzahlen.size[0], kennzahlen.size[1], kennzahlen.size[2])));
+      }
       links.appendChild(el("span", "lib-meta", new Date(d.updatedAt || Date.now()).toLocaleString()));
       row.appendChild(links);
 
