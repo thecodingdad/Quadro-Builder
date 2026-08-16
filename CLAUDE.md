@@ -160,6 +160,13 @@ Koordinaten in **cm**, Three.js-Konvention **y = oben**, Boden bei y = 0.
 ## Fallstricke
 
 - `catalog.js` lädt `../data/parts.json` relativ – die App muss unter `/web/` ausgeliefert werden.
+- **Layout ohne feste Breakpoints:** `ui.js` setzt Klassen auf `<body>`, das CSS liest nur diese –
+  `compact-colors`/`compact-view` (Bauteil-Zeile eng), `compact-head` (Kopfzeile eng),
+  `sidebar-overlay`, `mobile-portrait`, `asm-sheet-on`. Die beiden Kollaps-Stufen misst ein
+  `ResizeObserver` (`grp-build.scrollWidth > clientWidth`). **Falle:** das Einklappen schafft
+  selbst Platz – ohne die Hysterese (`tightAt[…] + HYSTERESIS`) pendelt der Zustand endlos.
+  Kollabiert wird durch **Umhängen des Original-Knotens** (`moveNode`), nicht durch eine zweite
+  Garnitur Knöpfe; die Rückkehr-Stelle hält ein Kommentar-Knoten.
 - **Zeiger-Eingaben teilen sich `builder.js` und OrbitControls:** ein Finger/die linke Maustaste
   gehören dem Builder (drehen um den Punkt unter dem Zeiger, wählen, bauen), zwei Finger und das
   Rad gehören OrbitControls. Beides muss **getrennt** abgeschaltet werden – `mouseButtons.LEFT`

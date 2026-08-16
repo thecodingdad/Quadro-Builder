@@ -722,6 +722,23 @@ body.mobile-portrait #tab-bar.single { display: none; }
 /* Statusmeldung nicht an den Rand der unteren Leiste kleben lassen. */
 body.mobile-portrait .status { bottom: 16px; max-width: calc(100% - 24px); }
 
+/* --- Touch: größere Ziele ---------------------------------------------
+   Mit dem Finger trifft man 26-px-Knöpfe schlecht; auf Zeigern ohne feine
+   Auflösung wachsen die Bedienelemente auf ~40 px. */
+@media (pointer: coarse) {
+  .btn { min-height: 40px; }
+  .btn.part { min-height: 44px; padding: 5px 9px; }
+  .btn.icon-sq { min-width: 40px; }
+  .side-tab { padding: 11px 6px; }
+  .tab { padding-top: 9px; padding-bottom: 9px; }
+  .own-tools button, .lib-row button { min-width: 38px; min-height: 34px; }
+  .part-popup-row { padding: 10px 8px; }
+  .swatch { width: 30px; height: 30px; }
+  /* Popups dürfen breiter werden -- die Liste soll lesbar bleiben. */
+  .part-popup { min-width: min(62vw, 260px); }
+  .part-popup.color-popup { max-width: min(80vw, 260px); }
+}
+
 /* Druckbereich (nur beim Drucken sichtbar) */
 #print-area { display: none; }
 @media print {

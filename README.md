@@ -50,6 +50,7 @@ Keine Installation, kein Account, keine Cloud – alles läuft lokal im Browser.
 - **JSON-Export/Import** – echte Offline-Sicherung als Datei
 - **Zweisprachig** – Deutsch und Englisch (Sprache wechseln mit dem DE/EN-Button)
 - **Installierbar (PWA)** – als eigenes Fenster einrichten und offline weiterbauen
+- **Mobil bedienbar** – im Hochformat wandert die Bauteil-Leiste nach unten, Werkzeuge klappen bei Platzmangel zusammen, und der Aufbau läuft als Karte über der Szene
 - **GitHub Pages ready** – läuft ohne Server direkt aus dem Repository
 
 ### Schnellstart

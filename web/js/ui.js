@@ -2940,15 +2940,23 @@ export function initUI({ scene, model, builder }) {
   function measureCollapse() {
     const breite = $("toolbar-ctx").clientWidth;
     if (!breite) return;                       // unsichtbar (Boot, Drucken)
+    // Je Durchgang EINE Stufe. Danach gleich noch einmal messen: das Einklappen
+    // aendert nur die INNERE Breite der Bauteil-Gruppe, der Beobachter an der
+    // Zeile meldet sich dafuer nicht -- ohne die Wiederholung bliebe es bei
+    // Stufe 1, obwohl es immer noch zu eng ist.
     if (overflows() && collapseStage < 2) {
       tightAt[collapseStage + 1] = breite;
       collapseStage++;
       applyCollapse();
+      requestAnimationFrame(measureCollapse);
       return;
     }
     if (!overflows() && collapseStage > 0 && breite > tightAt[collapseStage] + HYSTERESIS) {
       collapseStage--;
       applyCollapse();
+      // Passt es doch nicht, faengt der naechste Durchgang es wieder ein; er
+      // merkt sich dann diese Breite und laesst es dabei bewenden.
+      requestAnimationFrame(measureCollapse);
     }
   }
 
