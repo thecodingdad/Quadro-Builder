@@ -56,4 +56,20 @@ async function boot() {
   }
 }
 
+/**
+ * Service Worker anmelden: damit läuft der Editor auch ohne Netz und lässt
+ * sich installieren. Mit `?dev` bleibt er aus -- beim Entwickeln soll nichts
+ * zwischen Datei und Browser stehen. Ohne sicheren Kontext (http:// auf einem
+ * anderen Rechner als localhost) lehnt der Browser ab; das ist kein Fehler
+ * der App und wird deshalb nur vermerkt.
+ */
+function registriereWorker() {
+  if (!("serviceWorker" in navigator) || location.search.includes("dev")) return;
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("../sw.js")
+      .catch((e) => console.info("Kein Service Worker:", e.message));
+  });
+}
+
+registriereWorker();
 boot();

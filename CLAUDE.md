@@ -68,6 +68,9 @@ Three.js ausschließlich in `scene.js`, DOM ausschließlich in `ui.js`/`scene.js
 | `web/js/qdfimport.js` | Parser für QDF-Dateien der Original-QUADRO-3D-Software |
 | `web/js/qdfexport.js` | Schreibt ein Modell als QDF (Gegenstück zu `qdfimport.js`) |
 | `web/js/library.js` | Modell-Bibliothek: QDF-Sammlung einlesen, Kennzahlen, Bestandsabgleich |
+| `manifest.webmanifest` | PWA-Manifest (Wurzel, damit `scope` auch `data/` umfasst) |
+| `sw.js` | Service Worker: Netz zuerst, Cache als Rückfall – macht die App offline lauffähig |
+| `tools/make-icons.py` | Erzeugt die Symbole in `icons/` (nur von Hand, kein Build-Step) |
 
 **Datenfluss:** Jede Modelländerung → `builder.refresh()` → `scene.renderModel()` + Handles neu →
 `builder.onChange()` → (in `main.js`) `ui.update()` + `ui.touchActiveTab()` (markiert den Tab,
@@ -76,6 +79,11 @@ sichert die Sitzung und – bei eingeschaltetem Auto-Save – die Datei).
 **Mehrere Modelle:** Ein Tab hält ein Modell samt Werkzeugleiste, Ansicht und Schrittspeicher
 (`builder.uiState()`/`setUiState()`). Umgeschaltet wird über EIN `BuildModel` und EINEN `Builder`:
 Stand des alten Tabs sichern (`model.toJSON()`, Kamera, Schnittebene), Stand des neuen einsetzen.
+
+**PWA:** `web/index.html` verweist auf `../manifest.webmanifest`, `main.js` meldet `../sw.js` an –
+beide relativ, damit es unter GitHub Pages im Unterordner passt. Mit `?dev` wird der Worker
+**nicht** angemeldet, und ohne sicheren Kontext (http:// auf einem fremden Host) lehnt der Browser
+ihn ab; dann fehlen Offline-Betrieb und Installieren-Knopf, die App selbst läuft normal.
 
 **Backend-Andockpunkte:** nur `storage.js`/`docs.js` und `catalog.loadCatalog()`. Ein optionales
 Django-Backend (Roadmap) darf ausschließlich diese Module ersetzen.

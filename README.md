@@ -49,6 +49,7 @@ Keine Installation, kein Account, keine Cloud – alles läuft lokal im Browser.
 - **Autosave + benannte Entwürfe** – Daten bleiben im Browser erhalten
 - **JSON-Export/Import** – echte Offline-Sicherung als Datei
 - **Zweisprachig** – Deutsch und Englisch (Sprache wechseln mit dem DE/EN-Button)
+- **Installierbar (PWA)** – als eigenes Fenster einrichten und offline weiterbauen
 - **GitHub Pages ready** – läuft ohne Server direkt aus dem Repository
 
 ### Schnellstart

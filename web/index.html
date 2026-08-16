@@ -4,6 +4,16 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Quadro Builder</title>
+  <!-- Installierbare Web-App: Manifest, Symbole und Farbe der Systemleiste.
+       Manifest und Service Worker liegen eine Ebene höher, damit ihr
+       Geltungsbereich auch `data/` einschließt. -->
+  <link rel="manifest" href="../manifest.webmanifest" />
+  <meta name="theme-color" content="#1a8cff" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-title" content="Quadro" />
+  <link rel="icon" href="../icons/icon-192.png" sizes="192x192" type="image/png" />
+  <link rel="apple-touch-icon" href="../icons/icon-192.png" />
   <link rel="stylesheet" href="./css/style.css" />
   <!-- Der Teilekatalog wird für die Werkzeugleiste gebraucht. Ohne diesen
        Hinweis startet sein Abruf erst, wenn der ganze Modulbaum geladen ist --
@@ -112,6 +122,12 @@
                 <span class="menu-label" data-i18n="settings_quality">Render-Qualität</span>
                 <select id="quality-select" class="lang-select"></select>
                 <span class="hint" data-i18n="settings_quality_hint">Betrifft die Rundung der Kupplungen und Rohre.</span>
+              </div>
+              <!-- Nur sichtbar, wenn der Browser die Installation anbietet -->
+              <div class="menu-section" id="install-section" hidden>
+                <span class="menu-label" data-i18n="settings_install">App</span>
+                <button id="btn-install" class="btn full" data-i18n="btn_install">Installieren</button>
+                <span class="hint" data-i18n="settings_install_hint">Als eigenes Fenster einrichten, auch offline nutzbar.</span>
               </div>
             </div>
           </div>

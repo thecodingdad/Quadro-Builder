@@ -390,6 +390,29 @@ export function initUI({ scene, model, builder }) {
     });
   }
 
+  // --- Installieren (PWA) ------------------------------------------------
+  // Der Browser meldet selbst, wenn die App installierbar ist. Vorher hat ein
+  // Knopf keinen Sinn, deshalb steht der Abschnitt bis dahin auf hidden.
+  let installAngebot = null;
+  window.addEventListener("beforeinstallprompt", (e) => {
+    e.preventDefault();
+    installAngebot = e;
+    $("install-section").hidden = false;
+  });
+  $("btn-install").addEventListener("click", async () => {
+    if (!installAngebot) return;
+    installAngebot.prompt();
+    const { outcome } = await installAngebot.userChoice;
+    installAngebot = null;
+    $("install-section").hidden = true;
+    toggleSettingsMenu(false);
+    if (outcome === "accepted") flash(t("flash_installed"));
+  });
+  window.addEventListener("appinstalled", () => {
+    installAngebot = null;
+    $("install-section").hidden = true;
+  });
+
   // --- Hamburger-Menü (Mobile) -------------------------------------------
   const hamburgerBtn = $("btn-hamburger");
   const hamburgerInner = $("toolbar-right-inner");

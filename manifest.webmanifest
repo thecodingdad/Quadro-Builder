@@ -1,0 +1,19 @@
+{
+  "name": "Quadro Builder",
+  "short_name": "Quadro",
+  "description": "3D-Planungstool für QUADRO-Klettergerüste: bauen, Stückliste, QDF-Import und -Export.",
+  "lang": "de",
+  "start_url": "web/index.html",
+  "scope": "./",
+  "id": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#f4f6f9",
+  "theme_color": "#1a8cff",
+  "categories": ["utilities", "productivity"],
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
