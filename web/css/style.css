@@ -720,11 +720,18 @@ body.sidebar-hidden #sidebar, body.sidebar-hidden #sidebar-resizer { display: no
   max-width: 240px;
 }
 .tab:hover { background: rgba(0, 0, 0, 0.07); }
+/* Aktiver Entwurf: blau wie ein aktiver Knopf -- so sieht man auf einen Blick,
+   welches Modell gerade offen ist. */
 .tab.active {
-  background: #fff;
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-ink);
   font-weight: 600;
-  box-shadow: 0 -1px 0 rgba(0, 0, 0, 0.06);
 }
+.tab.active:hover { background: var(--accent); }
+.tab.active .tab-close { opacity: 0.85; }
+.tab.active .tab-close:hover { background: rgba(255, 255, 255, 0.25); opacity: 1; }
+.tab.active .tab-dirty { background: #fff; }
 .tab-name { overflow: hidden; text-overflow: ellipsis; }
 .tab-dirty {
   width: 7px; height: 7px; border-radius: 50%;
