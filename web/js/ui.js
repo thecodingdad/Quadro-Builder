@@ -1264,11 +1264,8 @@ export function initUI({ scene, model, builder }) {
       const links = el("div", "own-main");
       const kopf = el("div", "lib-head");
       kopf.appendChild(el("span", "lib-name", d.name));
-      if (kennzahlen) {
-        kopf.appendChild(el("span", "lib-badge", kennzahlen.ok ? "✓" : String(kennzahlen.fehlt)));
-        row.title = kennzahlen.ok ? t("lib_feasible_title") : t("lib_infeasible_title");
-      }
       links.appendChild(kopf);
+      if (kennzahlen) row.title = kennzahlen.ok ? t("lib_feasible_title") : t("lib_infeasible_title");
       if (kennzahlen) {
         links.appendChild(el("span", "lib-meta",
           t("lib_parts", kennzahlen.connectors, kennzahlen.tubes, kennzahlen.panels)));
@@ -1278,6 +1275,12 @@ export function initUI({ scene, model, builder }) {
       links.appendChild(el("span", "lib-meta", new Date(d.updatedAt || Date.now()).toLocaleString()));
       row.appendChild(links);
 
+      // Rechte Spalte: oben das Abzeichen (Haken oder fehlende Teile), unten
+      // die Werkzeuge.
+      const rechts = el("div", "own-side");
+      if (kennzahlen) {
+        rechts.appendChild(el("span", "lib-badge", kennzahlen.ok ? "✓" : String(kennzahlen.fehlt)));
+      }
       const werkzeuge = el("div", "own-tools");
       werkzeuge.appendChild(iconKnopf(STIFT, t("btn_doc_rename"), async () => {
         const gewaehlt = await askName(d.name, { eigeneId: d.id });
@@ -1298,7 +1301,8 @@ export function initUI({ scene, model, builder }) {
         for (const tab of tabs) if (tab.docId === d.id) { tab.docId = null; tab.dirty = true; }
         renderTabs(); renderOwnModels();
       }));
-      row.appendChild(werkzeuge);
+      rechts.appendChild(werkzeuge);
+      row.appendChild(rechts);
       row.addEventListener("click", () => openDocById(d.id));
       box.appendChild(row);
     }
