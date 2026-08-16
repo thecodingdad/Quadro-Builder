@@ -211,6 +211,11 @@ export function initUI({ scene, model, builder }) {
     requestAnimationFrame(() => {
       const maxLeft = window.innerWidth - pop.offsetWidth - 8;
       if (parseFloat(pop.style.left) > maxLeft) pop.style.left = Math.max(8, maxLeft) + "px";
+      // Steht der Anker unten (Bedienleiste im Hochformat), klappt das Popup
+      // nach OBEN auf -- sonst haengt es unter dem Bildrand.
+      if (rect.bottom + 5 + pop.offsetHeight > window.innerHeight - 8) {
+        pop.style.top = Math.max(8, rect.top - 5 - pop.offsetHeight) + "px";
+      }
     });
   }
   // --- Schnittebene ------------------------------------------------------
@@ -498,7 +503,10 @@ export function initUI({ scene, model, builder }) {
 
   /** Alle Knöpfe zum Bauen sperren oder freigeben (Aufbau-Modus). */
   function setzeBauteileGesperrt(gesperrt) {
-    const bereiche = ["#grp-build", "#btn-diagonal", "#mode-delete", "#btn-undo", "#btn-redo"];
+    // #btn-view bleibt frei: dahinter stecken die Ansichts-Schalter, die auch
+    // im Aufbau-Modus nutzbar sein sollen (Schraeg darin sperrt ueber build-opt).
+    const bereiche = ["#grp-build", "#btn-diagonal", "#btn-color",
+                      "#mode-delete", "#btn-undo", "#btn-redo"];
     for (const wahl of bereiche) {
       for (const el2 of document.querySelectorAll(`${wahl}, ${wahl} button, ${wahl} input`)) {
         // Ansicht bleibt bedienbar -- ausser den Bau-Schaltern, die dort stehen.
@@ -623,8 +631,14 @@ export function initUI({ scene, model, builder }) {
     });
   }
 
+  // Manche Popups zeigen KEINE Kopie, sondern die Originalknoten aus der
+  // Werkzeugleiste (siehe openGroupPopup). Beim Schliessen muessen die
+  // zurueck an ihren Platz, sonst verschwinden sie mit dem Popup.
+  let popupCleanup = null;
+
   function closePopup() {
     if (!activePopup) return;
+    if (popupCleanup) { popupCleanup(); popupCleanup = null; }
     activePopup.remove();
     activePopup = null;
     popupAnchor = null;
@@ -674,6 +688,48 @@ export function initUI({ scene, model, builder }) {
     // sich das eigene Popup nicht sofort wieder schließt. In der Bubble-Phase
     // käme der Schließer deshalb nie an, und eine offene Liste blieb stehen,
     // wenn man daneben etwas anklickt, das gar kein Popup öffnet (Bogenrohr).
+    setTimeout(() => document.addEventListener("click", onPopupOutsideClick, true), 0);
+  }
+
+  // --- Umhängen (schmale Schirme) ----------------------------------------
+  // Wird es eng, wandern ganze Bedien-Gruppen in ein Ausklapp-Panel und später
+  // zurück. Verschoben wird immer der ORIGINAL-Knoten: eine zweite Garnitur
+  // Knöpfe hätte doppelte IDs, und die Render-Funktionen (renderColorButtons,
+  // syncPartHighlights) füllen weiterhin dieselben Container.
+  const homeMarks = new WeakMap();
+
+  /** Knoten in `ziel` hängen; `ziel === null` bringt ihn an seinen Platz zurück. */
+  function moveNode(node, target) {
+    if (!node) return;
+    if (target) {
+      if (!homeMarks.has(node) && node.parentNode) {
+        // Ein Kommentar haelt die Luecke -- sonst ist die Reihenfolge in der
+        // Leiste nach dem Zurueckhaengen eine andere.
+        const mark = document.createComment("umgehaengt");
+        node.parentNode.insertBefore(mark, node);
+        homeMarks.set(node, mark);
+      }
+      if (node.parentNode !== target) target.appendChild(node);
+      return;
+    }
+    const mark = homeMarks.get(node);
+    if (mark && mark.parentNode) mark.parentNode.insertBefore(node, mark);
+  }
+
+  /**
+   * Popup, das eine vorhandene Gruppe zeigt (Farben, Ansichts-Schalter).
+   * Beim Schliessen wandert sie an ihren Platz in der Leiste zurueck.
+   */
+  function openGroupPopup(anchorBtn, group, cls) {
+    if (activePopup && popupAnchor === anchorBtn) { closePopup(); return; }
+    closePopup();
+    const pop = el("div", `part-popup ${cls}`);
+    document.body.appendChild(pop);
+    moveNode(group, pop);
+    placePopupUnder(pop, anchorBtn);
+    activePopup = pop;
+    popupAnchor = anchorBtn;
+    popupCleanup = () => moveNode(group, null);
     setTimeout(() => document.addEventListener("click", onPopupOutsideClick, true), 0);
   }
 
@@ -786,6 +842,8 @@ export function initUI({ scene, model, builder }) {
         builder.setColor(c.id);
         renderColorButtons();
         syncPartColors();
+        // Steht die Reihe gerade in einem Popup, ist die Wahl damit erledigt.
+        closePopup();
       });
       colorWrap.appendChild(sw);
     }
@@ -803,6 +861,16 @@ export function initUI({ scene, model, builder }) {
     colorWrap.appendChild(rnd);
     colorWrap.querySelectorAll("button").forEach((x) =>
       x.classList.toggle("active", x.dataset.color === builder.color));
+    paintColorButton();
+  }
+
+  /** Der Ersatz-Knopf (schmale Leiste) traegt die aktuelle Baufarbe. */
+  function paintColorButton() {
+    const sw = $("btn-color-swatch");
+    if (!sw) return;
+    const zufall = builder.color === RANDOM_COLOR;
+    sw.classList.toggle("swatch-random", zufall);
+    sw.style.background = zufall ? "" : colorHexFor(builder.color);
   }
   renderColorButtons();
 
@@ -1568,6 +1636,9 @@ export function initUI({ scene, model, builder }) {
     $("panel-assembly").hidden = currentPanel !== "assembly";
     document.body.classList.toggle("sidebar-hidden", currentPanel === null);
     $("toggle-sidebar").classList.toggle("active", currentPanel !== null);
+    // Der Hintergrund gehoert nur zur ueberlagernden Leiste.
+    $("sidebar-backdrop").hidden =
+      currentPanel === null || !document.body.classList.contains("sidebar-overlay");
     renderSideTabs();
     requestAnimationFrame(() => scene.onResize());
   }
@@ -1990,6 +2061,11 @@ export function initUI({ scene, model, builder }) {
         closePopup();
         // Offene Overlays zuerst: Escape schliesst sie, statt den Modus zu wechseln.
         if (!$("help-overlay").hidden) { $("help-overlay").hidden = true; break; }
+        // Ueberlagernde Seitenleiste verhaelt sich wie ein Menue: Escape zu.
+        if (currentPanel && document.body.classList.contains("sidebar-overlay")) {
+          showSidebarPanel(null);
+          break;
+        }
         // Erst aufraeumen, dann den Modus wechseln: ein Escape, das eine
         // Markierung wegnimmt, soll einen nicht gleichzeitig aus dem Modus
         // werfen. Im Aufbau-Modus wird der Modus nie verlassen.
@@ -2607,6 +2683,9 @@ export function initUI({ scene, model, builder }) {
   function renderTabs() {
     const list = $("tab-list");
     if (!list) return;
+    // Mit nur EINEM Entwurf sagt die Leiste nichts, was der Kopf nicht schon
+    // zeigt -- im Hochformat ist die Zeile Hoehe wert und faellt dann weg.
+    $("tab-bar").classList.toggle("single", tabs.length < 2);
     list.innerHTML = "";
     for (const tab of tabs) {
       const item = el("div", "tab" + (tab.tabId === activeTabId ? " active" : "")
@@ -2813,6 +2892,122 @@ export function initUI({ scene, model, builder }) {
     const basis = t("doc_untitled");
     if (!belegt.has(basis)) return basis;
     for (let i = 2; ; i++) if (!belegt.has(`${basis} ${i}`)) return `${basis} ${i}`;
+  }
+
+  // --- Layout: schmale Schirme -------------------------------------------
+  // Alles Weitere haengt an Klassen auf <body>; CSS und die Umhaenge-Aufrufe
+  // lesen nur diese. Zwei Quellen: feste Medienabfragen fuer Geraeteform und
+  // Messung fuer die Frage "passt die Bauteil-Zeile noch?".
+  const mqPortrait = window.matchMedia("(max-width: 820px) and (orientation: portrait)");
+  const mqNarrow = window.matchMedia("(max-width: 1000px)");
+
+  // Kollaps-Stufen der Bauteil-Zeile: 0 = alles ausgeschrieben,
+  // 1 = Farben als EIN Knopf, 2 = zusaetzlich die Ansichts-Schalter im Popup.
+  let collapseStage = 0;
+  // Breite, bei der die jeweilige Stufe noetig wurde. Zurueckgeschaltet wird
+  // erst deutlich darueber -- sonst schafft das Einklappen selbst wieder Platz,
+  // die Messung schaltet zurueck, es wird wieder eng: Dauerpendeln.
+  const tightAt = [0, 0, 0];
+  const HYSTERESIS = 24;
+
+  function applyCollapse() {
+    const b = document.body.classList;
+    b.toggle("compact-colors", collapseStage >= 1);
+    b.toggle("compact-view", collapseStage >= 2);
+    $("btn-color").hidden = collapseStage < 1;
+    $("btn-view").hidden = collapseStage < 2;
+    // Was gerade offen ist, koennte umgehaengt worden sein -> zumachen.
+    closePopup();
+    paintColorButton();
+  }
+
+  /** Passt die Bauteil-Gruppe noch in die Zeile? */
+  function overflows() {
+    const grp = $("grp-build");
+    return grp.scrollWidth > grp.clientWidth + 1;
+  }
+
+  function measureCollapse() {
+    const breite = $("toolbar-ctx").clientWidth;
+    if (!breite) return;                       // unsichtbar (Boot, Drucken)
+    if (overflows() && collapseStage < 2) {
+      tightAt[collapseStage + 1] = breite;
+      collapseStage++;
+      applyCollapse();
+      return;
+    }
+    if (!overflows() && collapseStage > 0 && breite > tightAt[collapseStage] + HYSTERESIS) {
+      collapseStage--;
+      applyCollapse();
+    }
+  }
+
+  // Kopfzeile: bei Platzmangel bleiben nur Datei, Zurueck und Wieder stehen.
+  // Bauen/Aufbau und "Automatisch speichern" wandern ins Menue, der
+  // Seitenleisten-Schalter direkt neben den Menue-Knopf.
+  let headCompact = false;
+  let headTightAt = 0;
+
+  function applyHeadCollapse(compact) {
+    if (compact === headCompact) return;
+    headCompact = compact;
+    document.body.classList.toggle("compact-head", compact);
+    moveNode($("mode-add").parentNode, compact ? $("menu-extra") : null);
+    moveNode(document.querySelector(".autosave-toggle"), compact ? $("menu-extra") : null);
+    if (compact) $("toolbar-right").insertBefore($("toggle-sidebar"), $("btn-hamburger"));
+    else moveNode($("toggle-sidebar"), null);
+    if (!compact) toggleHamburger(false);
+  }
+
+  function measureHead() {
+    const left = $("toolbar-left");
+    const breite = left.clientWidth;
+    if (!breite) return;
+    if (!headCompact && left.scrollWidth > breite + 1) {
+      headTightAt = breite;
+      applyHeadCollapse(true);
+    } else if (headCompact && breite > headTightAt + HYSTERESIS) {
+      applyHeadCollapse(false);
+      // Passt es doch nicht, faengt die naechste Messung es wieder ein.
+      requestAnimationFrame(measureHead);
+    }
+  }
+
+  function applyLayout() {
+    document.body.classList.toggle("mobile-portrait", mqPortrait.matches);
+    document.body.classList.toggle("sidebar-overlay", mqNarrow.matches || mqPortrait.matches);
+    applyPanelVisibility();
+    requestAnimationFrame(() => { measureCollapse(); measureHead(); scene.onResize(); });
+  }
+
+  for (const mq of [mqPortrait, mqNarrow]) mq.addEventListener("change", applyLayout);
+  // Der Beobachter deckt alles ab, was die Zeile enger macht: Fensterbreite,
+  // Seitenleiste, Sprachwechsel, neue Bauteil-Gruppen.
+  new ResizeObserver(() => measureCollapse()).observe($("toolbar-ctx"));
+  new ResizeObserver(() => measureHead()).observe($("toolbar-left"));
+
+  // Seitenleiste im Overlay-Modus: Klick daneben schliesst sie.
+  $("sidebar-backdrop").addEventListener("click", () => showSidebarPanel(null));
+
+  $("btn-color").addEventListener("click", (e) => {
+    e.stopPropagation();
+    openGroupPopup($("btn-color"), $("color-buttons"), "color-popup");
+  });
+  $("btn-view").addEventListener("click", (e) => {
+    e.stopPropagation();
+    openGroupPopup($("btn-view"), document.querySelector(".view-row"), "view-popup");
+  });
+
+  applyLayout();
+
+  // Dev-Hook (nur mit ?dev): Layout-Zustand von aussen pruefbar machen.
+  if (location.search.includes("dev")) {
+    window.__layout = {
+      measure: measureCollapse,
+      overflows,
+      get stage() { return collapseStage; },
+      get tightAt() { return [...tightAt]; },
+    };
   }
 
   Object.assign(ui, {

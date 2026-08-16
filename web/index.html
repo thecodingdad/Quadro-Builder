@@ -2,7 +2,9 @@
 <html lang="de">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <!-- viewport-fit=cover: ohne das bleiben die env(safe-area-inset-*)-Werte 0,
+       und die untere Bedienleiste läge unter dem Home-Balken. -->
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>Quadro Builder</title>
   <!-- Installierbare Web-App: Manifest, Symbole und Farbe der Systemleiste.
        Manifest und Service Worker liegen eine Ebene höher, damit ihr
@@ -93,6 +95,9 @@
 
         <!-- Alle Toolbar-Right-Inhalte: Desktop = inline, Mobile = Dropdown -->
         <div id="toolbar-right-inner">
+        <!-- Wird es oben eng, hängt ui.js Bauen/Aufbau und "Automatisch
+             speichern" hier hinein (ganz oben im Menü). -->
+        <div id="menu-extra"></div>
         <!-- Icon-Buttons: Desktop = inline, Mobile-Dropdown = Zeile -->
         <div class="toolbar-icon-row">
           <!-- Seitenleiste ein-/ausblenden -->
@@ -173,8 +178,22 @@
         <span class="divider"></span>
         <div id="color-buttons" class="part-row" role="group" data-i18n-title="label_color"></div>
       </div>
+      <!-- Ersatz für die Farbreihe, wenn der Platz nicht reicht: ein Swatch in
+           der aktuellen Farbe, der die Reihe als Popup aufklappt. Er steht
+           AUSSERHALB der scrollenden Bauteil-Gruppe und bleibt so erreichbar. -->
+      <button id="btn-color" class="btn part collapse-trigger" data-i18n-title="label_color" hidden>
+        <span class="swatch" id="btn-color-swatch"></span>
+      </button>
       <!-- Ansicht: gehört zum Modell, deshalb hier statt oben rechts -->
-      <span class="divider"></span>
+      <span class="divider" id="view-divider"></span>
+      <!-- Ersatz für die Ansichts-Schalter, wenn der Platz nicht reicht -->
+      <button id="btn-view" class="btn ghost icon-sq collapse-trigger" data-i18n-title="btn_view_title" hidden>
+        <svg viewBox="0 0 18 18" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round">
+          <line x1="3" y1="5" x2="15" y2="5"/><circle cx="11" cy="5" r="2" fill="#fff"/>
+          <line x1="3" y1="9" x2="15" y2="9"/><circle cx="6.5" cy="9" r="2" fill="#fff"/>
+          <line x1="3" y1="13" x2="15" y2="13"/><circle cx="12" cy="13" r="2" fill="#fff"/>
+        </svg>
+      </button>
       <div class="toolbar-icon-row view-row">
 
           <!-- Schräg gehört zum Bauen, steht aber bei den Ansichts-Schaltern;
@@ -409,6 +428,10 @@
         <p class="hint" data-i18n="asm_hint">Lage für Lage von unten nach oben. Orange = im aktuellen Schritt anbauen, blass = kommt später.</p>
       </section>
     </aside>
+
+    <!-- Schmale Schirme: die Seitenleiste liegt über allem, dieser Hintergrund
+         fängt Klicks daneben ab und schließt sie. -->
+    <div id="sidebar-backdrop" hidden></div>
   </main>
 
   <div id="print-area"></div>

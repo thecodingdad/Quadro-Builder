@@ -286,6 +286,25 @@ select {
     #1f63b5 216deg 288deg, #2b2b2b 288deg 360deg);
 }
 
+/* --- Kollaps: enge Bauteil-Zeile --------------------------------------- */
+/* Stufe 1 nimmt die Farbreihe weg und zeigt EINEN Swatch-Knopf, Stufe 2 legt
+   die Ansichts-Schalter hinter ein Ausklapp-Panel. Welche Stufe gilt, misst
+   ui.js -- hier steht nur, was die Klasse bewirkt. */
+body.compact-colors #color-buttons,
+body.compact-view .view-row,
+body.compact-view #view-divider { display: none; }
+/* Im Popup gilt das nicht: dort SOLL die umgehängte Gruppe zu sehen sein. */
+.part-popup #color-buttons,
+.part-popup .view-row { display: flex !important; }
+.part-popup.color-popup { flex-direction: row; flex-wrap: wrap; max-width: 220px; gap: 6px; }
+.part-popup.color-popup #color-buttons { flex-wrap: wrap; gap: 8px; }
+.part-popup.view-popup .view-row { flex-direction: column; align-items: stretch; gap: 4px; }
+.part-popup.view-popup .btn { justify-content: flex-start; }
+
+/* Der Ersatz-Knopf für die Farbreihe: Swatch statt Icon */
+#btn-color { padding: 5px 7px; }
+#btn-color .swatch { display: block; pointer-events: none; }
+
 /* Main */
 :root { --sidebar-w: 320px; }
 main { flex: 1; display: flex; min-height: 0; }
@@ -590,87 +609,84 @@ body.sidebar-hidden #sidebar, body.sidebar-hidden #sidebar-resizer { display: no
   padding: 1px 6px; font-variant-numeric: tabular-nums;
 }
 
-/* Responsive — ab 768 px aufwärts gilt das volle Desktop-Layout.
-   Strategie: zwei Stufen
-   ≤768px  — kompakte Darstellung
-   ≤480px  — nur Kern-Teile in der Bauteil-Leiste */
+/* Responsive — das Layout richtet sich NICHT nach festen Breakpoints, sondern
+   nach dem, was ui.js misst und als Klasse auf <body> setzt:
+   compact-colors / compact-view  — Bauteil-Zeile wird eng (Kollaps-Stufen)
+   compact-head                   — Kopfzeile wird eng (Menü-Knopf)
+   sidebar-overlay                — Seitenleiste legt sich über die Seite
+   mobile-portrait                — Telefon im Hochformat (Bedienung unten) */
 
-/* ≤768 px: Hamburger-Modus */
-@media (max-width: 768px) {
-  /* Brand: "Builder" weglassen, nur QUADRO zeigen */
-  .brand span { display: none; }
+/* --- Enge Kopfzeile ----------------------------------------------------
+   Reicht der Platz oben nicht, bleiben Datei, Zurück und Wieder stehen; alles
+   Weitere hängt ui.js in das Menü (#toolbar-right-inner), der Seitenleisten-
+   Schalter rückt neben den Menü-Knopf. */
+body.compact-head .brand span { display: none; }
+body.compact-head .hide-mobile { display: none !important; }
+body.compact-head #toolbar-left  { padding: 5px 10px; gap: 6px; }
+body.compact-head #toolbar-right { padding: 5px 8px; gap: 4px; border-left: none; }
+body.compact-head #btn-hamburger { display: inline-flex !important; }
 
-  /* Keyboard-Button + andere Desktop-only Elemente ausblenden */
-  .hide-mobile { display: none !important; }
-
-  /* Toolbar: Hauptzeile kompakter */
-  #toolbar-left  { padding: 5px 10px; gap: 6px; }
-  #toolbar-right { padding: 5px 8px;  gap: 0; border-left: none; }
-  #toolbar-ctx   { padding: 4px 10px; }
-
-  /* Hamburger-Button einblenden */
-  #btn-hamburger { display: inline-flex !important; }
-
-  /* toolbar-icon-row wird zur echten Flex-Zeile im Dropdown */
-  #toolbar-right-inner .toolbar-icon-row {
-    display: flex;
-    gap: 4px;
-    align-items: center;
-  }
-  /* Divider innerhalb der Icon-Zeile bleibt vertikal */
-  #toolbar-right-inner .toolbar-icon-row .divider {
-    width: 1px;
-    height: 20px;
-    margin: 0 2px;
-  }
-
-  /* Inner: standardmäßig verborgen — wird per .open gezeigt */
-  #toolbar-right-inner {
-    display: none;
-    position: absolute;
-    top: calc(100% + 4px);
-    right: 0;
-    background: #fff;
-    border: 1px solid var(--line);
-    border-radius: 12px;
-    box-shadow: 0 6px 24px rgba(0,0,0,.13);
-    padding: 8px;
-    flex-direction: column;
-    align-items: stretch;
-    gap: 4px;
-    min-width: 220px;
-    z-index: 300;
-  }
-
-  #toolbar-right-inner.open { display: flex; }
-
-  /* Trennlinien werden horizontal */
-  #toolbar-right-inner .divider {
-    width: 100%;
-    height: 1px;
-    background: var(--line);
-    margin: 3px 0;
-  }
-
-  /* Entwürfe-Button volle Breite */
-  #toolbar-right-inner #btn-file {
-    width: 100%;
-    justify-content: flex-start;
-  }
-  #toolbar-right-inner #file-menu { width: 100%; }
-
-  /* Sprach-Dropdown volle Breite */
-  #toolbar-right-inner .lang-select { width: 100%; }
-
-  /* file-pop: volle Viewport-Breite auf Mobile */
-  #file-pop {
-    position: fixed;
-    right: 8px;
-    left: 8px;
-    width: auto;
-    top: auto;
-  }
+body.compact-head #toolbar-right-inner {
+  display: none;
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.13);
+  padding: 8px;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
+  min-width: 220px;
+  z-index: 300;
 }
+body.compact-head #toolbar-right-inner.open { display: flex; }
+/* Im Menü stehen die Einträge untereinander und über die volle Breite. */
+body.compact-head #menu-extra { display: flex; flex-direction: column; gap: 6px; }
+body.compact-head #menu-extra .group.seg { width: 100%; }
+body.compact-head #menu-extra .group.seg .btn { flex: 1 1 0; }
+body.compact-head #toolbar-right-inner .toolbar-icon-row { display: flex; gap: 4px; align-items: center; }
+body.compact-head #toolbar-right-inner .divider {
+  width: 100%; height: 1px; background: var(--line); margin: 3px 0;
+}
+
+/* --- Seitenleiste als Overlay ------------------------------------------
+   Ab schmalen Schirmen legt sie sich über Canvas UND Werkzeugleisten und
+   verhält sich wie ein Menü: Hintergrund abgedunkelt, Klick daneben schließt. */
+body.sidebar-overlay #sidebar {
+  position: fixed;
+  top: 0; right: 0; bottom: 0;
+  width: min(360px, 88vw);
+  z-index: 400;
+  box-shadow: -8px 0 28px rgba(0, 0, 0, 0.18);
+  padding-right: max(14px, env(safe-area-inset-right));
+  padding-bottom: max(14px, env(safe-area-inset-bottom));
+}
+body.sidebar-overlay #sidebar-resizer { display: none; }
+#sidebar-backdrop {
+  position: fixed; inset: 0;
+  background: rgba(20, 26, 34, 0.35);
+  z-index: 390;
+}
+
+/* --- Hochformat: Bedienung nach unten ---------------------------------- */
+body.mobile-portrait #work { flex-direction: column; }
+body.mobile-portrait #tab-bar     { order: 1; }
+body.mobile-portrait #canvas-wrap { order: 2; }
+body.mobile-portrait #toolbar-ctx {
+  order: 3;
+  border-top: 1px solid var(--line);
+  border-bottom: none;
+  padding-bottom: max(5px, env(safe-area-inset-bottom));
+  padding-left: max(10px, env(safe-area-inset-left));
+  padding-right: max(10px, env(safe-area-inset-right));
+}
+/* Ein einziger Entwurf braucht keine Tableiste -- die Zeile ist Canvas wert. */
+body.mobile-portrait #tab-bar.single { display: none; }
+/* Statusmeldung nicht an den Rand der unteren Leiste kleben lassen. */
+body.mobile-portrait .status { bottom: 16px; max-width: calc(100% - 24px); }
 
 /* Druckbereich (nur beim Drucken sichtbar) */
 #print-area { display: none; }
