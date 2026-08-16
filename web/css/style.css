@@ -871,3 +871,7 @@ body.tab-dragging .tab { cursor: grabbing; }
   background: var(--panel);
 }
 #sidebar .panel { margin-top: 14px; }
+
+/* Knöpfe, die nur ein Sinnbild tragen (Zurück/Wieder). */
+.btn.icon-only { padding: 5px 7px; }
+.btn.icon-only svg { display: block; }
