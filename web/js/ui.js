@@ -203,18 +203,36 @@ export function initUI({ scene, model, builder }) {
 
   /** Popup fixed unter einem Anker-Button platzieren, am rechten Rand geklemmt. */
   function placePopupUnder(pop, anchorBtn) {
-    const rect = anchorBtn.getBoundingClientRect();
+    // ZUERST aus dem Fluss nehmen, dann messen: als normales Kind von <body>
+    // (Flex-Spalte) drueckt das Popup die Leisten zusammen -- der Anker saesse
+    // beim Messen woanders als gleich darauf.
     pop.style.position = "fixed";
-    pop.style.top = (rect.bottom + 5) + "px";
+    pop.style.top = "0px";
+    pop.style.left = "0px";
+    const rect = anchorBtn.getBoundingClientRect();
     pop.style.left = rect.left + "px";
     pop.style.right = "auto";
+    // Steht die Bedienleiste unten (Hochformat), klappen ihre Popups nach OBEN
+    // auf -- direkt an den Knopf, spiegelbildlich zur Leiste oben. Verankert
+    // wird dann die UNTERKANTE: die Hoehe des Popups zu messen geht schief,
+    // solange der Browser noch nicht umgebrochen hat.
+    const nachOben = document.body.classList.contains("mobile-portrait")
+      && $("toolbar-ctx").contains(anchorBtn);
+    if (nachOben) {
+      pop.style.top = "auto";
+      pop.style.bottom = (window.innerHeight - rect.top + 5) + "px";
+      pop.style.maxHeight = Math.max(120, rect.top - 16) + "px";
+    } else {
+      pop.style.bottom = "auto";
+      pop.style.top = (rect.bottom + 5) + "px";
+    }
     requestAnimationFrame(() => {
       const maxLeft = window.innerWidth - pop.offsetWidth - 8;
       if (parseFloat(pop.style.left) > maxLeft) pop.style.left = Math.max(8, maxLeft) + "px";
-      // Steht der Anker unten (Bedienleiste im Hochformat), klappt das Popup
-      // nach OBEN auf -- sonst haengt es unter dem Bildrand.
-      if (rect.bottom + 5 + pop.offsetHeight > window.innerHeight - 8) {
-        pop.style.top = Math.max(8, rect.top - 5 - pop.offsetHeight) + "px";
+      // Am oberen Rand angeschlagen? Dann doch nach oben klappen.
+      if (!nachOben && rect.bottom + 5 + pop.offsetHeight > window.innerHeight - 8) {
+        pop.style.top = "auto";
+        pop.style.bottom = (window.innerHeight - rect.top + 5) + "px";
       }
     });
   }
@@ -428,6 +446,13 @@ export function initUI({ scene, model, builder }) {
   }
   if (hamburgerBtn) {
     hamburgerBtn.addEventListener("click", (e) => { e.stopPropagation(); toggleHamburger(); });
+    // Im Hochformat ist die Marke der zweite Weg ins Menue -- oben links, wo
+    // der Daumen sowieso hinlangt, und dort, wo vorher "Datei" stand.
+    document.querySelector(".brand").addEventListener("click", (e) => {
+      if (!document.body.classList.contains("mobile-portrait")) return;
+      e.stopPropagation();
+      toggleHamburger();
+    });
     document.addEventListener("click", (e) => {
       if (!hamburgerInner.contains(e.target) && e.target !== hamburgerBtn)
         toggleHamburger(false);
@@ -447,15 +472,9 @@ export function initUI({ scene, model, builder }) {
   });
   $("mode-reinforce").addEventListener("click", () => setMode(builder.mode === "reinforce" ? "select" : "reinforce"));
   $("mode-assembly").addEventListener("click", () => setMode("assembly"));
-  $("btn-labels").addEventListener("click", () => toggleLabels());
   $("btn-hints").addEventListener("click", () => toggleHints());
   $("btn-diagonal").addEventListener("click", () => toggleDiagonal());
 
-  function toggleLabels() {
-    builder.setShowLabels(!builder.showLabels);
-    $("btn-labels").classList.toggle("active", builder.showLabels);
-    const ml = $("mobile-btn-labels"); if (ml) ml.classList.toggle("active", builder.showLabels);
-  }
   function toggleHints() {
     builder.setShowHints(!builder.showHints);
     $("btn-hints").classList.toggle("active", builder.showHints);
@@ -546,7 +565,6 @@ export function initUI({ scene, model, builder }) {
       showSidebarPanel(localStorage.getItem(SIDEBAR_PANEL_KEY) || null);
     applyAssemblySheet();
     updateWakeLock();
-    $("btn-labels").classList.toggle("active", builder.showLabels);
     syncPartHighlights();
     syncDeleteButton();
     const statusMap = {
@@ -639,6 +657,18 @@ export function initUI({ scene, model, builder }) {
   // Werkzeugleiste (siehe openGroupPopup). Beim Schliessen muessen die
   // zurueck an ihren Platz, sonst verschwinden sie mit dem Popup.
   let popupCleanup = null;
+  // Wann wurde das offene Popup geoeffnet? Ein Tipp auf Touch-Geraeten kann
+  // zwei Klick-Ereignisse liefern -- ohne diese Sperre ginge das Popup im
+  // selben Wimpernschlag wieder zu.
+  let popupOpenedAt = 0;
+  const TOGGLE_GUARD_MS = 250;
+
+  /** Zweiter Klick auf denselben Knopf: schliessen -- aber nicht sofort. */
+  function togglePopup(anchorBtn) {
+    if (!activePopup || popupAnchor !== anchorBtn) return false;
+    if (performance.now() - popupOpenedAt > TOGGLE_GUARD_MS) closePopup();
+    return true;
+  }
 
   function closePopup() {
     if (!activePopup) return;
@@ -663,10 +693,7 @@ export function initUI({ scene, model, builder }) {
    */
   function showPartPopup(anchorBtn, items, currentId, iconOf, onPick) {
     // Toggle: Popup für denselben Button bereits offen → schließen
-    if (activePopup && popupAnchor === anchorBtn) {
-      closePopup();
-      return;
-    }
+    if (togglePopup(anchorBtn)) return;
     closePopup();
 
     const pop = el("div", "part-popup");
@@ -687,6 +714,7 @@ export function initUI({ scene, model, builder }) {
 
     activePopup = pop;
     popupAnchor = anchorBtn;
+    popupOpenedAt = performance.now();
     // Leicht verzögert registrieren, damit der auslösende Klick nicht sofort schließt
     // In der CAPTURE-Phase: die Knöpfe der Leiste stoppen das Ereignis, damit
     // sich das eigene Popup nicht sofort wieder schließt. In der Bubble-Phase
@@ -725,15 +753,25 @@ export function initUI({ scene, model, builder }) {
    * Beim Schliessen wandert sie an ihren Platz in der Leiste zurueck.
    */
   function openGroupPopup(anchorBtn, group, cls) {
-    if (activePopup && popupAnchor === anchorBtn) { closePopup(); return; }
+    if (togglePopup(anchorBtn)) return;
     closePopup();
     const pop = el("div", `part-popup ${cls}`);
     document.body.appendChild(pop);
+    // Waehrend die Gruppe im Popup haengt, ruht die Messung: sonst meldet die
+    // Leiste "passt wieder", schaltet eine Stufe zurueck -- und das Zurueck-
+    // schalten schliesst das gerade geoeffnete Popup.
+    measurePaused = true;
     moveNode(group, pop);
+    tidyDividers();
     placePopupUnder(pop, anchorBtn);
     activePopup = pop;
     popupAnchor = anchorBtn;
-    popupCleanup = () => moveNode(group, null);
+    popupOpenedAt = performance.now();
+    popupCleanup = () => {
+      moveNode(group, null);
+      tidyDividers();
+      measurePaused = false;
+    };
     setTimeout(() => document.addEventListener("click", onPopupOutsideClick, true), 0);
   }
 
@@ -742,7 +780,7 @@ export function initUI({ scene, model, builder }) {
    * `entries` sind `{ icon, label, run }` -- `icon` ist fertiges SVG-Markup.
    */
   function showMenuPopup(anchorBtn, entries) {
-    if (activePopup && popupAnchor === anchorBtn) { closePopup(); return; }
+    if (togglePopup(anchorBtn)) return;
     closePopup();
 
     const pop = el("div", "part-popup");
@@ -762,6 +800,7 @@ export function initUI({ scene, model, builder }) {
     placePopupUnder(pop, anchorBtn);
     activePopup = pop;
     popupAnchor = anchorBtn;
+    popupOpenedAt = performance.now();
     setTimeout(() => document.addEventListener("click", onPopupOutsideClick, true), 0);
   }
 
@@ -839,9 +878,14 @@ export function initUI({ scene, model, builder }) {
     colorWrap.innerHTML = "";
     for (const c of [...tubeColors(), ...PANEL_EXTRA_COLORS]) {
       const sw = el("button", "swatch");
-      sw.style.background = c.hex;
-      sw.title = (getLang() === "en" && c.name_en) ? c.name_en : c.name;
+      // Farbe als Variable, nicht als Hintergrund: im Popup faerbt sie nur den
+      // Punkt vor dem Namen, in der Leiste den ganzen Knopf.
+      sw.style.setProperty("--swatch", c.hex);
+      const name = (getLang() === "en" && c.name_en) ? c.name_en : c.name;
+      sw.title = name;
       sw.dataset.color = c.id;
+      // Im Popup steht der Name daneben; in der Leiste blendet ihn das CSS aus.
+      sw.appendChild(el("span", "pp-name", name));
       sw.addEventListener("click", () => {
         builder.setColor(c.id);
         renderColorButtons();
@@ -857,10 +901,12 @@ export function initUI({ scene, model, builder }) {
     const rnd = el("button", "swatch swatch-random");
     rnd.title = t("color_random");
     rnd.dataset.color = RANDOM_COLOR;
+    rnd.appendChild(el("span", "pp-name", t("color_random")));
     rnd.addEventListener("click", () => {
       builder.setColor(RANDOM_COLOR);
       renderColorButtons();
       syncPartColors();
+      closePopup();
     });
     colorWrap.appendChild(rnd);
     colorWrap.querySelectorAll("button").forEach((x) =>
@@ -874,7 +920,7 @@ export function initUI({ scene, model, builder }) {
     if (!sw) return;
     const zufall = builder.color === RANDOM_COLOR;
     sw.classList.toggle("swatch-random", zufall);
-    sw.style.background = zufall ? "" : colorHexFor(builder.color);
+    sw.style.setProperty("--swatch", zufall ? "transparent" : colorHexFor(builder.color));
   }
   renderColorButtons();
 
@@ -1314,17 +1360,40 @@ export function initUI({ scene, model, builder }) {
     import: `<svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round" stroke-linecap="round">
             <path d="M8 10.2V1.8"/><path d="M4.8 5 8 1.6 11.2 5"/><path d="M2.5 12.5v1.7h11v-1.7"/></svg>`,
   };
-  $("btn-file-menu").addEventListener("click", (e) => {
-    e.stopPropagation();
-    showMenuPopup($("btn-file-menu"), [
+  /** Die Einträge des Datei-Menüs -- als Popup und als Zeilen im Hauptmenü. */
+  function fileEntries() {
+    return [
       { icon: DATEI_ICONS.neu, label: t("btn_doc_new"), run: () => $("btn-doc-new").click() },
       { icon: DATEI_ICONS.oeffnen, label: t("btn_doc_open"), run: () => $("btn-doc-open").click() },
       { icon: DATEI_ICONS.speichern, label: t("btn_doc_save"), run: () => $("btn-doc-save").click() },
       { icon: DATEI_ICONS.speichernUnter, label: t("btn_doc_saveas"), run: () => $("btn-doc-saveas").click() },
       { icon: DATEI_ICONS.import, label: t("btn_import"), run: () => $("file-import").click() },
       { icon: DATEI_ICONS.export, label: t("btn_export_qdf"), run: () => exportActiveTab() },
-    ]);
+    ];
+  }
+
+  $("btn-file-menu").addEventListener("click", (e) => {
+    e.stopPropagation();
+    showMenuPopup($("btn-file-menu"), fileEntries());
   });
+
+  /**
+   * Im Hochformat gibt es keinen eigenen Datei-Knopf mehr: seine Eintraege
+   * stehen als Zeilen oben im Hauptmenue, das auch die Marke oeffnet.
+   */
+  function renderMenuFileRows(on) {
+    const box = $("menu-file-rows");
+    box.innerHTML = "";
+    box.hidden = !on;
+    if (!on) return;
+    for (const eintrag of fileEntries()) {
+      const row = el("button", "part-popup-row");
+      row.innerHTML = eintrag.icon + `<span class="pp-name"></span>`;
+      row.querySelector(".pp-name").textContent = eintrag.label;
+      row.addEventListener("click", () => { toggleHamburger(false); eintrag.run(); });
+      box.appendChild(row);
+    }
+  }
 
   // "Öffnen" hat keine eigene Liste mehr: es zeigt den Seitenleisten-Tab
   // "Meine Modelle", dort steht jedes Modell mit Öffnen, Umbenennen, Löschen.
@@ -2053,7 +2122,6 @@ export function initUI({ scene, model, builder }) {
       case "a": setMode("assembly"); break;
       case "k": setMode("clamp"); break;
       case "d": toggleDiagonal(); break;
-      case "n": toggleLabels(); break;
       case "h": toggleHints(); break;
       case "c": scene.resetCamera(); break;
       // Die Liste der Tasten selbst: F1 wie ueberall, "?" fuer die Tastatur
@@ -2619,7 +2687,6 @@ export function initUI({ scene, model, builder }) {
     applySlice();
     syncPartHighlights();
     if (v.camera) scene.restoreCameraState(v.camera); else scene.resetCamera();
-    $("btn-labels").classList.toggle("active", builder.showLabels);
     $("btn-hints").classList.toggle("active", builder.showHints);
     $("btn-diagonal").classList.toggle("active", builder.mode === "add" && builder.diagonal);
     renderColorButtons();
@@ -2919,6 +2986,8 @@ export function initUI({ scene, model, builder }) {
   // die Messung schaltet zurueck, es wird wieder eng: Dauerpendeln.
   const tightAt = [0, 0, 0];
   const HYSTERESIS = 24;
+  // Ruht, solange eine Gruppe im Popup haengt (siehe openGroupPopup).
+  let measurePaused = false;
 
   function applyCollapse() {
     const b = document.body.classList;
@@ -2929,6 +2998,7 @@ export function initUI({ scene, model, builder }) {
     // Was gerade offen ist, koennte umgehaengt worden sein -> zumachen.
     closePopup();
     paintColorButton();
+    tidyDividers();
   }
 
   /** Passt die Bauteil-Gruppe noch in die Zeile? */
@@ -2938,6 +3008,7 @@ export function initUI({ scene, model, builder }) {
   }
 
   function measureCollapse() {
+    if (measurePaused) return;
     const breite = $("toolbar-ctx").clientWidth;
     if (!breite) return;                       // unsichtbar (Boot, Drucken)
     // Je Durchgang EINE Stufe. Danach gleich noch einmal messen: das Einklappen
@@ -2975,6 +3046,7 @@ export function initUI({ scene, model, builder }) {
     if (compact) $("toolbar-right").insertBefore($("toggle-sidebar"), $("btn-hamburger"));
     else moveNode($("toggle-sidebar"), null);
     if (!compact) toggleHamburger(false);
+    tidyDividers();
   }
 
   function measureHead() {
@@ -2991,12 +3063,44 @@ export function initUI({ scene, model, builder }) {
     }
   }
 
+  /**
+   * Trenner aufraeumen. Wandern Knoepfe ins Menue oder in ein Popup, bleiben
+   * sonst Trenner am Rand oder gleich zwei nebeneinander stehen. Sichtbar
+   * bleibt nur, was wirklich zwei Gruppen trennt.
+   */
+  function tidyDividers() {
+    for (const leiste of [$("toolbar-left"), $("toolbar-ctx"), $("grp-build")]) {
+      let vorherInhalt = false;     // stand vor diesem Trenner schon etwas?
+      let offen = null;             // Trenner, der noch einen Nachfolger sucht
+      for (const kind of leiste.children) {
+        if (kind.classList.contains("divider")) {
+          // Der Loesch-Trenner hat seine eigene Sichtbarkeit (mit der Auswahl).
+          if (kind.id === "delete-divider") continue;
+          kind.classList.toggle("divider-off", !vorherInhalt);
+          if (vorherInhalt) { offen = kind; vorherInhalt = false; }
+          continue;
+        }
+        if (kind.hidden || kind.offsetParent === null) continue;
+        vorherInhalt = true;
+        offen = null;
+      }
+      // Am Ende noch ein offener Trenner? Der trennt nichts mehr.
+      if (offen) offen.classList.add("divider-off");
+    }
+  }
+
   function applyLayout() {
-    document.body.classList.toggle("mobile-portrait", mqPortrait.matches);
-    document.body.classList.toggle("sidebar-overlay", mqNarrow.matches || mqPortrait.matches);
+    const hochformat = mqPortrait.matches;
+    document.body.classList.toggle("mobile-portrait", hochformat);
+    document.body.classList.toggle("sidebar-overlay", mqNarrow.matches || hochformat);
+    // Im Hochformat verschwindet der Datei-Knopf; seine Eintraege stehen dann
+    // oben im Hauptmenue, das auch ein Tipp auf die Marke oeffnet.
+    renderMenuFileRows(hochformat);
     applyPanelVisibility();
     applyAssemblySheet();
-    requestAnimationFrame(() => { measureCollapse(); measureHead(); scene.onResize(); });
+    requestAnimationFrame(() => {
+      measureCollapse(); measureHead(); tidyDividers(); scene.onResize();
+    });
   }
 
   for (const mq of [mqPortrait, mqNarrow]) mq.addEventListener("change", applyLayout);
@@ -3005,8 +3109,9 @@ export function initUI({ scene, model, builder }) {
   new ResizeObserver(() => measureCollapse()).observe($("toolbar-ctx"));
   new ResizeObserver(() => measureHead()).observe($("toolbar-left"));
 
-  // Seitenleiste im Overlay-Modus: Klick daneben schliesst sie.
+  // Seitenleiste im Overlay-Modus: Klick daneben oder auf das Kreuz schliesst sie.
   $("sidebar-backdrop").addEventListener("click", () => showSidebarPanel(null));
+  $("sidebar-close").addEventListener("click", () => showSidebarPanel(null));
 
   // --- Aufbau im Hochformat: Karte ueber der Szene -----------------------
   // Das Aufbau-Panel wandert aus der Seitenleiste in eine Karte am unteren

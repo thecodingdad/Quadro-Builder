@@ -60,13 +60,11 @@ export class Builder {
     this.selection = new Map();
     this.highlight = null;   // reine Sicht-Hervorhebung (Bestandsliste)
 
-    this.showLabels = false;     // Kupplungs-Namen im normalen Bauen anzeigen
     this.diagonal = false;       // schraege (45-Grad) Streben statt Achsen
     this.showHints = false;      // Verstaerkungs-Vorschlaege hervorheben
     this.buildPlan = { levels: [], steps: [] };
     this.assemblyStep = 0;
     this.assemblyOrder = "y+";   // Aufbaurichtung, siehe buildplan.BUILD_ORDERS
-    this.assemblyLabels = true;  // Beschriftung im Aufbaumodus (per Namen-Button)
 
     this._undoStack = [];
     this._redoStack = [];
@@ -164,7 +162,6 @@ export class Builder {
     else this.selection.clear();
     // Labels beim Moduswechsel grundsaetzlich ausschalten;
     // der Aufbaumodus schaltet sie in enterAssembly() selbst wieder ein.
-    this.showLabels = false;
     if (mode === "assembly") this.enterAssembly(); // Aufbau zeigt wieder eigene Labels
     this.refresh();
   }
@@ -454,9 +451,8 @@ export class Builder {
       mode: this.mode, tubeId: this.tubeId, panelId: this.panelId,
       fittingKind: this.fittingKind, clampPart: this.clampPart, slideKind: this.slideKind,
       color: this.color, diagonal: this.diagonal,
-      showLabels: this.showLabels, showHints: this.showHints,
+      showHints: this.showHints,
       assemblyOrder: this.assemblyOrder, assemblyStep: this.assemblyStep,
-      assemblyLabels: this.assemblyLabels,
       undo: this._undoStack.slice(), redo: this._redoStack.slice(),
     };
   }
@@ -471,11 +467,9 @@ export class Builder {
     if (s.slideKind) this.slideKind = s.slideKind;
     if (s.color) this.color = s.color;
     this.diagonal = !!s.diagonal;
-    this.showLabels = !!s.showLabels;
     this.showHints = !!s.showHints;
     if (s.assemblyOrder) this.assemblyOrder = s.assemblyOrder;
     this.assemblyStep = s.assemblyStep || 0;
-    this.assemblyLabels = s.assemblyLabels !== false;
     this._undoStack = Array.isArray(s.undo) ? s.undo.slice() : [];
     this._redoStack = Array.isArray(s.redo) ? s.redo.slice() : [];
     this.selection.clear();
@@ -512,13 +506,6 @@ export class Builder {
       if (!map || !map.has(id)) this.selection.delete(id);
     }
   }
-  // Im Aufbaumodus merkt sich der Schalter seinen Zustand, damit ein
-  // Schrittwechsel die Beschriftung nicht wieder einblendet.
-  setShowLabels(on) {
-    this.showLabels = !!on;
-    if (this.mode === "assembly") this.assemblyLabels = this.showLabels;
-    this.refresh();
-  }
   setDiagonal(on) { this.diagonal = !!on; if (this.mode === "add") this.refresh(); }
   setShowHints(on) { this.showHints = !!on; this.refresh(); }
 
@@ -540,7 +527,6 @@ export class Builder {
     this.buildPlan = computeBuildPlan(this.model, this.assemblyOrder);
     const max = Math.max(0, this.buildPlan.steps.length - 1);
     this.assemblyStep = Math.min(this.assemblyStep, max);
-    this.showLabels = this.assemblyLabels; // Beschriftung: zuletzt gewaehlter Zustand
   }
 
   // Aufbaurichtung wechseln: Plan neu rechnen und beim ersten Schritt beginnen.
@@ -742,15 +728,15 @@ export class Builder {
   refresh() {
     const assembly = this.mode === "assembly" && this.buildPlan.steps.length
       ? this._assemblyVisibility() : null;
-    // Genau EIN gewaehltes Teil: dessen Namen anzeigen -- dieselben Sprites wie
-    // der "Namen"-Schalter, nur auf dieses Teil begrenzt. Gilt im Cursor-Modus
-    // und im Aufbau-Modus, wo man so ein Teil nachschlagen kann.
+    // Genau EIN gewaehltes Teil: dessen Namen anzeigen. Nur dann -- alle Namen
+    // auf einmal machten das Bild unleserlich, deshalb gibt es den frueheren
+    // Schalter "Kupplungsnamen" nicht mehr.
     const soloId = (this.mode === "select" || this.mode === "assembly") && this.selection.size === 1
       ? [...this.selection.keys()][0] : null;
-    const withLabels = this.showLabels || soloId != null;
+    const withLabels = soloId != null;
     const labelFor = withLabels ? (node) => connectorLabelInfo(this.model, node) : null;
     const slideNameFor = withLabels ? (sl) => slideKindLabel(sl.kind) : null;
-    const labelIds = (soloId != null && !this.showLabels) ? new Set([soloId]) : null;
+    const labelIds = soloId != null ? new Set([soloId]) : null;
     const soloLabel = soloId != null
       ? { id: soloId, text: this._partLabel(soloId, this.selection.get(soloId)) } : null;
     const suggest = (this.showHints || this.mode === "reinforce")

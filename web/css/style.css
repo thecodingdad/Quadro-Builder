@@ -107,6 +107,10 @@ body {
 #toolbar-ctx .part-row { flex-wrap: nowrap; }
 /* Farbe-Gruppe und alle anderen ctx-Kinder nicht schrumpfen */
 #toolbar-ctx .group { flex-shrink: 0; }
+/* Auch die einzelnen Knöpfe nicht: "Auswahl" und "Verstärken" hängen direkt in
+   #grp-build (nicht in einer .part-row) und wurden sonst schmaler als ihre
+   Beschriftung gequetscht, statt die Gruppe scrollen zu lassen. */
+#toolbar-ctx .btn { flex-shrink: 0; }
 
 .brand { font-weight: 800; letter-spacing: 0.5px; font-size: 18px; white-space: nowrap; }
 .brand span { color: var(--accent); font-weight: 700; }
@@ -120,6 +124,9 @@ body {
   width: 1px; height: 20px; align-self: center;
   background: var(--line); margin: 0 5px; flex-shrink: 0;
 }
+/* Trenner, der nach dem Umhängen von Knöpfen nichts mehr trennt (siehe
+   tidyDividers in ui.js). */
+.divider.divider-off { display: none; }
 
 /* Autosave-Anzeige als kleiner Statuspunkt (jetzt im Entwürfe-Button) */
 
@@ -270,6 +277,7 @@ select {
 
 .swatches { display: flex; gap: 5px; }
 .swatch {
+  background: var(--swatch);
   width: 26px; height: 26px;
   border-radius: 50%;
   border: 2px solid #fff;
@@ -291,15 +299,42 @@ select {
    die Ansichts-Schalter hinter ein Ausklapp-Panel. Welche Stufe gilt, misst
    ui.js -- hier steht nur, was die Klasse bewirkt. */
 body.compact-colors #color-buttons,
-body.compact-view .view-row,
-body.compact-view #view-divider { display: none; }
+body.compact-view .view-row { display: none; }
+/* Der Trenner davor bleibt: er scheidet jetzt Bauteile von den Ansichts-
+   Schaltern. Ob er gebraucht wird, entscheidet tidyDividers in ui.js. */
 /* Im Popup gilt das nicht: dort SOLL die umgehängte Gruppe zu sehen sein. */
 .part-popup #color-buttons,
 .part-popup .view-row { display: flex !important; }
-.part-popup.color-popup { flex-direction: row; flex-wrap: wrap; max-width: 220px; gap: 6px; }
-.part-popup.color-popup #color-buttons { flex-wrap: wrap; gap: 8px; }
-.part-popup.view-popup .view-row { flex-direction: column; align-items: stretch; gap: 4px; }
-.part-popup.view-popup .btn { justify-content: flex-start; }
+/* Im Popup werden aus den Icon-Knöpfen Listenzeilen mit Icon UND Name --
+   ohne Beschriftung rät man bei Schnitt/Perspektive nur. */
+.pp-name { display: none; }
+.part-popup .pp-name { display: block; flex: 1; text-align: left; white-space: nowrap; font-size: 13px; }
+.part-popup.color-popup #color-buttons,
+.part-popup.view-popup .view-row { flex-direction: column; align-items: stretch; gap: 2px; }
+.part-popup.view-popup .btn,
+.part-popup.color-popup .swatch {
+  display: flex; align-items: center; gap: 10px;
+  justify-content: flex-start; text-align: left;
+  width: 100%; padding: 7px 8px;
+  border: none; border-radius: 7px; background: none; outline: none;
+  color: var(--ink); font-family: inherit; min-height: 0;
+}
+.part-popup.view-popup .btn:hover,
+.part-popup.color-popup .swatch:hover { background: #f1f4f8; }
+.part-popup.view-popup .btn.active,
+.part-popup.color-popup .swatch.active { background: var(--accent); color: var(--accent-ink); }
+/* Der Farbtupfer wandert in ein eigenes Kästchen vor dem Namen. */
+.part-popup.color-popup .swatch { position: relative; padding-left: 36px; transform: none; }
+.part-popup.color-popup .swatch::before {
+  content: ""; position: absolute; left: 8px; top: 50%; transform: translateY(-50%);
+  width: 20px; height: 20px; border-radius: 50%;
+  background: var(--swatch); outline: 1px solid var(--line);
+}
+.part-popup.color-popup .swatch-random::before {
+  background: conic-gradient(
+    #d42e2e 0deg 72deg, #2e9e4a 72deg 144deg, #f4c020 144deg 216deg,
+    #1f63b5 216deg 288deg, #2b2b2b 288deg 360deg);
+}
 
 /* Der Ersatz-Knopf für die Farbreihe: Swatch statt Icon */
 #btn-color { padding: 5px 7px; }
@@ -647,7 +682,24 @@ body.compact-head #toolbar-right-inner.open { display: flex; }
 body.compact-head #menu-extra { display: flex; flex-direction: column; gap: 6px; }
 body.compact-head #menu-extra .group.seg { width: 100%; }
 body.compact-head #menu-extra .group.seg .btn { flex: 1 1 0; }
-body.compact-head #toolbar-right-inner .toolbar-icon-row { display: flex; gap: 4px; align-items: center; }
+/* Im Menü sind auch die Icon-Knöpfe Listenzeilen mit Namen -- und die
+   Einstellungen stehen direkt unter den Datei-Einträgen. */
+body.compact-head #toolbar-right-inner { display: none; }
+body.compact-head #toolbar-right-inner.open { display: flex; }
+body.compact-head #menu-file-rows { order: 1; }
+body.compact-head #toolbar-right-inner .toolbar-icon-row { order: 2; display: flex; flex-direction: column; gap: 2px; }
+body.compact-head #menu-extra { order: 3; }
+body.compact-head #toolbar-right-inner .toolbar-icon-row .btn,
+body.compact-head #toolbar-right-inner .menu { width: 100%; }
+body.compact-head #toolbar-right-inner .toolbar-icon-row .btn {
+  display: flex; align-items: center; gap: 10px;
+  justify-content: flex-start; padding: 7px 8px;
+  border: none; border-radius: 7px; background: none; min-width: 0;
+}
+body.compact-head #toolbar-right-inner .toolbar-icon-row .btn:hover { background: #f1f4f8; }
+body.compact-head #toolbar-right-inner .toolbar-icon-row .pp-name {
+  display: block; font-size: 13px; text-align: left;
+}
 body.compact-head #toolbar-right-inner .divider {
   width: 100%; height: 1px; background: var(--line); margin: 3px 0;
 }
@@ -665,6 +717,17 @@ body.sidebar-overlay #sidebar {
   padding-bottom: max(14px, env(safe-area-inset-bottom));
 }
 body.sidebar-overlay #sidebar-resizer { display: none; }
+/* Schließen-Kreuz gehört zur überlagernden Leiste; im Desktop-Layout schließt
+   der Schalter oben rechts, dort wäre es doppelt. */
+.sidebar-close { display: none; }
+body.sidebar-overlay .sidebar-close {
+  display: inline-flex; align-items: center; justify-content: center;
+  flex: 0 0 auto; align-self: center;
+  width: 30px; height: 30px; margin-left: 4px;
+  border: none; border-radius: 8px; background: none;
+  color: var(--muted); cursor: pointer;
+}
+body.sidebar-overlay .sidebar-close:hover { background: rgba(0, 0, 0, 0.06); color: var(--ink); }
 #sidebar-backdrop {
   position: fixed; inset: 0;
   background: rgba(20, 26, 34, 0.35);
@@ -672,6 +735,15 @@ body.sidebar-overlay #sidebar-resizer { display: none; }
 }
 
 /* --- Hochformat: Bedienung nach unten ---------------------------------- */
+/* Der Datei-Knopf fällt weg -- seine Einträge stehen im Menü, das auch ein
+   Tipp auf die Marke öffnet. */
+body.mobile-portrait #file-actions { display: none; }
+body.mobile-portrait .brand { cursor: pointer; }
+body.mobile-portrait .brand:active { opacity: 0.6; }
+#menu-file-rows { display: flex; flex-direction: column; gap: 2px; }
+#menu-file-rows + #menu-extra { border-top: 1px solid var(--line); padding-top: 6px; margin-top: 2px; }
+#menu-file-rows[hidden] + #menu-extra { border-top: none; padding-top: 0; margin-top: 0; }
+
 body.mobile-portrait #work { flex-direction: column; }
 body.mobile-portrait #tab-bar     { order: 1; }
 body.mobile-portrait #canvas-wrap { order: 2; }
@@ -699,7 +771,10 @@ body.mobile-portrait #tab-bar.single { display: none; }
   flex-direction: column;
   max-height: 42%;
 }
-#asm-sheet.open { max-height: 80%; }
+/* Aufgeklappt IMMER die halbe Szene hoch: sonst springt die Karte bei jedem
+   Schrittwechsel auf eine andere Höhe, weil mal drei und mal zwölf Teile in
+   der Liste stehen. Gescrollt wird dann innerhalb der Liste. */
+#asm-sheet.open { height: 50%; max-height: none; }
 .asm-sheet-handle {
   border: none; background: none; padding: 8px 0 4px; cursor: pointer;
   display: flex; justify-content: center; flex: 0 0 auto;
@@ -707,7 +782,7 @@ body.mobile-portrait #tab-bar.single { display: none; }
 .asm-sheet-grip {
   display: block; width: 42px; height: 4px; border-radius: 2px; background: #c4ccd6;
 }
-#asm-sheet-body { overflow-y: auto; padding: 0 14px 10px; }
+#asm-sheet-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 0 14px 10px; }
 /* Eingeklappt bleiben Schrittzähler, Fortschritt und Titel stehen -- die
    Teileliste und die Einstellungen kommen erst beim Aufklappen. */
 #asm-sheet:not(.open) #asm-body,
