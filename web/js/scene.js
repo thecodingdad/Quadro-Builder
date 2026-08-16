@@ -159,6 +159,11 @@ export class SceneManager {
     // Drehen macht der Builder selbst (um den Punkt unter dem Zeiger), deshalb
     // bekommt OrbitControls die linke Taste gar nicht erst.
     this.controls.mouseButtons.LEFT = null;
+    // Dasselbe fuer den Finger: EIN Finger gehoert dem Builder (drehen,
+    // waehlen, bauen -- genau wie die linke Maustaste), ZWEI Finger zoomen und
+    // schieben. `mouseButtons` gilt nur fuer die Maus; ohne diese Zeile wuerde
+    // OrbitControls beim Wischen zusaetzlich drehen.
+    this.controls.touches = { ONE: null, TWO: THREE.TOUCH.DOLLY_PAN };
     this.onCameraChange = () => {};   // von der UI zum Sichern ueberschrieben
     this.controls.addEventListener("end", () => {
       // Nach Zoomen/Schieben den Bezugspunkt nachfuehren (siehe _reanchorTarget).
@@ -563,6 +568,11 @@ export class SceneManager {
     this.controls.dampingFactor = 0.08;
     this.controls.zoomToCursor = true;
     this.controls.mouseButtons.LEFT = null;   // Drehen macht der Builder selbst
+    // Dasselbe fuer den Finger: EIN Finger gehoert dem Builder (drehen,
+    // waehlen, bauen -- genau wie die linke Maustaste), ZWEI Finger zoomen und
+    // schieben. `mouseButtons` gilt nur fuer die Maus; ohne diese Zeile wuerde
+    // OrbitControls beim Wischen zusaetzlich drehen.
+    this.controls.touches = { ONE: null, TWO: THREE.TOUCH.DOLLY_PAN };
     this.controls.addEventListener("end", () => {
       if (!this.orbiting) this._reanchorTarget();
       this.onCameraChange();

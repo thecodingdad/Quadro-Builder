@@ -1188,7 +1188,16 @@ export class Builder {
   // --- Events -------------------------------------------------------------
   _attach() {
     const el = this.scene.renderer.domElement;
+    // Ein Zug gehoert genau EINEM Zeiger. Kommt ein zweiter Finger dazu, ist
+    // das eine Zwei-Finger-Geste (Zoomen/Schieben) -- die uebernimmt
+    // OrbitControls, der eigene Zug wird abgebrochen. Ohne diese Buchhaltung
+    // kaemen waehrend des Zoomens abwechselnd Bewegungen BEIDER Finger an: der
+    // Drehpunkt sprang dann zwischen ihnen hin und her.
+    this._pointerId = null;
+
     el.addEventListener("pointerdown", (e) => {
+      if (this._pointerId !== null) { this._abortGesture(); return; }
+      this._pointerId = e.pointerId;
       this._down = {
         x: e.clientX, y: e.clientY,
         add: e.ctrlKey || e.metaKey || e.shiftKey,
@@ -1223,9 +1232,40 @@ export class Builder {
       // Linke Taste ohne Strg: eigene Drehung um den Punkt unter dem Zeiger.
       if (e.button === 0 && !this._down.box) this.scene.beginOrbit(e.clientX, e.clientY);
     });
-    el.addEventListener("pointermove", (e) => this._onMove(e));
-    el.addEventListener("pointerup", (e) => this._onUp(e));
+    // Zeiger, die nicht zum laufenden Zug gehoeren, bleiben aussen vor.
+    const fremd = (e) => this._pointerId !== null && e.pointerId !== this._pointerId;
+    el.addEventListener("pointermove", (e) => { if (!fremd(e)) this._onMove(e); });
+    el.addEventListener("pointerup", (e) => {
+      if (fremd(e)) return;
+      this._pointerId = null;
+      this._onUp(e);
+    });
+    // Abgebrochene Zeiger (Geste vom System uebernommen, Finger verlassen den
+    // Bildschirm) hinterlassen sonst einen halb offenen Zug.
+    el.addEventListener("pointercancel", (e) => { if (!fremd(e)) this._abortGesture(); });
+  }
 
+  /**
+   * Laufenden Zug ohne Wirkung beenden: Drehen aufheben, Auswahl-Rechteck
+   * wegnehmen, ein begonnenes Verschieben auf den Stand davor zuruecksetzen.
+   */
+  _abortGesture() {
+    this._pointerId = null;
+    this._down = null;
+    this._cubeDown = null;
+    this._cubeDrag = null;
+    if (this._boxing) {
+      this._boxing = false;
+      this.scene.hideSelectBox();
+    }
+    if (this._drag) {
+      const d = this._drag;
+      this._drag = null;
+      this.model.loadJSON(JSON.parse(d.before));
+      this.scene.setCursor("default");
+      this.refresh();
+    }
+    this.scene.endOrbit();
   }
 
 

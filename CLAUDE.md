@@ -160,6 +160,12 @@ Koordinaten in **cm**, Three.js-Konvention **y = oben**, Boden bei y = 0.
 ## Fallstricke
 
 - `catalog.js` lädt `../data/parts.json` relativ – die App muss unter `/web/` ausgeliefert werden.
+- **Zeiger-Eingaben teilen sich `builder.js` und OrbitControls:** ein Finger/die linke Maustaste
+  gehören dem Builder (drehen um den Punkt unter dem Zeiger, wählen, bauen), zwei Finger und das
+  Rad gehören OrbitControls. Beides muss **getrennt** abgeschaltet werden – `mouseButtons.LEFT`
+  gilt nur für die Maus, für den Finger braucht es `controls.touches` (in `scene.js` an **beiden**
+  Stellen, die Controls bauen). Der Builder merkt sich außerdem die `pointerId` des laufenden Zugs
+  und bricht ihn ab, sobald ein zweiter Finger dazukommt (`_abortGesture`).
 - Undo/Redo in `builder.js` arbeiten mit vollständigen JSON-Snapshots (`recordHistory`,
   max. 60 Schritte). Modelländerungen deshalb immer durch `recordHistory(...)` kapseln.
 - **IndexedDB** `quadro.library.v1` (Version 2) hält drei Speicher: `designs` (eingelesene
