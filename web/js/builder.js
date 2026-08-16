@@ -581,8 +581,9 @@ export class Builder {
   buildStep(dirVec) {
     if (this.model.isEmpty()) {
       this.recordHistory(() => {
-        const cs = geometry().connectorSize;
-        this.selectedNodeId = this.model.addNode(0, cs / 2, 0).id;
+        // Erste Kupplung auf y = 0, genau wie beim Klick auf den Ursprung --
+        // der Würfel steht damit auf dem Boden statt darüber.
+        this.selectedNodeId = this.model.addNode(0, 0, 0).id;
       });
       this.refresh();
       return;
@@ -601,7 +602,9 @@ export class Builder {
     if (res && res.ground) this.onNotice(t("notice_ground"));
     else if (res && res.collision) this.onNotice(t("notice_collision"));
     else if (res && res.tube) this._notePlaced(res.tube.id, "tube");
-    else if (res && res.node) this.selectedNodeId = res.node.id;
+    // Der Ankerpunkt wandert ans neue Rohrende -- sonst müsste man jede
+    // Richtung zweimal drücken: einmal bauen, einmal hinlaufen.
+    if (res && res.node) this.selectedNodeId = res.node.id;
     this.refresh();
   }
 
