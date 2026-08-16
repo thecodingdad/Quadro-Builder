@@ -121,18 +121,10 @@ export function initUI({ scene, model, builder }) {
     }, 350);
   }
 
-  // --- Entwuerfe/Datei-Menue ---------------------------------------------
-  const fileMenu = $("file-menu");
-  function toggleFileMenu(open) {
-    const pop = $("file-pop");
-    const show = open == null ? pop.hidden : open;
-    pop.hidden = !show;
-    $("btn-file").classList.toggle("active", show);
-    // #toolbar-left scrollt waagerecht (overflow-x) und schneidet damit auch
-    // senkrecht ab -- ein absolut positioniertes Popup waere unsichtbar.
-    // Deshalb fixed unter dem Button platzieren.
-    if (show) placePopupUnder(pop, $("btn-file"));
-  }
+  // Die Datei-Aktionen stehen jetzt als einzelne Knöpfe in der Kopfzeile.
+  // toggleFileMenu bleibt als Attrappe, damit die Aufrufe in den Handlern
+  // nichts kaputt machen.
+  function toggleFileMenu() { /* kein Menü mehr */ }
 
   /** Popup fixed unter einem Anker-Button platzieren, am rechten Rand geklemmt. */
   function placePopupUnder(pop, anchorBtn) {
@@ -146,11 +138,6 @@ export function initUI({ scene, model, builder }) {
       if (parseFloat(pop.style.left) > maxLeft) pop.style.left = Math.max(8, maxLeft) + "px";
     });
   }
-  $("btn-file").addEventListener("click", (e) => { e.stopPropagation(); toggleFileMenu(); });
-  document.addEventListener("click", (e) => {
-    if (fileMenu && !fileMenu.contains(e.target)) toggleFileMenu(false);
-  });
-
   // --- Schnittebene ------------------------------------------------------
   // Schneidet das Modell entlang einer Achse auf, damit man hineinsehen und
   // weiter innen bauen kann. Kein eigener Modus: laeuft parallel zu Bauen,
@@ -880,13 +867,6 @@ export function initUI({ scene, model, builder }) {
   $("btn-redo").addEventListener("click", () => builder.redo());
   const camBtn = $("btn-camera");
   if (camBtn) camBtn.addEventListener("click", () => scene.resetCamera());
-  $("btn-clear").addEventListener("click", () => {
-    if (!model.isEmpty() && !confirm(t("confirm_clear"))) return;
-    builder.recordHistory(() => model.clear());
-    builder.selectedNodeId = null;
-    builder.refresh();
-    toggleFileMenu(false);
-  });
   $("btn-export-qdf").addEventListener("click", () => {
     const tab = ui.activeTab;
     if (!tab) return;
@@ -1000,8 +980,10 @@ export function initUI({ scene, model, builder }) {
   }
 
   async function refreshDocList() {
+    // Die Kopfzeile hat keine Auswahlliste mehr -- die Modelle stehen in der
+    // Seitenleiste. Bleibt für den Fall, dass die Liste wieder auftaucht.
     const sel = $("doc-select");
-    if (!sel) return;
+    if (!sel) { if (currentPanel === "own") renderOwnModels(); return; }
     const alt = sel.value;
     sel.innerHTML = "";
     let liste = [];
@@ -1069,11 +1051,11 @@ export function initUI({ scene, model, builder }) {
     flash(t("flash_saved", gewaehlt.name));
   });
 
-  $("btn-doc-open").addEventListener("click", async () => {
-    const id = $("doc-select").value;
-    if (!id) return;
-    toggleFileMenu(false);
-    await openDocById(id);
+  // "Öffnen" hat keine eigene Liste mehr: es zeigt den Seitenleisten-Tab
+  // "Meine Modelle", dort steht jedes Modell mit Öffnen, Umbenennen, Löschen.
+  $("btn-doc-open").addEventListener("click", () => {
+    showSidebarPanel("own");
+    renderOwnModels();
   });
 
   /** Datei in einem Tab öffnen -- ist sie schon offen, wird der Tab gewählt. */
@@ -1087,16 +1069,6 @@ export function initUI({ scene, model, builder }) {
     return tab;
   }
 
-  $("btn-doc-delete").addEventListener("click", async () => {
-    const id = $("doc-select").value;
-    if (!id) return;
-    const doc = await docs.getDoc(id);
-    if (!doc || !confirm(t("confirm_delete_save", doc.name))) return;
-    await docs.removeDoc(id);
-    for (const tab of tabs) if (tab.docId === id) { tab.docId = null; tab.dirty = true; }
-    renderTabs();
-    refreshDocList();
-  });
 
   $("btn-doc-save").addEventListener("click", async () => {
     const tab = ui.activeTab;
@@ -1328,6 +1300,7 @@ export function initUI({ scene, model, builder }) {
 
   function applyPanelVisibility() {
     $("panel-bom").hidden = currentPanel !== "bom";
+    $("panel-own").hidden = currentPanel !== "own";
     $("panel-library").hidden = currentPanel !== "library";
     $("panel-assembly").hidden = currentPanel !== "assembly";
     document.body.classList.toggle("sidebar-hidden", currentPanel === null);
@@ -1339,8 +1312,9 @@ export function initUI({ scene, model, builder }) {
   // Nur bom/inventory/library/zu wird gemerkt.
   function showSidebarPanel(name) {
     currentPanel = name;
-    if (name === "library") { renderOwnModels(); if (!libLoaded) loadLibrary(); }
-    if (name === "bom" || name === "library" || name === null)
+    if (name === "own") renderOwnModels();
+    if (name === "library" && !libLoaded) loadLibrary();
+    if (name === "bom" || name === "own" || name === "library" || name === null)
       localStorage.setItem(SIDEBAR_PANEL_KEY, name || "");
     applyPanelVisibility();
   }
@@ -1737,14 +1711,16 @@ export function initUI({ scene, model, builder }) {
 
   /**
    * Eine Zeile der Stückliste. `invKey` verbindet sie mit dem Bestand
-   * ("gruppe:id"): dann zeigt die Zeile zusätzlich, wie viele Teile davon
-   * vorhanden sind, färbt sich rot, wenn sie nicht reichen, und hebt auf Klick
-   * die zugehörigen Teile im Modell hervor.
+   * ("gruppe:id"): dann steht neben der benötigten Anzahl der eigene Bestand
+   * ("56/103"), und reicht er nicht, ist die Zeile rot hinterlegt.
+   * `hl` beschreibt, welche Teile ein Klick im Modell hervorhebt -- bei nach
+   * Farben getrennten Zeilen nur die dieser Farbe.
    */
-  function bomRow(container, name, colorId, count, subtotal, invKey = null) {
+  function bomRow(container, name, colorId, count, subtotal, invKey = null, hl = null) {
     const inv = invKey ? invIndex.get(invKey) : null;
+    const marke = hl ? hlKey(hl) : null;
     const row = el("div", "bom-row" + (inv && !inv.ok ? " bad" : "")
-      + (invKey && invKey === invHighlightKey ? " marked" : ""));
+      + (marke && marke === bomHighlightKey ? " marked" : ""));
     const label = el("span", "bom-name");
     if (colorId) {
       const dot = el("span", "dot"); dot.style.background = colorHex(colorId);
@@ -1753,21 +1729,74 @@ export function initUI({ scene, model, builder }) {
     label.appendChild(document.createTextNode(name));
     row.appendChild(label);
     row.appendChild(el("span", "bom-count", `${count}×`));
-    if (inv) {
-      row.appendChild(el("span", "inv-status", inv.ok ? "✓" : t("inv_missing", inv.need - inv.owned)));
-      row.title = t("inv_have", inv.owned, inv.need);
-      row.addEventListener("click", () => {
-        setInventoryHighlight(invKey === invHighlightKey ? null : inv);
-      });
-    } else {
-      row.appendChild(el("span", "inv-status", ""));
-    }
+    // Bestand: eigene Stückzahl / benötigte Stückzahl des ganzen Teils.
+    row.appendChild(el("span", "bom-stock", inv ? `${inv.owned}/${inv.need}` : ""));
+    if (inv) row.title = t("inv_have", inv.owned, inv.need);
     row.appendChild(el("span", "bom-sub", subtotal == null ? "" : eur(subtotal)));
+    if (marke) {
+      row.addEventListener("click", () => setBomHighlight(marke === bomHighlightKey ? null : hl));
+    }
     container.appendChild(row);
+  }
+
+  // Hervorhebung aus der Stückliste: welche Zeile ist markiert?
+  let bomHighlightKey = null;
+  const hlKey = (hl) => `${hl.kind}:${hl.id}:${hl.color || ""}`;
+
+  /** Teile im Modell, die zu einer Stücklisten-Zeile gehören. */
+  function partsForBomRow(hl) {
+    const ids = new Set();
+    const farbePasst = (el2) => !hl.color || el2.color === hl.color;
+    if (hl.kind === "tubes") {
+      for (const tb of model.tubes.values())
+        if (!tb.arm && !tb.link && tb.tubeId === hl.id && farbePasst(tb)) ids.add(tb.id);
+    } else if (hl.kind === "panels") {
+      for (const p of model.panels.values())
+        if (p.panelId === hl.id && farbePasst(p)) ids.add(p.id);
+    } else if (hl.kind === "connectors") {
+      for (const n of model.nodes.values()) {
+        if (n.unused) continue;
+        for (const typ of connectorsForNode(model, n)) if (typ === hl.id) { ids.add(n.id); break; }
+      }
+    } else if (hl.kind === "fittings") {
+      for (const f of model.fittings.values()) {
+        const def = partForFitting(f.kind, f.mask);
+        if (def && def.id === hl.id) ids.add(f.id);
+      }
+    } else if (hl.kind === "reinforcements") {
+      for (const tb of model.tubes.values()) if (tb.reinforced) ids.add(tb.id);
+    } else if (hl.kind === "textiles") {
+      for (const tx of model.textiles.values()) if (farbePasst(tx)) ids.add(tx.id);
+    } else if (hl.kind === "slides") {
+      for (const sl of model.slides.values()) if (sl.kind === hl.id) ids.add(sl.id);
+    }
+    return ids;
+  }
+
+  function setBomHighlight(hl) {
+    bomHighlightKey = hl ? hlKey(hl) : null;
+    builder.setHighlight(hl ? partsForBomRow(hl) : null);
+    update();
   }
 
   // Bestand je Katalogteil, aufgeschlüsselt für die Stücklisten-Zeilen.
   let invIndex = new Map();
+  const round2Preis = (v) => Math.round(v * 100) / 100;
+
+  // Nach Farben getrennte Zeilen? Merkt sich die Wahl über Sitzungen hinweg.
+  const BOM_COLOR_KEY = "quadro.bomByColor.v1";
+  let bomByColor = localStorage.getItem(BOM_COLOR_KEY) !== "0";
+  const bomColorBox = $("bom-by-color");
+  if (bomColorBox) {
+    bomColorBox.checked = bomByColor;
+    bomColorBox.addEventListener("change", () => {
+      bomByColor = bomColorBox.checked;
+      localStorage.setItem(BOM_COLOR_KEY, bomByColor ? "1" : "0");
+      bomHighlightKey = null;
+      builder.setHighlight(null);
+      update();
+    });
+  }
 
 
   function update() {
@@ -1782,44 +1811,82 @@ export function initUI({ scene, model, builder }) {
     invIndex = new Map(cmp.rows.map((r) => [r.group + ":" + r.key, r]));
     lastInvRows = cmp.rows;
 
+    // Nach Farben getrennt oder zusammengefasst? Der Preis hängt nicht an der
+    // Farbe, deshalb lassen sich die Zeilen einfach addieren.
+    const nachFarbe = bomByColor;
+    const fasseZusammen = (rows, idFeld) => {
+      if (nachFarbe) return rows;
+      const map = new Map();
+      for (const r of rows) {
+        const id = r[idFeld];
+        if (!map.has(id)) map.set(id, { ...r, color: null, colorName: null, count: 0, subtotal: 0 });
+        const z = map.get(id);
+        z.count += r.count;
+        z.subtotal = round2Preis(z.subtotal + (r.subtotal || 0));
+      }
+      return [...map.values()];
+    };
+
     const tb = $("bom-tubes"); tb.innerHTML = "";
-    if (bom.tubes.length === 0) tb.appendChild(el("div", "muted", "–"));
-    for (const r of bom.tubes) bomRow(tb, `${r.name} · ${r.colorName}`, r.color, r.count, r.subtotal, "tubes:" + r.tubeId);
+    const rohre = fasseZusammen(bom.tubes, "tubeId");
+    if (rohre.length === 0) tb.appendChild(el("div", "muted", "–"));
+    for (const r of rohre) {
+      bomRow(tb, r.color ? `${r.name} · ${r.colorName}` : r.name, r.color, r.count, r.subtotal,
+        "tubes:" + r.tubeId, { kind: "tubes", id: r.tubeId, color: r.color });
+    }
 
     const cb = $("bom-connectors"); cb.innerHTML = "";
     if (bom.connectors.length === 0) cb.appendChild(el("div", "muted", "–"));
-    for (const r of bom.connectors) bomRow(cb, r.name, null, r.count, r.subtotal, "connectors:" + r.type);
+    for (const r of bom.connectors) {
+      bomRow(cb, r.name, null, r.count, r.subtotal, "connectors:" + r.type,
+        { kind: "connectors", id: r.type });
+    }
     if (bom.openEnds > 0) {
       const row = el("div", "bom-row muted");
       row.appendChild(el("span", "bom-name", t("bom_open_ends")));
       row.appendChild(el("span", "bom-count", `${bom.openEnds}×`));
+      row.appendChild(el("span", "bom-stock", ""));
       row.appendChild(el("span", "bom-sub", ""));
       cb.appendChild(row);
     }
 
     const pb = $("bom-panels"); pb.innerHTML = "";
-    if (bom.panels.length === 0) pb.appendChild(el("div", "muted", "–"));
-    for (const r of bom.panels) bomRow(pb, `${r.name} · ${r.colorName}`, r.color, r.count, r.subtotal, "panels:" + r.panelId);
+    const platten = fasseZusammen(bom.panels, "panelId");
+    if (platten.length === 0) pb.appendChild(el("div", "muted", "–"));
+    for (const r of platten) {
+      bomRow(pb, r.color ? `${r.name} · ${r.colorName}` : r.name, r.color, r.count, r.subtotal,
+        "panels:" + r.panelId, { kind: "panels", id: r.panelId, color: r.color });
+    }
 
     const xb = $("bom-textiles"); xb.innerHTML = "";
     const textiles = bom.textiles || [];
     if (textiles.length === 0) xb.appendChild(el("div", "muted", "–"));
-    for (const r of textiles) bomRow(xb, `${t("bom_textile")} ${r.w}×${r.h} cm · ${r.colorName}`, r.color, r.count, null);
+    for (const r of textiles) {
+      const name = `${t("bom_textile")} ${r.w}×${r.h} cm` + (nachFarbe ? ` · ${r.colorName}` : "");
+      bomRow(xb, name, nachFarbe ? r.color : null, r.count, null, null,
+        { kind: "textiles", id: `${r.w}x${r.h}`, color: nachFarbe ? r.color : null });
+    }
 
     const slb = $("bom-slides"); slb.innerHTML = "";
     const slides = bom.slides || [];
     if (slides.length === 0) slb.appendChild(el("div", "muted", "–"));
-    for (const r of slides) bomRow(slb, r.name || slideKindName(r.kind), null, r.count, r.subtotal || null);
+    for (const r of slides) {
+      bomRow(slb, r.name || slideKindName(r.kind), null, r.count, r.subtotal || null,
+        r.id ? "fittings:" + r.id : null, { kind: "slides", id: r.kind });
+    }
 
     const fb = $("bom-fittings"); fb.innerHTML = "";
     const fits = bom.fittings || [];
     if (fits.length === 0) fb.appendChild(el("div", "muted", "–"));
-    for (const r of fits) bomRow(fb, r.name, null, r.count, r.subtotal || null, "fittings:" + r.id);
+    for (const r of fits) {
+      bomRow(fb, r.name, null, r.count, r.subtotal || null, "fittings:" + r.id,
+        { kind: "fittings", id: r.id });
+    }
 
     const rb = $("bom-reinforcements"); rb.innerHTML = "";
     const reinf = bom.reinforcements || [];
     if (reinf.length === 0) rb.appendChild(el("div", "muted", "–"));
-    for (const r of reinf) bomRow(rb, r.name, null, r.count, r.subtotal, "reinforcements:" + r.id);
+    for (const r of reinf) bomRow(rb, r.name, null, r.count, r.subtotal, "reinforcements:" + r.id, { kind: "reinforcements", id: r.id });
 
     $("sum-tubes").textContent = bom.totals.tubes;
     $("sum-conn").textContent = bom.totals.connectors;
@@ -1831,7 +1898,8 @@ export function initUI({ scene, model, builder }) {
     if (!$("inventory-editor").hidden) renderInventoryEditor();
     // Die Bibliothek zeigt je Modell, ob der Bestand reicht -- nach einer
     // Bestandsaenderung muessen die Haken neu gerechnet werden.
-    if (currentPanel === "library") { renderLibrary(); renderOwnModels(); }
+    if (currentPanel === "library") renderLibrary();
+    if (currentPanel === "own") renderOwnModels();
     if (builder.mode === "assembly") renderAssembly();
     showSaved();
   }
@@ -2246,7 +2314,7 @@ export function initUI({ scene, model, builder }) {
   $("tab-new").addEventListener("click", () => openTab({ name: naechsterFreierName() }));
   $("empty-new").addEventListener("click", () => $("btn-doc-new").click());
   $("own-new").addEventListener("click", () => $("btn-doc-new").click());
-  $("empty-open").addEventListener("click", () => { toggleFileMenu(true); $("doc-select").focus(); });
+  $("empty-open").addEventListener("click", () => { showSidebarPanel("own"); renderOwnModels(); });
   $("empty-import").addEventListener("click", () => $("file-import").click());
 
   /** "Modell 1", "Modell 2", ... -- der erste Name, den noch kein Tab trägt. */

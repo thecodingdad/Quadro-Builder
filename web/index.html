@@ -21,33 +21,17 @@
       <div id="toolbar-left">
         <div class="brand">QUADRO <span>Builder</span></div>
         <span class="divider"></span>
-        <div class="menu" id="file-menu">
-          <button id="btn-file" class="btn ghost icon-btn" data-i18n-title="btn_file_title">
-            <span id="autosave-status" class="save-dot" aria-label="Speicherstatus"></span>
-            <span data-i18n="btn_file">Entwürfe ▾</span>
-          </button>
-          <div id="file-pop" class="menu-pop" hidden>
-            <div class="menu-section">
-              <span class="menu-label" data-i18n="menu_doc">Modell</span>
-              <button id="btn-doc-new" class="btn ghost full" data-i18n="btn_doc_new">Neu…</button>
-              <div class="menu-row">
-                <select id="doc-select"></select>
-                <button id="btn-doc-open" class="btn ghost" data-i18n="btn_doc_open">Öffnen</button>
-                <button id="btn-doc-delete" class="btn ghost" data-i18n-title="btn_doc_delete_title">🗑</button>
-              </div>
-              <button id="btn-doc-save" class="btn ghost full" data-i18n="btn_doc_save">Speichern</button>
-              <button id="btn-doc-saveas" class="btn ghost full" data-i18n="btn_doc_saveas">Speichern unter…</button>
-            </div>
-            <div class="menu-section">
-              <span class="menu-label" data-i18n="menu_file">Datei</span>
-              <button id="btn-export-qdf" class="btn ghost full" data-i18n="btn_export_qdf" data-i18n-title="btn_export_qdf_title">Export QDF</button>
-              <button id="btn-export-all" class="btn ghost full" data-i18n="btn_export_all" data-i18n-title="btn_export_all_title">Alle exportieren…</button>
-              <button id="btn-import" class="btn ghost full" data-i18n="btn_import" data-i18n-title="btn_import_title">Import QDF</button>
-              <input id="file-import" type="file" accept=".qdf,application/json,.json" hidden />
-            </div>
-            <button id="btn-clear" class="btn ghost full danger" data-i18n="btn_clear" data-i18n-title="btn_clear_title">Modell leeren</button>
-          </div>
-        </div><!-- #file-menu -->
+        <div class="group" id="file-actions">
+          <span id="autosave-status" class="save-dot" aria-label="Speicherstatus"></span>
+          <button id="btn-doc-new" class="btn ghost" data-i18n="btn_doc_new" data-i18n-title="btn_doc_new_title">Neu…</button>
+          <button id="btn-doc-open" class="btn ghost" data-i18n="btn_doc_open" data-i18n-title="btn_doc_open_title">Öffnen</button>
+          <button id="btn-doc-save" class="btn ghost" data-i18n="btn_doc_save">Speichern</button>
+          <button id="btn-doc-saveas" class="btn ghost" data-i18n="btn_doc_saveas">Speichern unter…</button>
+          <span class="divider"></span>
+          <button id="btn-export-qdf" class="btn ghost" data-i18n="btn_export_qdf" data-i18n-title="btn_export_qdf_title">Export QDF</button>
+          <button id="btn-import" class="btn ghost" data-i18n="btn_import" data-i18n-title="btn_import_title">Import QDF</button>
+          <input id="file-import" type="file" accept=".qdf,application/json,.json" hidden />
+        </div>
         <span class="divider"></span>
         <div class="group seg">
           <button id="mode-add" class="btn active" data-i18n="btn_build" data-i18n-title="btn_build_title">Bauen</button>
@@ -114,6 +98,14 @@
       </div><!-- #toolbar-right -->
     </div><!-- #toolbar-main -->
 
+
+
+
+
+  </header>
+
+  <main>
+    <div id="work">
     <!-- Kontextzeile: Bauteil-Auswahl (nur in Bau-Modi sichtbar; Farbe per Klick auf aktiven Button) -->
     <div id="toolbar-ctx">
       <div class="group" id="grp-build">
@@ -204,16 +196,11 @@
         <span data-i18n="btn_redo_short">Wieder</span>
       </button>
     </div><!-- #toolbar-ctx -->
-
     <!-- Dateien: je offenes Modell ein Tab, wie im Browser -->
     <div id="tab-bar" class="tab-bar">
       <div id="tab-list" class="tab-list"></div>
       <button id="tab-new" class="tab-new" data-i18n-title="btn_doc_new_title" title="Neues Modell">+</button>
     </div>
-
-  </header>
-
-  <main>
     <div id="canvas-wrap">
       <div id="canvas"></div>
 
@@ -306,12 +293,15 @@
       </div>
     </div>
 
+    </div><!-- #work -->
+
     <div id="sidebar-resizer" title="Breite ziehen"></div>
 
     <aside id="sidebar">
       <div id="side-tabs" class="side-tabs">
         <button class="side-tab" data-panel="bom" data-i18n="side_tab_bom">Stückliste &amp; Bestand</button>
-        <button class="side-tab" data-panel="library" data-i18n="side_tab_models">Modelle</button>
+        <button class="side-tab" data-panel="own" data-i18n="side_tab_own">Meine Modelle</button>
+        <button class="side-tab" data-panel="library" data-i18n="side_tab_library">Bibliothek</button>
         <button class="side-tab" data-panel="assembly" data-i18n="side_tab_assembly" hidden>Aufbau</button>
       </div>
 
@@ -319,6 +309,10 @@
         <div id="model-size" class="model-size" hidden></div>
         <div id="feasibility-banner" class="feasibility"></div>
         <h2 data-i18n="bom_title">Stückliste &amp; Bestand</h2>
+        <label class="asm-opt">
+          <input type="checkbox" id="bom-by-color" checked>
+          <span data-i18n="bom_by_color">Nach Farben trennen</span>
+        </label>
         <h3 data-i18n="bom_tubes">Rohre</h3>
         <div id="bom-tubes" class="bom-list"></div>
         <h3 data-i18n="bom_connectors">Kupplungen</h3>
@@ -356,14 +350,17 @@
 
 
 
-      <section class="panel" id="panel-library" hidden>
+      <section class="panel" id="panel-own" hidden>
         <h2 data-i18n="lib_own_title">Meine Modelle</h2>
         <div class="lib-actions">
           <button id="own-new" class="btn ghost small" data-i18n="btn_doc_new">Neu…</button>
+          <button id="btn-export-all" class="btn ghost small" data-i18n="btn_export_all" data-i18n-title="btn_export_all_title">Alle exportieren…</button>
         </div>
         <div id="own-list" class="lib-list"></div>
+      </section>
 
-        <h2 data-i18n="lib_title">Sammlung</h2>
+      <section class="panel" id="panel-library" hidden>
+        <h2 data-i18n="lib_title">Bibliothek</h2>
         <p class="hint" data-i18n="lib_hint">Lies deine eigene QDF-Sammlung ein (z. B. den Beispiel-Ordner der QUADRO-Software). Die Dateien bleiben im Browser.</p>
         <div class="lib-actions">
           <button id="lib-add-folder" class="btn ghost small" data-i18n="btn_lib_folder" data-i18n-title="btn_lib_folder_title">📂 Ordner…</button>
