@@ -440,7 +440,9 @@ export function computeBOM(model) {
     connectors.reduce((s, r) => s + r.subtotal, 0) +
     panels.reduce((s, r) => s + r.subtotal, 0) +
     reinforcements.reduce((s, r) => s + r.subtotal, 0) +
-    fittings.reduce((s, r) => s + r.subtotal, 0)
+    fittings.reduce((s, r) => s + r.subtotal, 0) +
+    // Rutschenteile haben seit dem Katalogeintrag eigene Preise.
+    slides.reduce((s, r) => s + (r.subtotal || 0), 0)
   );
 
   return {

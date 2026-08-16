@@ -509,7 +509,7 @@
       "price": 0,
       "buildable": true,
       "colored": true,
-      "note": "großes Rechteck-Panel; L2-fix"
+      "note": "großes Rechteck-Panel; L2-fix · gehört zum Pool-/Bällebad-Set, im Shop nicht einzeln gelistet"
     },
     {
       "id": "pool_wall",
@@ -521,7 +521,7 @@
       "price": 0,
       "buildable": false,
       "colored": true,
-      "note": "Bällebad-Seitenwand; feste Geometrie (pool2 in QDF)"
+      "note": "Bällebad-Seitenwand; feste Geometrie (pool2 in QDF) · gehört zum Pool-/Bällebad-Set, im Shop nicht einzeln gelistet"
     },
     {
       "id": "pool_floor",
@@ -533,7 +533,7 @@
       "price": 0,
       "buildable": false,
       "colored": true,
-      "note": "Synthetischer Bällebad-Boden (pool2); scene.js rendert darüber Wasser-Volumen"
+      "note": "Synthetischer Bällebad-Boden (pool2); scene.js rendert darüber Wasser-Volumen · gehört zum Pool-/Bällebad-Set, im Shop nicht einzeln gelistet"
     }
   ],
   "reinforcements": [
@@ -554,9 +554,9 @@
       "code": "CBR",
       "name": "Radlager",
       "name_en": "Wheel bearing",
-      "price": 0,
+      "price": 2.49,
       "qdf": "bearing2",
-      "note": "5 cm langes Rohrstück an einer Kupplung, trägt das Multirad · Preis noch offen"
+      "note": "5 cm langes Rohrstück an einer Kupplung, trägt das Multirad · Preis: quadroshop.com „Multirad Radlager“, Stand 2026-08-16"
     },
     {
       "id": "tube_cap",
@@ -593,72 +593,72 @@
       "code": "",
       "name": "Multirad",
       "name_en": "Multi wheel",
-      "price": 0,
+      "price": 6.99,
       "qdf": "multi-wheel2",
-      "note": "schmales Speichenrad, sitzt auf einem Radlager · Preis noch offen"
+      "note": "schmales Speichenrad, sitzt auf einem Radlager · Preis: quadroshop.com „Multirad“, Stand 2026-08-16"
     },
     {
       "id": "wheel_floating",
       "code": "",
       "name": "Schwimmrad",
       "name_en": "Float wheel",
-      "price": 0,
+      "price": 13.49,
       "qdf": "floating-wheel2",
-      "note": "knapp 15 cm dick, sitzt auf einem Rohr · Preis noch offen"
+      "note": "knapp 15 cm dick, sitzt auf einem Rohr · Preis: quadroshop.com „Schwimmrad“, Stand 2026-08-16"
     },
     {
       "id": "hub_cap",
       "code": "",
       "name": "Radkappe",
       "name_en": "Wheel cap",
-      "price": 0,
+      "price": 2.99,
       "qdf": "hub-cap2",
-      "note": "hält das Schwimmrad fest, wie die Radarretierung beim Multirad · Preis noch offen"
+      "note": "hält das Schwimmrad fest, wie die Radarretierung beim Multirad · Preis: quadroshop.com „Radkappe für Schwimmrad“, Stand 2026-08-16"
     },
     {
       "id": "caster",
       "code": "",
       "name": "Laufrolle",
       "name_en": "Caster",
-      "price": 0,
+      "price": 4.99,
       "qdf": "casters2",
-      "note": "sitzt auf ihrem Adapter an einer Kupplung · Preis noch offen"
+      "note": "sitzt auf ihrem Adapter an einer Kupplung · Preis: quadroshop.com „Laufrolle Vollgummi“, Stand 2026-08-16"
     },
     {
       "id": "steering_lock",
       "code": "",
       "name": "Multirad Arretierung",
       "name_en": "Multi wheel lock",
-      "price": 0,
+      "price": 2.49,
       "qdf": "steering-lock2",
-      "note": "sitzt am Ende eines Kupplungs-Stutzens und hält das Multirad · Preis noch offen"
+      "note": "sitzt am Ende eines Kupplungs-Stutzens und hält das Multirad · Preis: quadroshop.com „Multirad Arretierung“, Stand 2026-08-16"
     },
     {
       "id": "wheel_adapter",
       "code": "",
       "name": "Laufrolle Adapter",
       "name_en": "Caster adapter",
-      "price": 0,
+      "price": 2.49,
       "qdf": "adapter2",
-      "note": "sitzt auf einem Kupplungs-Stutzen und nimmt die Laufrolle auf · Preis noch offen"
+      "note": "sitzt auf einem Kupplungs-Stutzen und nimmt die Laufrolle auf · Preis: quadroshop.com „Laufrolle Adapter“, Stand 2026-08-16"
     },
     {
       "id": "textile_round",
       "code": "",
       "name": "Rundwand (Textil)",
       "name_en": "Curved textile wall",
-      "price": 0,
+      "price": 16.99,
       "qdf": "textil-round2",
-      "note": "Viertelzylinder, Radius 40 cm · Preis noch offen"
+      "note": "Viertelzylinder, Radius 40 cm · Preis: quadroshop.com „Rundtextil“, Stand 2026-08-16"
     },
     {
       "id": "roof_large",
       "code": "",
       "name": "Dachtextil",
       "name_en": "Roof textile",
-      "price": 0,
+      "price": 32.99,
       "qdf": "roof-large2",
-      "note": "Textil, das über eine bestimmte Dachkonstruktion gestülpt wird (First aus zwei 75ern) · wird geladen, aber nicht frei gesetzt · Preis noch offen"
+      "note": "Textil, das über eine bestimmte Dachkonstruktion gestülpt wird (First aus zwei 75ern) · wird geladen, aber nicht frei gesetzt · Preis: quadroshop.com „Dachtextil“, Stand 2026-08-16"
     },
     {
       "id": "lattice",
@@ -667,52 +667,52 @@
       "name_en": "Lattice",
       "price": 0,
       "qdf": "lattice2",
-      "note": "Masse stehen im Entwurf · Preis noch offen"
+      "note": "Maße stehen im Entwurf · im Shop nur als Ballcage-Netz gelistet (84,99 €) bzw. Baby-Ballcage (74,99 €), nicht als Einzelteil unserer Größe · Preis noch offen"
     },
     {
       "id": "bag",
       "code": "",
       "name": "Spielsack",
       "name_en": "Play bag",
-      "price": 0,
+      "price": 32.99,
       "qdf": "bag2",
-      "note": "Preis noch offen"
+      "note": "Preis noch offen · Preis: quadroshop.com „Spielsack“, Stand 2026-08-16"
     },
     {
       "id": "slide_integral",
       "code": "",
       "name": "Integralrutsche",
       "name_en": "Integral slide",
-      "price": 0,
+      "price": 169.99,
       "qdf": "slide-new2",
-      "note": "eigenständige Rutsche ohne Anbauten · Preis noch offen"
+      "note": "eigenständige Rutsche ohne Anbauten · Preis: quadroshop.com „Integralrutsche“, Stand 2026-08-16"
     },
     {
       "id": "slide_module",
       "code": "",
       "name": "Modularrutschen-Körper",
       "name_en": "Modular slide body",
-      "price": 0,
+      "price": 64.99,
       "qdf": "slide2",
-      "note": "leicht gewellte Bahn, mehrere hintereinander möglich; am Ende der Kette der Auslauf · Preis noch offen"
+      "note": "leicht gewellte Bahn, mehrere hintereinander möglich; am Ende der Kette der Auslauf · Preis: quadroshop.com „Modularrutschen-Körper“, Stand 2026-08-16"
     },
     {
       "id": "slide_curved",
       "code": "",
       "name": "Bogenrutschen-Körper",
       "name_en": "Curved slide body",
-      "price": 0,
+      "price": 99.99,
       "qdf": "curved-slide2",
-      "note": "gebogene Bahn, Ausgang 90 Grad zur Laufrichtung · Preis noch offen"
+      "note": "gebogene Bahn, Ausgang 90 Grad zur Laufrichtung · Preis: quadroshop.com „Bogenrutschen-Körper“, Stand 2026-08-16"
     },
     {
       "id": "slide_end",
       "code": "",
       "name": "Rutschenauslauf",
       "name_en": "Slide run-out",
-      "price": 0,
+      "price": 49.99,
       "qdf": "slide-end2",
-      "note": "schließt eine Kette aus Modular- oder Bogenrutschen-Körpern ab · Preis noch offen"
+      "note": "schließt eine Kette aus Modular- oder Bogenrutschen-Körpern ab · Preis: quadroshop.com „Rutschenauslauf“, Stand 2026-08-16"
     },
     {
       "id": "textile",
@@ -721,7 +721,7 @@
       "name_en": "Textile",
       "price": 0,
       "qdf": "textil2",
-      "note": "Tuch zwischen zwei parallelen Rohren, gesetzt wie das Gitter · Preis noch offen"
+      "note": "Tuch zwischen zwei parallelen Rohren, gesetzt wie das Gitter · im Shop nur im Textilset (59,99 €), nicht einzeln · Preis noch offen"
     }
   ]
 }
