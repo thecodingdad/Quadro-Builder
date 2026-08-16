@@ -385,6 +385,19 @@ export function initUI({ scene, model, builder }) {
     $("mode-delete").hidden = !on;
   }
 
+  /** Alle Knöpfe zum Bauen sperren oder freigeben (Aufbau-Modus). */
+  function setzeBauteileGesperrt(gesperrt) {
+    const bereiche = ["#grp-build", "#mode-delete", "#btn-undo", "#btn-redo"];
+    for (const wahl of bereiche) {
+      for (const el2 of document.querySelectorAll(`${wahl}, ${wahl} button, ${wahl} input`)) {
+        if (el2.closest(".view-row")) continue;      // Ansicht bleibt bedienbar
+        if (el2.tagName === "BUTTON" || el2.tagName === "INPUT") el2.disabled = gesperrt;
+      }
+    }
+    $("toolbar-ctx").classList.toggle("locked", gesperrt);
+    if (!gesperrt) { updateUndoButton(); syncDeleteButton(); }
+  }
+
   function setMode(m) {
     builder.setMode(m);
     // Der Cursor-Modus gehoert zum Bauen (nicht zum Aufbau-Modus), deshalb
@@ -394,7 +407,11 @@ export function initUI({ scene, model, builder }) {
     $("mode-clamp").classList.toggle("active", m === "clamp");
     $("mode-reinforce").classList.toggle("active", m === "reinforce");
     $("mode-assembly").classList.toggle("active", m === "assembly");
-    $("toolbar-ctx").hidden = m === "assembly";
+    // Im Aufbau-Modus bleibt die Bauteil-Zeile stehen, aber alles zum Bauen
+    // ist ausgegraut -- gebaut wird dort nicht. Die Ansichts-Schalter
+    // (Namen, Hinweise, Schnitt, Perspektive) bleiben nutzbar.
+    $("toolbar-ctx").hidden = false;
+    setzeBauteileGesperrt(m === "assembly");
     // Aufbau-Modus zeigt das Aufbau-Panel; beim Verlassen zurück zum zuletzt
     // gewählten Panel (oder zu). Andere Modi lassen das Panel unberührt.
     if (m === "assembly") {
