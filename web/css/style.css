@@ -750,3 +750,23 @@ body.sidebar-hidden #sidebar, body.sidebar-hidden #sidebar-resizer { display: no
 .tab-new:hover { opacity: 1; background: rgba(0, 0, 0, 0.08); }
 
 .ask-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 14px; }
+
+/* Kein Modell offen: Einstiegskarte über der leeren Szene */
+.empty-state {
+  position: absolute; inset: 0;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(246, 248, 250, 0.92);
+  z-index: 5;
+}
+.empty-card {
+  background: #fff;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  border-radius: 12px;
+  padding: 24px 28px;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.08);
+  max-width: 420px;
+  text-align: center;
+}
+.empty-card h2 { margin: 0 0 6px; font-size: 17px; }
+.empty-card p { margin: 0 0 16px; color: #566; font-size: 13px; }
+.empty-actions { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; }

@@ -71,37 +71,15 @@
         <span class="divider"></span>
         <!-- Icon-Buttons: Desktop = inline, Mobile-Dropdown = Zeile -->
         <div class="toolbar-icon-row">
-          <button id="btn-labels" class="btn ghost icon-sq" data-i18n-title="btn_labels_title" title="Namen">
-            <svg viewBox="0 0 18 18" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
-              <rect x="2" y="4" width="14" height="11" rx="2"/>
-              <line x1="5.5" y1="9" x2="12.5" y2="9"/>
-              <line x1="5.5" y1="12" x2="9.5" y2="12"/>
-            </svg>
-          </button>
-          <button id="btn-hints" class="btn ghost icon-sq" data-i18n-title="btn_hints_title" title="Hinweise">
-            <svg viewBox="0 0 18 18" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round">
-              <path d="M9 3C6.24 3 4 5.24 4 8c0 1.86 1 3.5 2.5 4.33V13.5h5V12.33C13 11.5 14 9.86 14 8c0-2.76-2.24-5-5-5z"/>
-              <line x1="6.5" y1="13.5" x2="11.5" y2="13.5"/>
-              <line x1="7.5" y1="15.5" x2="10.5" y2="15.5"/>
-            </svg>
-          </button>
-          <button id="btn-slice" class="btn ghost icon-sq" data-i18n-title="btn_slice_title" title="Schnitt">
-            <!-- Quader mit Schnittkante -->
-            <svg viewBox="0 0 18 18" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round">
-              <path d="M3 5.5 9 2.5l6 3v7l-6 3-6-3z"/>
-              <path d="M1.5 11.5 9 7.5l7.5 4" stroke-dasharray="2.2 1.8"/>
-            </svg>
-          </button>
-          <button id="btn-projection" class="btn ghost icon-sq" data-i18n-title="btn_projection_title" title="Perspektive">
-            <!-- Wuerfel in Kavalier-Ansicht: Frontflaeche + versetzte Rueckkanten -->
-            <svg viewBox="0 0 18 18" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round">
-              <rect x="2.5" y="6" width="9" height="9"/>
-              <path d="M6.5 3h9v9M11.5 6l4-3M11.5 15l4-3"/>
+          <!-- Seitenleiste ein-/ausblenden -->
+          <button id="toggle-sidebar" class="btn ghost icon-sq" data-i18n-title="btn_sidebar_title" title="Seitenleiste">
+            <svg viewBox="0 0 18 18" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round">
+              <rect x="2" y="3" width="14" height="12" rx="2"/>
+              <line x1="11.5" y1="3" x2="11.5" y2="15"/>
             </svg>
           </button>
           <div class="menu" id="settings-menu">
             <button id="btn-settings" class="btn ghost icon-sq" data-i18n-title="btn_settings_title" title="Einstellungen">
-              <!-- Zahnrad: Ring + Nabe, dazu acht Zaehne als kurze Radialstriche -->
               <svg viewBox="0 0 18 18" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
                 <circle cx="9" cy="9" r="5" stroke-width="1.6"/>
                 <circle cx="9" cy="9" r="1.9" stroke-width="1.4"/>
@@ -109,6 +87,13 @@
               </svg>
             </button>
             <div id="settings-pop" class="menu-pop" hidden>
+              <div class="menu-section">
+                <span class="menu-label" data-i18n="settings_language">Sprache</span>
+                <select id="btn-lang" class="lang-select" title="Sprache / Language">
+                  <option value="de">&#x1F1E9;&#x1F1EA; DE</option>
+                  <option value="en">&#x1F1EC;&#x1F1E7; EN</option>
+                </select>
+              </div>
               <div class="menu-section">
                 <span class="menu-label" data-i18n="settings_quality">Render-Qualität</span>
                 <select id="quality-select" class="lang-select"></select>
@@ -124,33 +109,7 @@
               </div>
             </div>
           </div>
-          <span class="divider"></span>
-          <!-- Sidebar-Öffner -->
-          <button id="toggle-bom" class="btn ghost icon-sq" data-i18n-title="btn_bom_title" title="Stückliste">
-            <svg viewBox="0 0 18 18" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round">
-              <line x1="3" y1="5"  x2="15" y2="5" /><line x1="3" y1="9"  x2="15" y2="9" /><line x1="3" y1="13" x2="11" y2="13" />
-            </svg>
-          </button>
-          <button id="toggle-library" class="btn ghost icon-sq" data-i18n-title="btn_library_title" title="Modelle">
-            <!-- Gestapelte Blaetter: die eigene Modellsammlung -->
-            <svg viewBox="0 0 18 18" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round">
-              <path d="M9 2.5 16 6l-7 3.5L2 6z"/>
-              <path d="M2.5 9.2 9 12.4l6.5-3.2"/>
-              <path d="M2.5 12.2 9 15.4l6.5-3.2"/>
-            </svg>
-          </button>
-          <button id="toggle-inventory" class="btn ghost icon-sq" data-i18n-title="btn_inventory_title" title="Bestand">
-            <svg viewBox="0 0 18 18" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
-              <rect x="3" y="3" width="5" height="5" rx="1"/><rect x="10" y="3" width="5" height="5" rx="1"/>
-              <rect x="3" y="10" width="5" height="5" rx="1"/><rect x="10" y="10" width="5" height="5" rx="1"/>
-            </svg>
-          </button>
         </div>
-        <!-- Sprache direkt als Dropdown -->
-        <select id="btn-lang" class="lang-select" title="Sprache / Language">
-          <option value="de">&#x1F1E9;&#x1F1EA; DE</option>
-          <option value="en">&#x1F1EC;&#x1F1E7; EN</option>
-        </select>
         </div><!-- #toolbar-right-inner -->
       </div><!-- #toolbar-right -->
     </div><!-- #toolbar-main -->
@@ -189,6 +148,39 @@
           <span data-i18n="btn_reinforce">Verstärken</span>
         </button>
       </div>
+      <!-- Ansicht: gehört zum Modell, deshalb hier statt oben rechts -->
+      <span class="mini-divider"></span>
+      <div class="toolbar-icon-row view-row">
+
+          <button id="btn-labels" class="btn ghost icon-sq" data-i18n-title="btn_labels_title" title="Namen">
+            <svg viewBox="0 0 18 18" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="2" y="4" width="14" height="11" rx="2"/>
+              <line x1="5.5" y1="9" x2="12.5" y2="9"/>
+              <line x1="5.5" y1="12" x2="9.5" y2="12"/>
+            </svg>
+          </button>
+          <button id="btn-hints" class="btn ghost icon-sq" data-i18n-title="btn_hints_title" title="Hinweise">
+            <svg viewBox="0 0 18 18" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round">
+              <path d="M9 3C6.24 3 4 5.24 4 8c0 1.86 1 3.5 2.5 4.33V13.5h5V12.33C13 11.5 14 9.86 14 8c0-2.76-2.24-5-5-5z"/>
+              <line x1="6.5" y1="13.5" x2="11.5" y2="13.5"/>
+              <line x1="7.5" y1="15.5" x2="10.5" y2="15.5"/>
+            </svg>
+          </button>
+          <button id="btn-slice" class="btn ghost icon-sq" data-i18n-title="btn_slice_title" title="Schnitt">
+            <!-- Quader mit Schnittkante -->
+            <svg viewBox="0 0 18 18" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round">
+              <path d="M3 5.5 9 2.5l6 3v7l-6 3-6-3z"/>
+              <path d="M1.5 11.5 9 7.5l7.5 4" stroke-dasharray="2.2 1.8"/>
+            </svg>
+          </button>
+          <button id="btn-projection" class="btn ghost icon-sq" data-i18n-title="btn_projection_title" title="Perspektive">
+            <!-- Wuerfel in Kavalier-Ansicht: Frontflaeche + versetzte Rueckkanten -->
+            <svg viewBox="0 0 18 18" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round">
+              <rect x="2.5" y="6" width="9" height="9"/>
+              <path d="M6.5 3h9v9M11.5 6l4-3M11.5 15l4-3"/>
+            </svg>
+          </button>
+                </div>
       <!-- Delete + Undo: pinned rechts, immer sichtbar -->
       <span class="mini-divider"></span>
       <button id="mode-delete" class="btn part delete-part" data-i18n-title="btn_delete_title">
@@ -274,6 +266,19 @@
           <rect x="6.5" y="11" width="9" height="2" rx="0.4" fill="currentColor" stroke="none"/>
         </svg>
       </button>
+
+      <!-- Kein Modell offen: Einstieg statt leerer Fläche -->
+      <div id="empty-state" class="empty-state" hidden>
+        <div class="empty-card">
+          <h2 data-i18n="empty_title">Kein Modell geöffnet</h2>
+          <p data-i18n="empty_hint">Leg ein neues Modell an, öffne ein gespeichertes oder lies eine QDF-Datei ein.</p>
+          <div class="empty-actions">
+            <button id="empty-new" class="btn" data-i18n="btn_doc_new">Neu…</button>
+            <button id="empty-open" class="btn ghost" data-i18n="btn_doc_open">Öffnen</button>
+            <button id="empty-import" class="btn ghost" data-i18n="btn_import">Import QDF</button>
+          </div>
+        </div>
+      </div>
 
       <div id="current-part" class="current-part" hidden></div>
 

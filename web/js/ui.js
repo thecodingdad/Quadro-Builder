@@ -1293,9 +1293,7 @@ export function initUI({ scene, model, builder }) {
     $("panel-library").hidden = currentPanel !== "library";
     $("panel-assembly").hidden = currentPanel !== "assembly";
     document.body.classList.toggle("sidebar-hidden", currentPanel === null);
-    $("toggle-bom").classList.toggle("active", currentPanel === "bom");
-    $("toggle-inventory").classList.toggle("active", currentPanel === "inventory");
-    $("toggle-library").classList.toggle("active", currentPanel === "library");
+    $("toggle-sidebar").classList.toggle("active", currentPanel !== null);
     requestAnimationFrame(() => scene.onResize());
   }
   // name: 'bom' | 'inventory' | 'library' | 'assembly' | null.
@@ -1311,9 +1309,13 @@ export function initUI({ scene, model, builder }) {
     showSidebarPanel(currentPanel === name ? null : name);
   }
 
-  $("toggle-bom").addEventListener("click", () => toggleSidebarPanel("bom"));
-  $("toggle-inventory").addEventListener("click", () => toggleSidebarPanel("inventory"));
-  $("toggle-library").addEventListener("click", () => toggleSidebarPanel("library"));
+  // EIN Knopf oben rechts: Leiste auf oder zu. Welcher Inhalt zu sehen ist,
+  // wählt die Tab-Leiste in der Seitenleiste selbst.
+  let letzterPanel = localStorage.getItem(SIDEBAR_PANEL_KEY) || "bom";
+  $("toggle-sidebar").addEventListener("click", () => {
+    if (currentPanel) { letzterPanel = currentPanel; showSidebarPanel(null); }
+    else showSidebarPanel(letzterPanel || "bom");
+  });
 
   // Szene (Gras, Baeume, Himmel) ein-/ausblenden via Canvas-Icon. Der Zustand
   // wird gemerkt; Standard beim allerersten Start ist aus.
@@ -1972,6 +1974,7 @@ export function initUI({ scene, model, builder }) {
       ...builder.uiState(),
       slice: JSON.parse(JSON.stringify(slice)),
       camera: scene.cameraState() || null,
+      projection: scene.projection,
     };
   }
 
@@ -1984,6 +1987,10 @@ export function initUI({ scene, model, builder }) {
       slice.on = false;
     }
     setMode(v.mode || "select");     // setzt auch die Knöpfe
+    if (v.projection && v.projection !== scene.projection) {
+      scene.setProjection(v.projection);
+      syncProjectionButton();
+    }
     applySlice();
     syncPartHighlights();
     if (v.camera) scene.restoreCameraState(v.camera); else scene.resetCamera();
@@ -2019,7 +2026,10 @@ export function initUI({ scene, model, builder }) {
       item.addEventListener("click", () => activateTab(tab.tabId));
       list.appendChild(item);
     }
+    // Ohne offenes Modell tritt der Einstieg an die Stelle der Szene.
     document.body.classList.toggle("no-doc", tabs.length === 0);
+    const leer = $("empty-state");
+    if (leer) leer.hidden = tabs.length > 0;
   }
 
   function activateTab(tabId) {
@@ -2185,6 +2195,9 @@ export function initUI({ scene, model, builder }) {
   }
 
   $("tab-new").addEventListener("click", () => openTab({ name: naechsterFreierName() }));
+  $("empty-new").addEventListener("click", () => $("btn-doc-new").click());
+  $("empty-open").addEventListener("click", () => { toggleFileMenu(true); $("doc-select").focus(); });
+  $("empty-import").addEventListener("click", () => $("file-import").click());
 
   /** "Modell 1", "Modell 2", ... -- der erste Name, den noch kein Tab trägt. */
   function naechsterFreierName() {
