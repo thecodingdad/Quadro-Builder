@@ -538,10 +538,14 @@ export function initUI({ scene, model, builder }) {
       // Szene beim Wechsel in den Aufbau-Modus ausblenden.
       // Aufbau-Modus blendet die Szene aus, ohne die Vorliebe zu ueberschreiben.
       applyScene(false, false);
-      showSidebarPanel("assembly");
+      // Im Hochformat steht der Aufbau als Karte ueber der Szene -- dort waere
+      // eine aufspringende Seitenleiste im Weg.
+      if (!document.body.classList.contains("mobile-portrait")) showSidebarPanel("assembly");
     }
     else if (currentPanel === "assembly")
       showSidebarPanel(localStorage.getItem(SIDEBAR_PANEL_KEY) || null);
+    applyAssemblySheet();
+    updateWakeLock();
     $("btn-labels").classList.toggle("active", builder.showLabels);
     syncPartHighlights();
     syncDeleteButton();
@@ -1633,7 +1637,10 @@ export function initUI({ scene, model, builder }) {
     $("panel-bom").hidden = currentPanel !== "bom";
     $("panel-own").hidden = currentPanel !== "own";
     $("panel-library").hidden = currentPanel !== "library";
-    $("panel-assembly").hidden = currentPanel !== "assembly";
+    // Steckt das Aufbau-Panel in der Karte ueber der Szene, gehoert es nicht
+    // der Seitenleiste -- dann darf ihr Sichtbarkeits-Schalter es nicht zumachen.
+    $("panel-assembly").hidden = currentPanel !== "assembly"
+      && !document.body.classList.contains("asm-sheet-on");
     document.body.classList.toggle("sidebar-hidden", currentPanel === null);
     $("toggle-sidebar").classList.toggle("active", currentPanel !== null);
     // Der Hintergrund gehoert nur zur ueberlagernden Leiste.
@@ -1662,7 +1669,10 @@ export function initUI({ scene, model, builder }) {
     for (const b of $("side-tabs").querySelectorAll(".side-tab")) {
       const name = b.dataset.panel;
       b.classList.toggle("active", currentPanel === name);
-      if (name === "assembly") b.hidden = builder.mode !== "assembly";
+      if (name === "assembly") {
+        b.hidden = builder.mode !== "assembly"
+          || document.body.classList.contains("asm-sheet-on");
+      }
     }
   }
   for (const b of $("side-tabs").querySelectorAll(".side-tab")) {
@@ -2977,6 +2987,7 @@ export function initUI({ scene, model, builder }) {
     document.body.classList.toggle("mobile-portrait", mqPortrait.matches);
     document.body.classList.toggle("sidebar-overlay", mqNarrow.matches || mqPortrait.matches);
     applyPanelVisibility();
+    applyAssemblySheet();
     requestAnimationFrame(() => { measureCollapse(); measureHead(); scene.onResize(); });
   }
 
@@ -2988,6 +2999,52 @@ export function initUI({ scene, model, builder }) {
 
   // Seitenleiste im Overlay-Modus: Klick daneben schliesst sie.
   $("sidebar-backdrop").addEventListener("click", () => showSidebarPanel(null));
+
+  // --- Aufbau im Hochformat: Karte ueber der Szene -----------------------
+  // Das Aufbau-Panel wandert aus der Seitenleiste in eine Karte am unteren
+  // Rand. Es bleibt derselbe Knoten -- renderAssembly() und alle IDs merken
+  // nichts davon. Eingeklappt zeigt die Karte nur Schrittzahl und Titel.
+  let sheetOpen = false;
+
+  function applyAssemblySheet() {
+    const imSheet = document.body.classList.contains("mobile-portrait")
+      && builder.mode === "assembly";
+    moveNode($("panel-assembly"), imSheet ? $("asm-sheet-body") : null);
+    $("asm-sheet").hidden = !imSheet;
+    document.body.classList.toggle("asm-sheet-on", imSheet);
+    $("asm-sheet").classList.toggle("open", sheetOpen);
+    // In der Karte ist das Panel immer sichtbar; zurueck in der Leiste gilt
+    // wieder deren Auswahl (sonst stuende der Aufbau unter der Stueckliste).
+    $("panel-assembly").hidden = imSheet ? false : currentPanel !== "assembly";
+    renderSideTabs();
+    requestAnimationFrame(() => scene.onResize());
+  }
+
+  $("asm-sheet-handle").addEventListener("click", () => {
+    sheetOpen = !sheetOpen;
+    $("asm-sheet").classList.toggle("open", sheetOpen);
+  });
+
+  // --- Bildschirm wachhalten (nur im Aufbau) -----------------------------
+  // Beim Zusammenbauen liegt das Geraet daneben und wird lange nicht beruehrt.
+  let wakeLock = null;
+  async function updateWakeLock() {
+    const gewuenscht = builder.mode === "assembly" && document.visibilityState === "visible";
+    try {
+      if (gewuenscht && !wakeLock && navigator.wakeLock) {
+        wakeLock = await navigator.wakeLock.request("screen");
+        wakeLock.addEventListener("release", () => { wakeLock = null; });
+      } else if (!gewuenscht && wakeLock) {
+        await wakeLock.release();
+        wakeLock = null;
+      }
+    } catch {
+      // Ohne sicheren Kontext oder bei abgelehnter Anforderung: kein Drama,
+      // der Aufbau laeuft auch mit abschaltendem Bildschirm.
+      wakeLock = null;
+    }
+  }
+  document.addEventListener("visibilitychange", updateWakeLock);
 
   $("btn-color").addEventListener("click", (e) => {
     e.stopPropagation();

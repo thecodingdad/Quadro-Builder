@@ -310,6 +310,16 @@
         </div>
       </div>
 
+      <!-- Aufbau im Hochformat: das Aufbau-Panel wandert hier herein und liegt
+           als Karte über der Szene, damit Schritt und Modell zugleich zu sehen
+           sind. Der Griff klappt die Teileliste auf. -->
+      <div id="asm-sheet" hidden>
+        <button id="asm-sheet-handle" class="asm-sheet-handle" data-i18n-title="asm_sheet_toggle">
+          <span class="asm-sheet-grip"></span>
+        </button>
+        <div id="asm-sheet-body"></div>
+      </div>
+
       <div id="current-part" class="current-part" hidden></div>
 
       <div id="status" class="status"></div>

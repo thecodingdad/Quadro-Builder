@@ -191,6 +191,7 @@ const de = {
 
   // Seitenleiste – Aufbaumodus
   asm_title: 'Aufbau',
+  asm_sheet_toggle: 'Teileliste auf- oder zuklappen',
   btn_asm_print: '⎙ Drucken',
   btn_asm_print_title: 'Kompletten Bauplan drucken',
   asm_hint: 'Lage für Lage von unten nach oben. Orange = im aktuellen Schritt anbauen, blass = kommt später.',
@@ -562,6 +563,7 @@ const en = {
 
   // Sidebar – Assembly
   asm_title: 'Assembly',
+  asm_sheet_toggle: 'Show or hide the part list',
   btn_asm_print: '⎙ Print',
   btn_asm_print_title: 'Print complete build plan',
   asm_hint: 'Layer by layer, bottom to top. Orange = add in this step, pale = comes later.',

@@ -685,6 +685,40 @@ body.mobile-portrait #toolbar-ctx {
 }
 /* Ein einziger Entwurf braucht keine Tableiste -- die Zeile ist Canvas wert. */
 body.mobile-portrait #tab-bar.single { display: none; }
+
+/* --- Aufbau als Karte über der Szene ----------------------------------- */
+#asm-sheet {
+  position: absolute;
+  left: 0; right: 0; bottom: 0;
+  z-index: 30;
+  background: var(--panel);
+  border-top: 1px solid var(--line);
+  border-radius: 14px 14px 0 0;
+  box-shadow: 0 -6px 24px rgba(0, 0, 0, 0.14);
+  display: flex;
+  flex-direction: column;
+  max-height: 42%;
+}
+#asm-sheet.open { max-height: 80%; }
+.asm-sheet-handle {
+  border: none; background: none; padding: 8px 0 4px; cursor: pointer;
+  display: flex; justify-content: center; flex: 0 0 auto;
+}
+.asm-sheet-grip {
+  display: block; width: 42px; height: 4px; border-radius: 2px; background: #c4ccd6;
+}
+#asm-sheet-body { overflow-y: auto; padding: 0 14px 10px; }
+/* Eingeklappt bleiben Schrittzähler, Fortschritt und Titel stehen -- die
+   Teileliste und die Einstellungen kommen erst beim Aufklappen. */
+#asm-sheet:not(.open) #asm-body,
+#asm-sheet:not(.open) .asm-order-row,
+#asm-sheet:not(.open) .asm-opt,
+#asm-sheet:not(.open) .asm-head,
+#asm-sheet:not(.open) .hint { display: none; }
+#asm-sheet .panel { margin: 0; }
+#asm-sheet .asm-nav { margin: 0 0 8px; }
+#asm-sheet .asm-nav .btn { flex: 1 1 0; min-height: 44px; font-size: 20px; }
+#asm-sheet .asm-title { margin: 0 0 6px; }
 /* Statusmeldung nicht an den Rand der unteren Leiste kleben lassen. */
 body.mobile-portrait .status { bottom: 16px; max-width: calc(100% - 24px); }
 
