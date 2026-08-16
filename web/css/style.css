@@ -822,3 +822,8 @@ body.sidebar-hidden #sidebar, body.sidebar-hidden #sidebar-resizer { display: no
 /* Bestand reicht nicht: die ganze Zeile leicht rot hinterlegen. */
 .bom-row.bad, .bom-row.bad:nth-child(odd) { background: rgba(164, 36, 59, 0.12); }
 .bom-row.bad .bom-stock { color: #a4243b; font-weight: 600; }
+
+/* Zeilen der Stückliste, die Teile im Modell hervorheben, sind anklickbar. */
+.bom-row.clickable { cursor: pointer; }
+.bom-row.clickable:hover { background: rgba(26, 140, 255, 0.08); }
+.bom-row.bad.clickable:hover { background: rgba(164, 36, 59, 0.18); }

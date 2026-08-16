@@ -1734,6 +1734,8 @@ export function initUI({ scene, model, builder }) {
     if (inv) row.title = t("inv_have", inv.owned, inv.need);
     row.appendChild(el("span", "bom-sub", subtotal == null ? "" : eur(subtotal)));
     if (marke) {
+      // Anklickbar: hebt die Teile dieser Zeile im Modell hervor.
+      row.classList.add("clickable");
       row.addEventListener("click", () => setBomHighlight(marke === bomHighlightKey ? null : hl));
     }
     container.appendChild(row);
