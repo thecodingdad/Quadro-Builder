@@ -1043,15 +1043,9 @@ export function initUI({ scene, model, builder }) {
     }, 800);
   }
 
-  $("btn-doc-new").addEventListener("click", async () => {
-    const gewaehlt = await askName(naechsterFreierName());
-    if (!gewaehlt) return;
-    toggleFileMenu(false);
-    const tab = openTab({ name: gewaehlt.name });
-    if (gewaehlt.doc) tab.docId = gewaehlt.doc.id;   // vorhandene Datei überschreiben
-    await saveActiveTab({ name: gewaehlt.name, docId: gewaehlt.doc ? gewaehlt.doc.id : null });
-    flash(t("flash_saved", gewaehlt.name));
-  });
+  // Ein neues Modell heißt erst einmal "Unbenannt" und gehört zu keiner Datei.
+  // Nach dem Namen wird gefragt, wenn gespeichert wird -- nicht vorher.
+  $("btn-doc-new").addEventListener("click", () => { openTab({ name: freierName() }); });
 
   // "Öffnen" hat keine eigene Liste mehr: es zeigt den Seitenleisten-Tab
   // "Meine Modelle", dort steht jedes Modell mit Öffnen, Umbenennen, Löschen.
@@ -2346,19 +2340,18 @@ export function initUI({ scene, model, builder }) {
     update();
   }
 
-  $("tab-new").addEventListener("click", () => openTab({ name: naechsterFreierName() }));
+  $("tab-new").addEventListener("click", () => openTab({ name: freierName() }));
   $("empty-new").addEventListener("click", () => $("btn-doc-new").click());
 
   $("empty-open").addEventListener("click", () => { showSidebarPanel("own"); renderOwnModels(); });
   $("empty-import").addEventListener("click", () => $("file-import").click());
 
-  /** "Modell 1", "Modell 2", ... -- der erste Name, den noch kein Tab trägt. */
-  function naechsterFreierName() {
+  /** "Unbenannt", "Unbenannt 2", ... -- der erste Name, den kein Tab trägt. */
+  function freierName() {
     const belegt = new Set(tabs.map((x) => x.name));
-    for (let i = 1; ; i++) {
-      const name = t("doc_default_name", i);
-      if (!belegt.has(name)) return name;
-    }
+    const basis = t("doc_untitled");
+    if (!belegt.has(basis)) return basis;
+    for (let i = 2; ; i++) if (!belegt.has(`${basis} ${i}`)) return `${basis} ${i}`;
   }
 
   Object.assign(ui, {
