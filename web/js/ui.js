@@ -472,10 +472,11 @@ export function initUI({ scene, model, builder }) {
 
   /** Alle Knöpfe zum Bauen sperren oder freigeben (Aufbau-Modus). */
   function setzeBauteileGesperrt(gesperrt) {
-    const bereiche = ["#grp-build", "#mode-delete", "#btn-undo", "#btn-redo"];
+    const bereiche = ["#grp-build", "#btn-diagonal", "#mode-delete", "#btn-undo", "#btn-redo"];
     for (const wahl of bereiche) {
       for (const el2 of document.querySelectorAll(`${wahl}, ${wahl} button, ${wahl} input`)) {
-        if (el2.closest(".view-row")) continue;      // Ansicht bleibt bedienbar
+        // Ansicht bleibt bedienbar -- ausser den Bau-Schaltern, die dort stehen.
+        if (el2.closest(".view-row") && !el2.classList.contains("build-opt")) continue;
         if (el2.tagName === "BUTTON" || el2.tagName === "INPUT") el2.disabled = gesperrt;
       }
     }
