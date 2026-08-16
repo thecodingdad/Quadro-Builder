@@ -91,27 +91,43 @@ export function deleteNamed(name) {
 
 const LIB_DB = "quadro.library.v1";
 const LIB_STORE = "designs";
+// Version 2 bringt zwei weitere Speicher in dieselbe Datenbank: die eigenen
+// Modelle ("docs", je Datei ein Eintrag) und die offene Sitzung ("session",
+// ein einziger Eintrag mit allen Tabs samt Arbeitsstand). Beides gehört nicht
+// in localStorage -- dort teilen sich alle Schlüssel 5 MB, und ein großes
+// Modell wiegt schon gut 150 KB.
+const DOC_STORE = "docs";
+const SESSION_STORE = "session";
 
 function openLib() {
   return new Promise((resolve, reject) => {
-    const req = indexedDB.open(LIB_DB, 1);
+    const req = indexedDB.open(LIB_DB, 2);
     req.onupgradeneeded = () => {
       const db = req.result;
       if (!db.objectStoreNames.contains(LIB_STORE)) db.createObjectStore(LIB_STORE, { keyPath: "id" });
+      if (!db.objectStoreNames.contains(DOC_STORE)) db.createObjectStore(DOC_STORE, { keyPath: "id" });
+      if (!db.objectStoreNames.contains(SESSION_STORE)) db.createObjectStore(SESSION_STORE, { keyPath: "id" });
     };
     req.onsuccess = () => resolve(req.result);
     req.onerror = () => reject(req.error);
   });
 }
 
-function libTx(mode, fn) {
+/** Transaktion auf einem beliebigen Speicher der Datenbank. */
+export function dbTx(storeName, mode, fn) {
   return openLib().then((db) => new Promise((resolve, reject) => {
-    const tx = db.transaction(LIB_STORE, mode);
-    const out = fn(tx.objectStore(LIB_STORE));
+    const tx = db.transaction(storeName, mode);
+    const out = fn(tx.objectStore(storeName));
     tx.oncomplete = () => { db.close(); resolve(out && out.result !== undefined ? out.result : out); };
     tx.onerror = () => { db.close(); reject(tx.error); };
     tx.onabort = () => { db.close(); reject(tx.error); };
   }));
+}
+
+export const DB_STORES = { docs: DOC_STORE, session: SESSION_STORE };
+
+function libTx(mode, fn) {
+  return dbTx(LIB_STORE, mode, fn);
 }
 
 /** Eintraege ablegen (gleiche id ueberschreibt). */
