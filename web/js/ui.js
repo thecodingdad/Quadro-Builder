@@ -1844,6 +1844,33 @@ export function initUI({ scene, model, builder }) {
 
   // Bestand je Katalogteil, aufgeschlüsselt für die Stücklisten-Zeilen.
   let invIndex = new Map();
+
+  /**
+   * Bestand kann farbgenau geführt werden: neben "T35" steht dann "T35|red".
+   * Für die Machbarkeit zählt die Summe über alle Farben eines Teils.
+   */
+  function bestandSumme(bucket, id) {
+    const topf = inventory[bucket] || {};
+    let summe = topf[id] || 0;
+    for (const [k, v] of Object.entries(topf)) {
+      const [teil, farbe] = k.split("|");
+      if (farbe && teil === id) summe += v || 0;
+    }
+    return summe;
+  }
+
+  /** Bestandsobjekt, in dem die Farbvarianten je Teil zusammengezählt sind. */
+  function flacherBestand() {
+    const out = {};
+    for (const [bucket, topf] of Object.entries(inventory)) {
+      out[bucket] = {};
+      for (const [k, v] of Object.entries(topf || {})) {
+        const teil = k.split("|")[0];
+        out[bucket][teil] = (out[bucket][teil] || 0) + (v || 0);
+      }
+    }
+    return out;
+  }
   const round2Preis = (v) => Math.round(v * 100) / 100;
 
   // Nach Farben getrennte Zeilen? Merkt sich die Wahl über Sitzungen hinweg.
@@ -1860,7 +1887,7 @@ export function initUI({ scene, model, builder }) {
     });
   }
   const BOM_COLOR_KEY = "quadro.bomByColor.v1";
-  let bomByColor = localStorage.getItem(BOM_COLOR_KEY) !== "0";
+  let bomByColor = localStorage.getItem(BOM_COLOR_KEY) === "1";
   const bomColorBox = $("bom-by-color");
   if (bomColorBox) {
     bomColorBox.checked = bomByColor;
@@ -1882,9 +1909,23 @@ export function initUI({ scene, model, builder }) {
     const bom = computeBOM(model);
     // Stückliste und Bestand stehen in EINER Liste: erst rechnen, welche Teile
     // reichen, dann jede Zeile damit beschriften.
-    const cmp = compareInventory(bom, inventory);
+    const cmp = compareInventory(bom, flacherBestand());
     invIndex = new Map(cmp.rows.map((r) => [r.group + ":" + r.key, r]));
     lastInvRows = cmp.rows;
+    // Nach Farben getrennt: je Farbe eine eigene Bedarfs-/Bestandszeile.
+    if (bomByColor) {
+      const farbig = (bucket, rows, idFeld) => {
+        for (const r of rows) {
+          if (!r.color) continue;
+          const key = `${bucket}:${r[idFeld]}|${r.color}`;
+          const owned = (inventory[bucket] || {})[`${r[idFeld]}|${r.color}`] || 0;
+          invIndex.set(key, { group: bucket, key: `${r[idFeld]}|${r.color}`,
+            name: r.name, need: r.count, owned, ok: owned >= r.count });
+        }
+      };
+      farbig("tubes", bom.tubes, "tubeId");
+      farbig("panels", bom.panels, "panelId");
+    }
 
     // Nach Farben getrennt oder zusammengefasst? Der Preis hängt nicht an der
     // Farbe, deshalb lassen sich die Zeilen einfach addieren.
@@ -1911,7 +1952,8 @@ export function initUI({ scene, model, builder }) {
     if (rohre.length === 0) tb.appendChild(el("div", "muted", "–"));
     for (const r of rohre) {
       bomRow(tb, r.color ? `${r.name} · ${r.colorName}` : r.name, r.color, r.count, r.subtotal,
-        "tubes:" + r.tubeId, { kind: "tubes", id: r.tubeId, color: r.color });
+        "tubes:" + r.tubeId + (r.color ? "|" + r.color : ""),
+        { kind: "tubes", id: r.tubeId, color: r.color });
     }
 
     const cb = $("bom-connectors"); cb.innerHTML = "";
@@ -1935,7 +1977,8 @@ export function initUI({ scene, model, builder }) {
     if (platten.length === 0) pb.appendChild(el("div", "muted", "–"));
     for (const r of platten) {
       bomRow(pb, r.color ? `${r.name} · ${r.colorName}` : r.name, r.color, r.count, r.subtotal,
-        "panels:" + r.panelId, { kind: "panels", id: r.panelId, color: r.color });
+        "panels:" + r.panelId + (r.color ? "|" + r.color : ""),
+        { kind: "panels", id: r.panelId, color: r.color });
     }
 
     const xb = $("bom-textiles"); xb.innerHTML = "";
@@ -2058,13 +2101,25 @@ export function initUI({ scene, model, builder }) {
       ["bom-fittings", "fittings", ausGruppe("fittings")],
       ["bom-reinforcements", "reinforcements", reinforcements()],
     ];
+    // Farbige Teile bekommen je Farbe eine eigene Zeile, sobald die Liste nach
+    // Farben getrennt ist -- sonst ließe sich der Bestand nicht farbgenau
+    // eintragen. Farbig sind Rohre und Platten (Platten zusätzlich schwarz).
+    const farbigeToepfe = { tubes: tubeColors(), panels: [...tubeColors(), ...PANEL_EXTRA_COLORS] };
     for (const [boxId, bucket, teile] of abschnitte) {
       const box = $(boxId);
       box.innerHTML = "";
       if (!teile.length) { box.appendChild(el("div", "muted", "–")); continue; }
+      const farben = bomByColor ? farbigeToepfe[bucket] : null;
       for (const it of teile) {
         const name = partName(it) + (it.code ? ` (${it.code})` : "");
-        bomRow(box, name, null, 0, null, `${bucket}:${it.id}`);
+        if (farben) {
+          for (const f of farben) {
+            const farbName = (getLang() === "en" && f.name_en) ? f.name_en : f.name;
+            bomRow(box, `${name} · ${farbName}`, f.id, 0, null, `${bucket}:${it.id}|${f.id}`);
+          }
+        } else {
+          bomRow(box, name, null, 0, null, `${bucket}:${it.id}`);
+        }
       }
     }
   }
