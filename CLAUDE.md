@@ -62,17 +62,23 @@ Three.js ausschließlich in `scene.js`, DOM ausschließlich in `ui.js`/`scene.js
 | `web/js/buildplan.js` | Aufbauplan: Modell Lage für Lage in Bauschritte zerlegen |
 | `web/js/scene.js` | Three.js: Renderer, Kamera, Rendering, Raycasting, Handles, Label-Sprites, Umgebung (Gras/Bäume/Himmel) |
 | `web/js/builder.js` | Interaktion: Auswahl, Handles, Setzen/Löschen, Modi, Undo/Redo |
-| `web/js/storage.js` | `localStorage` (Autosave + benannte Entwürfe) + Datei-Export/Import |
-| `web/js/ui.js` | Toolbar, Panels (Stückliste/Bestand/Aufbau), Tastatur, Entwurfs-Menü |
+| `web/js/storage.js` | IndexedDB-Zugriff (`dbTx`), Modell-Sammlung, Datei-Export/Import |
+| `web/js/docs.js` | Virtuelle Dateien: Modelle speichern/laden/umbenennen, offene Sitzung, Migration |
+| `web/js/ui.js` | Toolbar, Datei-Tabs, Seitenleiste (Stückliste & Bestand / Modelle / Aufbau), Tastatur |
 | `web/js/qdfimport.js` | Parser für QDF-Dateien der Original-QUADRO-3D-Software |
 | `web/js/qdfexport.js` | Schreibt ein Modell als QDF (Gegenstück zu `qdfimport.js`) |
 | `web/js/library.js` | Modell-Bibliothek: QDF-Sammlung einlesen, Kennzahlen, Bestandsabgleich |
 
 **Datenfluss:** Jede Modelländerung → `builder.refresh()` → `scene.renderModel()` + Handles neu →
-`builder.onChange()` → (in `main.js`) `ui.update()` + `autosave(model.toJSON())`.
+`builder.onChange()` → (in `main.js`) `ui.update()` + `ui.touchActiveTab()` (markiert den Tab,
+sichert die Sitzung und – bei eingeschaltetem Auto-Save – die Datei).
 
-**Backend-Andockpunkte:** nur `storage.js` und `catalog.loadCatalog()`. Ein optionales
-Django-Backend (Roadmap) darf ausschließlich diese beiden Module ersetzen.
+**Mehrere Modelle:** Ein Tab hält ein Modell samt Werkzeugleiste, Ansicht und Schrittspeicher
+(`builder.uiState()`/`setUiState()`). Umgeschaltet wird über EIN `BuildModel` und EINEN `Builder`:
+Stand des alten Tabs sichern (`model.toJSON()`, Kamera, Schnittebene), Stand des neuen einsetzen.
+
+**Backend-Andockpunkte:** nur `storage.js`/`docs.js` und `catalog.loadCatalog()`. Ein optionales
+Django-Backend (Roadmap) darf ausschließlich diese Module ersetzen.
 
 ## Datenmodell
 
@@ -145,13 +151,16 @@ Koordinaten in **cm**, Three.js-Konvention **y = oben**, Boden bei y = 0.
 - `catalog.js` lädt `../data/parts.json` relativ – die App muss unter `/web/` ausgeliefert werden.
 - Undo/Redo in `builder.js` arbeiten mit vollständigen JSON-Snapshots (`recordHistory`,
   max. 60 Schritte). Modelländerungen deshalb immer durch `recordHistory(...)` kapseln.
-- `localStorage`-Schlüssel: `quadro.autosave.v1`, `quadro.designs.index.v1`,
-  `quadro.design.v1.<name>`, `quadro.inventory.v1`, `quadro.sidebarWidth.v1`,
-  `quadro.sidebarPanel.v1`, Sprache in `i18n.js`. Quota-Fehler werden als `QuotaError` geworfen.
-- Die **Modell-Bibliothek** liegt in **IndexedDB** (`quadro.library.v1`, Store `designs`), nicht in
-  `localStorage` – eine QDF-Sammlung bringt schnell 3–4 MB mit und würde die 5-MB-Grenze sprengen,
-  die sich Autosave und Entwürfe teilen. Gespeichert wird der QDF-Text im Original plus die beim
-  Einlesen berechneten Kennzahlen; geparst wird erst beim Öffnen.
+- **IndexedDB** `quadro.library.v1` (Version 2) hält drei Speicher: `designs` (eingelesene
+  QDF-Sammlung, Originaltext + Kennzahlen), `docs` (eigene Modelle als virtuelle Dateien) und
+  `session` (die offenen Tabs samt Arbeitsstand – damit übersteht auch Ungespeichertes einen
+  Reload). Alles Größere gehört hierhin: `localStorage` teilt 5 MB unter allen Schlüsseln auf,
+  ein großes Modell wiegt allein ~150 KB.
+- In `localStorage` stehen nur noch Einstellungen: `quadro.inventory.v1`, `quadro.sidebarWidth.v1`,
+  `quadro.sidebarPanel.v1`, `quadro.autosaveMode.v1`, `quadro.quality.v1`, `quadro.slice.v1`,
+  `quadro.camera.v1`, `quadro.projection.v1`, `quadro.scene.v1`, `quadro.migrated.v2`, Sprache in
+  `i18n.js`. Die alten Schlüssel `quadro.autosave.v1`/`quadro.design.v1.<name>` werden beim ersten
+  Start einmalig nach `docs` übernommen (`docs.migrateOldDrafts()`) und danach nur noch gelesen.
 - Dev-Hook: App mit `?dev` in der URL öffnen ⇒ `window.__qdf.import(text)` importiert QDF
   programmatisch (für Tests aus der Konsole).
 - `scene.js` cached Materialien/Geometrien bewusst (GPU-Leaks); neue Materialien nach diesem
