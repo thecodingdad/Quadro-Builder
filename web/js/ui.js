@@ -107,19 +107,7 @@ export function initUI({ scene, model, builder }) {
     $("btn-redo").disabled = !builder.canRedo();
   }
 
-  // --- Autosave-Anzeige --------------------------------------------------
-  let savedTimer = null;
-  function showSaved() {
-    const dot = $("autosave-status");
-    if (!dot) return;
-    dot.classList.add("saving");
-    dot.title = t("saving");
-    clearTimeout(savedTimer);
-    savedTimer = setTimeout(() => {
-      dot.classList.remove("saving");
-      dot.title = t("autosaved");
-    }, 350);
-  }
+
 
   // Die Datei-Aktionen stehen jetzt als einzelne Knöpfe in der Kopfzeile.
   // toggleFileMenu bleibt als Attrappe, damit die Aufrufe in den Handlern
@@ -1026,7 +1014,6 @@ export function initUI({ scene, model, builder }) {
       tab.docId = doc.id;
       tab.name = doc.name;
       tab.dirty = false;
-      showSaved();
       renderTabs();
       refreshDocList();
       return doc;
@@ -1917,7 +1904,6 @@ export function initUI({ scene, model, builder }) {
     if (currentPanel === "library") renderLibrary();
     if (currentPanel === "own") renderOwnModels();
     if (builder.mode === "assembly") renderAssembly();
-    showSaved();
   }
 
   /** Aussenmasse des Modells (Hoehe/Breite/Tiefe) ueber der Bestandsliste. */
@@ -2098,6 +2084,10 @@ export function initUI({ scene, model, builder }) {
   let tabs = [];            // { tabId, docId, name, dirty, model, view }
   let activeTabId = null;
   let sessionTimer = null;
+  // Während ein Tab eingesetzt wird, laufen Änderungsmeldungen des Builders
+  // auf -- die gehören nicht zum Bearbeiten und dürfen den Tab nicht als
+  // geändert markieren (sonst blitzt beim Wechsel kurz der Punkt auf).
+  let ladeVorgang = false;
 
   function activeTab() { return tabs.find((x) => x.tabId === activeTabId) || null; }
 
@@ -2171,10 +2161,12 @@ export function initUI({ scene, model, builder }) {
     const tab = tabs.find((x) => x.tabId === tabId);
     if (!tab) return;
     activeTabId = tabId;
+    ladeVorgang = true;
     builder.modelReplaced();
     model.loadJSON(tab.model || { format: 1, nodes: [], tubes: [] });
     applyViewState(tab.view || {});
     builder.refresh();
+    ladeVorgang = false;
     renderTabs();
     update();
     scheduleSessionSave();
@@ -2194,10 +2186,12 @@ export function initUI({ scene, model, builder }) {
     };
     tabs.push(tab);
     activeTabId = tab.tabId;
+    ladeVorgang = true;
     builder.modelReplaced();
     model.loadJSON(tab.model);
     applyViewState(tab.view);
     builder.refresh();
+    ladeVorgang = false;
     renderTabs();
     update();
     scheduleSessionSave();
@@ -2268,6 +2262,7 @@ export function initUI({ scene, model, builder }) {
     if (tabId === activeTabId) {
       activeTabId = null;
       const naechster = tabs[i] || tabs[i - 1] || null;
+      ladeVorgang = true;
       if (naechster) {
         activeTabId = naechster.tabId;
         builder.modelReplaced();
@@ -2279,6 +2274,7 @@ export function initUI({ scene, model, builder }) {
         model.loadJSON({ format: 1, nodes: [], tubes: [] });
         builder.refresh();
       }
+      ladeVorgang = false;
     }
     renderTabs();
     update();
@@ -2287,6 +2283,7 @@ export function initUI({ scene, model, builder }) {
 
   /** Der laufende Tab hat sich geändert: Markierung setzen, Sitzung sichern. */
   function touchActiveTab() {
+    if (ladeVorgang) return;
     const tab = activeTab();
     if (!tab) return;
     tab.dirty = true;
@@ -2315,10 +2312,12 @@ export function initUI({ scene, model, builder }) {
       activeTabId = sitzung.activeTabId && tabs.some((x) => x.tabId === sitzung.activeTabId)
         ? sitzung.activeTabId : tabs[0].tabId;
       const tab = activeTab();
+      ladeVorgang = true;
       builder.modelReplaced();
       model.loadJSON(tab.model || { format: 1, nodes: [], tubes: [] });
       applyViewState(tab.view || {});
       builder.refresh();
+      ladeVorgang = false;
     } else {
       const alt = storage.loadAutosave();
       openTab({ name: t("doc_untitled"), data: alt && alt.nodes && alt.nodes.length ? alt : null });

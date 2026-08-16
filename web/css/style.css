@@ -117,13 +117,6 @@ body {
 .divider { width: 1px; align-self: stretch; background: var(--line); margin: 2px 2px; flex-shrink: 0; }
 
 /* Autosave-Anzeige als kleiner Statuspunkt (jetzt im Entwürfe-Button) */
-.save-dot {
-  width: 9px; height: 9px; border-radius: 50%;
-  background: var(--ok); border: 1px solid #cdeedd;
-  box-shadow: 0 0 0 2px #e9f7ef;
-  flex: 0 0 auto; transition: background 0.2s ease, box-shadow 0.2s ease;
-}
-.save-dot.saving { background: var(--accent); box-shadow: 0 0 0 2px #e8f1ff; }
 
 
 /* Bauteil-Leiste (Rohre + Platten gemeinsam) */
@@ -836,3 +829,11 @@ body.sidebar-hidden #sidebar, body.sidebar-hidden #sidebar-resizer { display: no
 .own-main .lib-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .own-tools { display: flex; gap: 2px; flex: 0 0 auto; }
 .own-tools .btn { padding: 3px; }
+
+/* Auto-Save-Schalter in der Kopfzeile, neben "Speichern unter". */
+.autosave-toggle {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 12.5px; color: var(--muted);
+  padding: 0 6px; white-space: nowrap; cursor: pointer;
+}
+.autosave-toggle input { margin: 0; cursor: pointer; }
