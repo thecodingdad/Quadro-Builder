@@ -114,14 +114,18 @@ body {
 .group > label { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.4px; white-space: nowrap; }
 
 /* Senkrechter Trenner zwischen Toolbar-Bereichen */
-.divider { width: 1px; align-self: stretch; background: var(--line); margin: 2px 2px; flex-shrink: 0; }
+/* EIN Trenner für alle Leisten: gleiche Höhe in der Kopf- und in der
+   Bauteil-Zeile -- vorher sah der eine gestreckt, der andere kurz aus. */
+.divider {
+  width: 1px; height: 20px; align-self: center;
+  background: var(--line); margin: 0 5px; flex-shrink: 0;
+}
 
 /* Autosave-Anzeige als kleiner Statuspunkt (jetzt im Entwürfe-Button) */
 
 
 /* Bauteil-Leiste (Rohre + Platten gemeinsam) */
 .part-row { display: inline-flex; gap: 4px; flex-wrap: wrap; align-items: center; }
-.mini-divider { width: 1px; height: 20px; background: var(--line); margin: 0 4px; }
 .btn.part {
   display: inline-flex; flex-direction: column; align-items: center; gap: 1px;
   padding: 4px 7px; min-width: 36px; line-height: 1.1;
@@ -233,6 +237,10 @@ body {
   transition: all 0.12s ease;
 }
 .btn:hover { border-color: #c4ccd6; }
+/* Gesperrt heisst blass -- gilt für jeden Knopf, nicht nur die Bauteil-Zeile
+   (Zurück/Wieder stehen jetzt oben in der Kopfzeile). */
+.btn:disabled { opacity: 0.38; cursor: default; }
+.btn:disabled:hover { border-color: var(--line); background: #fff; }
 .btn.active { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
 .btn.ghost { padding: 7px 11px; color: #45505f; }
 .lang-btn { font-weight: 600; letter-spacing: 0.04em; min-width: 2.8em; }

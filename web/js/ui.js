@@ -470,6 +470,7 @@ export function initUI({ scene, model, builder }) {
   function syncDeleteButton() {
     const on = builder.mode === "select" && builder.selection.size > 0;
     $("mode-delete").hidden = !on;
+    $("delete-divider").hidden = !on;
   }
 
   /** Alle Knöpfe zum Bauen sperren oder freigeben (Aufbau-Modus). */
@@ -1213,6 +1214,10 @@ export function initUI({ scene, model, builder }) {
     speichernUnter: `<svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round" stroke-linecap="round">
             <path d="M2 2h8l3 3v4"/><path d="M2 2v12h5"/><path d="M5 2v3.5h4V2"/>
             <path d="M14.2 10.6 10 14.8l-2 .5.5-2 4.2-4.2z"/></svg>`,
+    export: `<svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round" stroke-linecap="round">
+            <path d="M8 1.8v8.4"/><path d="M4.8 7 8 10.4 11.2 7"/><path d="M2.5 12.5v1.7h11v-1.7"/></svg>`,
+    import: `<svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round" stroke-linecap="round">
+            <path d="M8 10.2V1.8"/><path d="M4.8 5 8 1.6 11.2 5"/><path d="M2.5 12.5v1.7h11v-1.7"/></svg>`,
   };
   $("btn-file-menu").addEventListener("click", (e) => {
     e.stopPropagation();
@@ -1221,6 +1226,8 @@ export function initUI({ scene, model, builder }) {
       { icon: DATEI_ICONS.oeffnen, label: t("btn_doc_open"), run: () => $("btn-doc-open").click() },
       { icon: DATEI_ICONS.speichern, label: t("btn_doc_save"), run: () => $("btn-doc-save").click() },
       { icon: DATEI_ICONS.speichernUnter, label: t("btn_doc_saveas"), run: () => $("btn-doc-saveas").click() },
+      { icon: DATEI_ICONS.import, label: t("btn_import"), run: () => $("file-import").click() },
+      { icon: DATEI_ICONS.export, label: t("btn_export_qdf"), run: () => exportActiveTab() },
     ]);
   });
 

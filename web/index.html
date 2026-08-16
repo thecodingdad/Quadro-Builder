@@ -48,6 +48,22 @@
           <button id="mode-add" class="btn active" data-i18n="btn_build" data-i18n-title="btn_build_title">Bauen</button>
           <button id="mode-assembly" class="btn" data-i18n="btn_assembly" data-i18n-title="btn_assembly_title">Aufbau</button>
         </div>
+        <span class="divider"></span>
+        <button id="btn-undo" class="btn ghost icon-sq" data-i18n-title="btn_undo_title" disabled>
+          <!-- Gebogener Pfeil nach links: der übliche Rückgängig-Pfeil -->
+          <svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="7,4 3,8 7,12"/>
+            <path d="M3 8h8a5 5 0 0 1 0 10H8"/>
+          </svg>
+        </button>
+        <button id="btn-redo" class="btn ghost icon-sq" data-i18n-title="btn_redo_title" disabled>
+          <!-- Gebogener Pfeil nach rechts -->
+          <svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="13,4 17,8 13,12"/>
+            <path d="M17 8H9a5 5 0 0 0 0 10h3"/>
+          </svg>
+        </button>
+        <span class="divider"></span>
         <label class="autosave-toggle" data-i18n-title="settings_autosave_hint">
           <input type="checkbox" id="opt-autosave" checked>
           <span data-i18n="settings_autosave">Automatisch speichern</span>
@@ -122,13 +138,13 @@
           </svg>
           <span data-i18n="btn_select">Auswahl</span>
         </button>
-        <span class="mini-divider"></span>
+        <span class="divider"></span>
         <div id="tube-buttons" class="part-row"></div>
-        <span class="mini-divider"></span>
+        <span class="divider"></span>
         <div id="panel-buttons" class="part-row"></div>
-        <span class="mini-divider"></span>
+        <span class="divider"></span>
         <div id="slide-buttons" class="part-row"></div>
-        <span class="mini-divider"></span>
+        <span class="divider"></span>
         <div id="fitting-buttons" class="part-row"></div>
         <button id="mode-clamp" hidden></button>
         <button id="mode-reinforce" class="btn part" data-i18n-title="btn_reinforce_title">
@@ -138,11 +154,11 @@
           </svg>
           <span data-i18n="btn_reinforce">Verstärken</span>
         </button>
-        <span class="mini-divider"></span>
+        <span class="divider"></span>
         <div id="color-buttons" class="part-row" role="group" data-i18n-title="label_color"></div>
       </div>
       <!-- Ansicht: gehört zum Modell, deshalb hier statt oben rechts -->
-      <span class="mini-divider"></span>
+      <span class="divider"></span>
       <div class="toolbar-icon-row view-row">
 
           <!-- Schräg gehört zum Bauen, steht aber bei den Ansichts-Schaltern;
@@ -179,27 +195,13 @@
             </svg>
           </button>
                 </div>
-      <!-- Delete + Undo: pinned rechts, immer sichtbar -->
-      <span class="mini-divider"></span>
+      <!-- Löschen: rechts angepinnt, nur mit Auswahl sichtbar (Trenner mit ihm) -->
+      <span id="delete-divider" class="divider" hidden></span>
       <button id="mode-delete" class="btn part delete-part" data-i18n-title="btn_delete_title">
         <svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round">
           <line x1="5" y1="5" x2="15" y2="15"/><line x1="15" y1="5" x2="5" y2="15"/>
         </svg>
         <span data-i18n="btn_delete">Löschen</span>
-      </button>
-      <button id="btn-undo" class="btn part icon-only" style="flex-shrink:0" data-i18n-title="btn_undo_title" disabled>
-        <!-- Gebogener Pfeil nach links: der übliche Rückgängig-Pfeil -->
-        <svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
-          <polyline points="7,4 3,8 7,12"/>
-          <path d="M3 8h8a5 5 0 0 1 0 10H8"/>
-        </svg>
-      </button>
-      <button id="btn-redo" class="btn part icon-only" style="flex-shrink:0" data-i18n-title="btn_redo_title" disabled>
-        <!-- Gebogener Pfeil nach rechts -->
-        <svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
-          <polyline points="13,4 17,8 13,12"/>
-          <path d="M17 8H9a5 5 0 0 0 0 10h3"/>
-        </svg>
       </button>
     </div><!-- #toolbar-ctx -->
     <!-- Dateien: je offenes Modell ein Tab, wie im Browser -->
