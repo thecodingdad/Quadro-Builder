@@ -1742,16 +1742,17 @@ export function initUI({ scene, model, builder }) {
   }
 
   /**
-   * Eine Zeile der Stückliste. `invKey` verbindet sie mit dem Bestand
-   * ("gruppe:id"): dann steht neben der benötigten Anzahl der eigene Bestand
-   * ("56/103"), und reicht er nicht, ist die Zeile rot hinterlegt.
-   * `hl` beschreibt, welche Teile ein Klick im Modell hervorhebt -- bei nach
-   * Farben getrennten Zeilen nur die dieser Farbe.
+   * Eine Zeile der Stückliste.
+   * `invKey` ("gruppe:id") verbindet sie mit dem Bestand: dann steht statt der
+   * blossen Anzahl "vorhanden/benötigt", und reicht der Bestand nicht, ist die
+   * Zeile rot hinterlegt. Im Bearbeiten-Modus wird daraus ein Eingabefeld.
+   * `hl` beschreibt, welche Teile ein Klick im Modell hervorhebt.
    */
   function bomRow(container, name, colorId, count, subtotal, invKey = null, hl = null) {
     const inv = invKey ? invIndex.get(invKey) : null;
+    const bedarf = inv ? inv.need : count;
     const marke = hl ? hlKey(hl) : null;
-    const row = el("div", "bom-row" + (inv && !inv.ok ? " bad" : "")
+    const row = el("div", "bom-row" + (inv && !inv.ok && !bomEditMode ? " bad" : "")
       + (marke && marke === bomHighlightKey ? " marked" : ""));
     const label = el("span", "bom-name");
     if (colorId) {
@@ -1760,12 +1761,27 @@ export function initUI({ scene, model, builder }) {
     }
     label.appendChild(document.createTextNode(name));
     row.appendChild(label);
-    row.appendChild(el("span", "bom-count", `${count}×`));
-    // Bestand: eigene Stückzahl / benötigte Stückzahl des ganzen Teils.
-    row.appendChild(el("span", "bom-stock", inv ? `${inv.owned}/${inv.need}` : ""));
-    if (inv) row.title = t("inv_have", inv.owned, inv.need);
-    row.appendChild(el("span", "bom-sub", subtotal == null ? "" : eur(subtotal)));
-    if (marke) {
+
+    if (bomEditMode && invKey) {
+      // Bearbeiten: benötigte Anzahl links, eigener Bestand als Eingabe.
+      const [bucket, id] = invKey.split(/:(.+)/);
+      row.appendChild(el("span", "bom-count", bedarf ? `${bedarf}×` : ""));
+      const inp = document.createElement("input");
+      inp.type = "number"; inp.min = "0"; inp.className = "inv-input";
+      inp.value = (inventory[bucket] && inventory[bucket][id]) || 0;
+      inp.addEventListener("click", (e) => e.stopPropagation());
+      inp.addEventListener("change", () => {
+        const v = Math.max(0, parseInt(inp.value || "0", 10) || 0);
+        if (v) inventory[bucket][id] = v; else delete inventory[bucket][id];
+      });
+      row.appendChild(inp);
+    } else {
+      // Anzeigen: entweder "vorhanden/benötigt" oder nur die Anzahl.
+      row.appendChild(el("span", "bom-count", inv ? `${inv.owned}/${inv.need}` : `${count}×`));
+      if (inv) row.title = t("inv_have", inv.owned, inv.need);
+    }
+    if (bomShowPrice) row.appendChild(el("span", "bom-sub", subtotal == null ? "" : eur(subtotal)));
+    if (marke && !bomEditMode) {
       // Anklickbar: hebt die Teile dieser Zeile im Modell hervor.
       row.classList.add("clickable");
       row.addEventListener("click", () => setBomHighlight(marke === bomHighlightKey ? null : hl));
@@ -1829,6 +1845,18 @@ export function initUI({ scene, model, builder }) {
   const round2Preis = (v) => Math.round(v * 100) / 100;
 
   // Nach Farben getrennte Zeilen? Merkt sich die Wahl über Sitzungen hinweg.
+  let bomEditMode = false;      // Bestand bearbeiten statt nur anzeigen
+  const BOM_PRICE_KEY = "quadro.bomShowPrice.v1";
+  let bomShowPrice = localStorage.getItem(BOM_PRICE_KEY) === "1";
+  const bomPriceBox = $("bom-show-price");
+  if (bomPriceBox) {
+    bomPriceBox.checked = bomShowPrice;
+    bomPriceBox.addEventListener("change", () => {
+      bomShowPrice = bomPriceBox.checked;
+      localStorage.setItem(BOM_PRICE_KEY, bomShowPrice ? "1" : "0");
+      update();
+    });
+  }
   const BOM_COLOR_KEY = "quadro.bomByColor.v1";
   let bomByColor = localStorage.getItem(BOM_COLOR_KEY) !== "0";
   const bomColorBox = $("bom-by-color");
@@ -1871,6 +1899,10 @@ export function initUI({ scene, model, builder }) {
       }
       return [...map.values()];
     };
+
+    // Bearbeiten: jede Kategorie zeigt den ganzen Katalog, damit sich auch
+    // Bestand für Teile eintragen lässt, die im Modell (noch) nicht vorkommen.
+    if (bomEditMode) { renderBestand(); return; }
 
     const tb = $("bom-tubes"); tb.innerHTML = "";
     const rohre = fasseZusammen(bom.tubes, "tubeId");
@@ -1947,7 +1979,6 @@ export function initUI({ scene, model, builder }) {
     $("sum-price").textContent = eur(bom.totals.price);
 
     renderInventory(bom);
-    if (!$("inventory-editor").hidden) renderInventoryEditor();
     // Die Bibliothek zeigt je Modell, ob der Bestand reicht -- nach einer
     // Bestandsaenderung muessen die Haken neu gerechnet werden.
     if (currentPanel === "library") renderLibrary();
@@ -1997,18 +2028,43 @@ export function initUI({ scene, model, builder }) {
     return ids;
   }
 
+  // Die Bestandsliste ist Teil der Stückliste; die Hervorhebung läuft über
+  // setBomHighlight. Bleibt für den Aufruf aus der Machbarkeitsprüfung.
   function setInventoryHighlight(r) {
     invHighlightKey = r ? r.group + ":" + r.key : null;
     builder.setHighlight(r ? partsForInventoryRow(r) : null);
-    for (const el2 of $("inventory-body").querySelectorAll(".inv-row"))
-      el2.classList.remove("marked");
-    if (!r) return;
-    const rows = [...$("inventory-body").querySelectorAll(".inv-row")];
-    const idx = lastInvRows.findIndex((x) => x.group === r.group && x.key === r.key);
-    if (idx >= 0 && rows[idx]) rows[idx].classList.add("marked");
   }
 
   let lastInvRows = [];
+
+  /**
+   * Bearbeiten-Ansicht: dieselben Abschnitte, aber der volle Katalog und je
+   * Zeile ein Eingabefeld für den eigenen Bestand.
+   */
+  function renderBestand() {
+    const zubehoer = accessories();
+    const istRutsche = (a) => typeof a.qdf === "string" && /slide/.test(a.qdf);
+    const ausGruppe = (name) => zubehoer.filter((a) => !istRutsche(a) && zubehoerGruppe(a.qdf) === name);
+    const abschnitte = [
+      ["bom-tubes", "tubes", allTubes()],
+      ["bom-connectors", "connectors", allConnectors()],
+      ["bom-panels", "panels", panels()],
+      ["bom-textiles", "fittings", ausGruppe("textiles")],
+      ["bom-slides", "fittings", zubehoer.filter(istRutsche)],
+      ["bom-wheels", "fittings", ausGruppe("wheels")],
+      ["bom-fittings", "fittings", ausGruppe("fittings")],
+      ["bom-reinforcements", "reinforcements", reinforcements()],
+    ];
+    for (const [boxId, bucket, teile] of abschnitte) {
+      const box = $(boxId);
+      box.innerHTML = "";
+      if (!teile.length) { box.appendChild(el("div", "muted", "–")); continue; }
+      for (const it of teile) {
+        const name = partName(it) + (it.code ? ` (${it.code})` : "");
+        bomRow(box, name, null, 0, null, `${bucket}:${it.id}`);
+      }
+    }
+  }
 
   /** Kopf des vereinten Panels: Modellmaße und Machbarkeit. */
   function renderInventory(bom) {
@@ -2032,49 +2088,7 @@ export function initUI({ scene, model, builder }) {
     banner.textContent = cmp.feasible ? t("inv_feasible") : t("inv_infeasible");
   }
 
-  // --- Bestandseditor (vollständige Teileliste + JSON Export/Import) ------
-  function renderInventoryEditor() {
-    const box = $("inventory-editor");
-    box.innerHTML = "";
-    // Dieselben Abschnitte und dieselbe Reihenfolge wie die Stückliste --
-    // sonst sucht man ein Teil im Bestand woanders als in der Liste. Die
-    // Rutschenteile stehen im Katalog beim Zubehör und werden hier abgetrennt.
-    const zubehoer = accessories();
-    const istRutsche = (a) => typeof a.qdf === "string" && /slide/.test(a.qdf);
-    const ausGruppe = (name) => zubehoer.filter((a) => !istRutsche(a) && zubehoerGruppe(a.qdf) === name);
-    const groups = [
-      [t("bom_tubes"), "tubes", allTubes()],
-      [t("bom_connectors"), "connectors", allConnectors()],
-      [t("bom_panels"), "panels", panels()],
-      [t("bom_textiles"), "fittings", ausGruppe("textiles")],
-      [t("bom_slides"), "fittings", zubehoer.filter(istRutsche)],
-      [t("bom_wheels"), "fittings", ausGruppe("wheels")],
-      [t("bom_fittings"), "fittings", ausGruppe("fittings")],
-      [t("bom_reinforcements"), "reinforcements", reinforcements()],
-    ];
-    for (const [title, bucket, items] of groups) {
-      if (!items.length) continue;
-      box.appendChild(el("h4", "inv-grp", title));
-      for (const it of items) {
-        const row = el("div", "inv-edit-row");
-        const label = it.name + (it.code ? ` (${it.code})` : "");
-        row.appendChild(el("span", "inv-name", label));
-        const inp = document.createElement("input");
-        inp.type = "number"; inp.min = "0"; inp.className = "inv-input";
-        inp.value = inventory[bucket][it.id] || 0;
-        inp.addEventListener("change", () => {
-          const v = Math.max(0, parseInt(inp.value || "0", 10) || 0);
-          if (v) inventory[bucket][it.id] = v;
-          else delete inventory[bucket][it.id];
-          inp.value = v;
-          saveInv(inventory);
-          update();
-        });
-        row.appendChild(inp);
-        box.appendChild(row);
-      }
-    }
-  }
+
 
   function exportInventory() {
     storage.exportFile(
@@ -2110,19 +2124,28 @@ export function initUI({ scene, model, builder }) {
       inventory.panels = next.panels;
       inventory.reinforcements = next.reinforcements;
       saveInv(inventory);
-      renderInventoryEditor();
       update();
       flash(t("flash_inv_imported"));
     } catch (err) { alert(err.message); }
   }
 
   $("btn-inv-toggle").addEventListener("click", () => {
-    const ed = $("inventory-editor");
-    const show = ed.hidden;
-    ed.hidden = !show;
-    $("btn-inv-toggle").classList.toggle("active", show);
-    if (show) renderInventoryEditor();
+    if (bomEditMode) {
+      // Speichern: Eingaben stehen schon im Bestand, jetzt festschreiben.
+      saveInv(inventory);
+      bomEditMode = false;
+      flash(t("flash_inv_saved"));
+    } else {
+      bomEditMode = true;
+      bomHighlightKey = null;
+      builder.setHighlight(null);
+    }
+    const knopf = $("btn-inv-toggle");
+    knopf.textContent = t(bomEditMode ? "btn_inv_save" : "btn_inv_edit");
+    knopf.classList.toggle("active", bomEditMode);
+    update();
   });
+
   $("btn-inv-export").addEventListener("click", exportInventory);
   $("btn-inv-import").addEventListener("click", () => $("inv-file-import").click());
   $("inv-file-import").addEventListener("change", (e) => {

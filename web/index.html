@@ -300,10 +300,22 @@
         <div id="model-size" class="model-size" hidden></div>
         <div id="feasibility-banner" class="feasibility"></div>
         <h2 data-i18n="bom_title">Stückliste &amp; Bestand</h2>
-        <label class="asm-opt">
-          <input type="checkbox" id="bom-by-color" checked>
-          <span data-i18n="bom_by_color">Nach Farben trennen</span>
-        </label>
+        <div class="bom-tools">
+          <button id="btn-inv-toggle" class="btn ghost small" data-i18n="btn_inv_edit" data-i18n-title="btn_inv_toggle_title">Bestand bearbeiten</button>
+          <button id="btn-inv-export" class="btn ghost small" data-i18n-title="btn_inv_export_title">⤓ JSON</button>
+          <button id="btn-inv-import" class="btn ghost small" data-i18n-title="btn_inv_import_title">⤒ JSON</button>
+          <input id="inv-file-import" type="file" accept=".json,application/json" hidden>
+        </div>
+        <div class="bom-opts">
+          <label class="asm-opt">
+            <input type="checkbox" id="bom-by-color" checked>
+            <span data-i18n="bom_by_color">Nach Farben trennen</span>
+          </label>
+          <label class="asm-opt">
+            <input type="checkbox" id="bom-show-price">
+            <span data-i18n="bom_show_price">Preis anzeigen</span>
+          </label>
+        </div>
         <h3 data-i18n="bom_tubes">Rohre</h3>
         <div id="bom-tubes" class="bom-list"></div>
         <h3 data-i18n="bom_connectors">Kupplungen</h3>
@@ -328,17 +340,6 @@
           <div><span data-i18n="total_price">Materialpreis ca.</span><strong id="sum-price">0,00 €</strong></div>
         </div>
 
-        <div class="inv-editor-head">
-          <h3 data-i18n="inv_edit_title">Bestand bearbeiten</h3>
-          <div class="inv-actions">
-            <button id="btn-inv-toggle" class="btn ghost small" data-i18n="btn_inv_toggle" data-i18n-title="btn_inv_toggle_title">Bearbeiten</button>
-            <button id="btn-inv-export" class="btn ghost small" data-i18n-title="btn_inv_export_title">⤓ JSON</button>
-            <button id="btn-inv-import" class="btn ghost small" data-i18n-title="btn_inv_import_title">⤒ JSON</button>
-            <input id="inv-file-import" type="file" accept=".json,application/json" hidden>
-          </div>
-        </div>
-        <div id="inventory-body" class="inv-list" hidden></div>
-        <div id="inventory-editor" class="inv-editor" hidden></div>
       </section>
 
 

@@ -851,3 +851,8 @@ body.tab-dragging .tab { cursor: grabbing; }
 #toolbar-ctx.locked .btn[disabled],
 #toolbar-ctx.locked button[disabled] { opacity: 0.4; cursor: not-allowed; }
 #toolbar-ctx.locked .swatch[disabled] { opacity: 0.35; cursor: not-allowed; }
+
+/* Werkzeuge und Schalter über der Stückliste */
+.bom-tools { display: flex; gap: 6px; flex-wrap: wrap; margin: 6px 0 4px; }
+.bom-opts { display: flex; gap: 14px; flex-wrap: wrap; margin-bottom: 6px; }
+.bom-row .inv-input { width: 58px; }
