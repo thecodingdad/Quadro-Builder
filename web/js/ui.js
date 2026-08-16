@@ -31,6 +31,91 @@ function el(tag, cls, text) {
 }
 function neg(v) { return [-v[0], -v[1], -v[2]]; }
 
+// --- Dialoge --------------------------------------------------------------
+// Alle Rückfragen laufen über eine Karte im Dokument. Browser-Popups (alert,
+// confirm, prompt) blockieren den Tab, sehen in jedem Browser anders aus und
+// passen nicht zum übrigen Bild.
+
+let dialogFertig = null;
+
+/** Steht gerade ein Dialog offen? (Tastenkürzel pausieren dann.) */
+function dialogOpen() { return !!dialogFertig; }
+
+/**
+ * Karte anzeigen und auf die Antwort warten.
+ *
+ * `buttons` sind `{ key, label, kind }`; der erste Knopf ist die Vorgabe für
+ * Enter, `kind` ist die CSS-Klasse ("ghost", "danger"). Escape und ein Klick
+ * neben die Karte antworten mit `cancelKey`. Mit `input` erscheint ein
+ * Textfeld. Ergebnis: `{ key, value }` oder `null` beim Abbruch.
+ */
+function dialog({ title, text = "", input = null, buttons = [], cancelKey = null }) {
+  // Ein zweiter Dialog verdrängt den ersten -- offene Zusagen laufen leer.
+  if (dialogFertig) dialogFertig(null);
+  return new Promise((resolve) => {
+    const box = $("dlg-overlay"), feld = $("dlg-input"), leiste = $("dlg-actions");
+    $("dlg-title").textContent = title || "";
+    $("dlg-text").textContent = text || "";
+    $("dlg-text").hidden = !text;
+    feld.hidden = !input;
+    feld.value = input ? (input.value || "") : "";
+    feld.placeholder = input ? (input.placeholder || "") : "";
+
+    const fertig = (key) => {
+      dialogFertig = null;
+      box.hidden = true;
+      window.removeEventListener("keydown", taste, true);
+      box.removeEventListener("mousedown", daneben);
+      leiste.innerHTML = "";
+      resolve(key == null ? null : { key, value: feld.value.trim() });
+    };
+    const taste = (e) => {
+      if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); fertig(cancelKey); }
+      else if (e.key === "Enter" && buttons.length) { e.preventDefault(); e.stopPropagation(); fertig(buttons[0].key); }
+    };
+    const daneben = (e) => { if (e.target === box) fertig(cancelKey); };
+
+    leiste.innerHTML = "";
+    for (const b of buttons) {
+      const knopf = el("button", b.kind ? `btn ${b.kind}` : "btn", b.label);
+      knopf.addEventListener("click", () => fertig(b.key));
+      leiste.appendChild(knopf);
+    }
+    dialogFertig = fertig;
+    box.hidden = false;
+    window.addEventListener("keydown", taste, true);
+    box.addEventListener("mousedown", daneben);
+    if (input) { feld.focus(); feld.select(); } else leiste.firstChild?.focus();
+  });
+}
+
+/** Ja/Nein-Rückfrage. Liefert true, wenn bestätigt wurde. */
+function askConfirm(text, { title = t("dlg_confirm_title"), ok = t("dlg_ok"), danger = false } = {}) {
+  return dialog({
+    title, text, cancelKey: "cancel",
+    buttons: [
+      { key: "ok", label: ok, kind: danger ? "danger" : "" },
+      { key: "cancel", label: t("ask_cancel"), kind: "ghost" },
+    ],
+  }).then((r) => !!r && r.key === "ok");
+}
+
+/** Texteingabe. Liefert den (getrimmten) Text oder null bei Abbruch. */
+function askInput(text, vorgabe = "", { title = t("dlg_input_title"), ok = t("dlg_ok") } = {}) {
+  return dialog({
+    title, text, input: { value: vorgabe }, cancelKey: "cancel",
+    buttons: [
+      { key: "ok", label: ok },
+      { key: "cancel", label: t("ask_cancel"), kind: "ghost" },
+    ],
+  }).then((r) => (r && r.key === "ok" && r.value ? r.value : null));
+}
+
+/** Meldung mit einem einzigen Knopf -- Ersatz für alert(). */
+function showMessage(text, { title = t("dlg_error_title") } = {}) {
+  return dialog({ title, text, cancelKey: "ok", buttons: [{ key: "ok", label: t("dlg_ok") }] });
+}
+
 function loadInv() {
   let inv;
   try { inv = JSON.parse(localStorage.getItem(INV_KEY)) || {}; }
@@ -965,7 +1050,7 @@ export function initUI({ scene, model, builder }) {
       scene.resetCamera();
       flash(info);
     } catch (err) {
-      alert(err.message);
+      showMessage(err.message);
     }
     e.target.value = "";
   });
@@ -1011,11 +1096,11 @@ export function initUI({ scene, model, builder }) {
    * Abbruch.
    */
   async function askName(vorschlag, { eigeneId = null } = {}) {
-    const name = (prompt(t("prompt_save_name"), vorschlag || "") || "").trim();
+    const name = await askInput(t("prompt_save_name"), vorschlag || "", { title: t("dlg_name_title"), ok: t("ask_save") });
     if (!name) return null;
     const vorhanden = await docs.docByName(name);
     if (vorhanden && vorhanden.id !== eigeneId) {
-      if (!confirm(t("confirm_overwrite", name))) return null;
+      if (!(await askConfirm(t("confirm_overwrite", name), { title: t("dlg_overwrite_title"), ok: t("dlg_overwrite_ok") }))) return null;
       return { name, doc: vorhanden };
     }
     return { name, doc: null };
@@ -1296,7 +1381,7 @@ export function initUI({ scene, model, builder }) {
         exportiereModell(d.name, tab ? tab.model : d.data);
       }));
       werkzeuge.appendChild(iconKnopf(MUELL, t("btn_doc_delete_title"), async () => {
-        if (!confirm(t("confirm_delete_save", d.name))) return;
+        if (!(await askConfirm(t("confirm_delete_save", d.name), { title: t("dlg_delete_title"), ok: t("dlg_delete_ok"), danger: true }))) return;
         await docs.removeDoc(d.id);
         for (const tab of tabs) if (tab.docId === d.id) { tab.docId = null; tab.dirty = true; }
         renderTabs(); renderOwnModels();
@@ -1332,7 +1417,8 @@ export function initUI({ scene, model, builder }) {
     });
   }
   $("lib-clear").addEventListener("click", async () => {
-    if (!libEntries.length || !confirm(t("lib_confirm_clear"))) return;
+    if (!libEntries.length) return;
+    if (!(await askConfirm(t("lib_confirm_clear"), { title: t("dlg_delete_title"), ok: t("dlg_delete_ok"), danger: true }))) return;
     await storage.libClear();
     await loadLibrary();
   });
@@ -1665,6 +1751,8 @@ export function initUI({ scene, model, builder }) {
 
   // --- Tastatur ----------------------------------------------------------
   window.addEventListener("keydown", (e) => {
+    // Steht ein Dialog offen, gehört die Tastatur ihm allein.
+    if (dialogOpen()) return;
     const tgt = e.target;
     if (tgt && (tgt.tagName === "INPUT" || tgt.tagName === "SELECT" || tgt.tagName === "TEXTAREA" || tgt.isContentEditable)) return;
 
@@ -2220,7 +2308,7 @@ export function initUI({ scene, model, builder }) {
       saveInv(inventory);
       update();
       flash(t("flash_inv_imported"));
-    } catch (err) { alert(err.message); }
+    } catch (err) { showMessage(err.message); }
   }
 
   $("btn-inv-toggle").addEventListener("click", () => {
@@ -2458,21 +2546,16 @@ export function initUI({ scene, model, builder }) {
    * Liefert "save" | "discard" | "cancel".
    */
   function askUnsaved(name) {
-    return new Promise((resolve) => {
-      const box = $("ask-overlay");
-      $("ask-text").textContent = t("ask_close_text", name);
-      box.hidden = false;
-      const fertig = (antwort) => {
-        box.hidden = true;
-        $("ask-save").onclick = null;
-        $("ask-discard").onclick = null;
-        $("ask-cancel").onclick = null;
-        resolve(antwort);
-      };
-      $("ask-save").onclick = () => fertig("save");
-      $("ask-discard").onclick = () => fertig("discard");
-      $("ask-cancel").onclick = () => fertig("cancel");
-    });
+    return dialog({
+      title: t("ask_close_title"),
+      text: t("ask_close_text", name),
+      cancelKey: "cancel",
+      buttons: [
+        { key: "save", label: t("ask_save") },
+        { key: "discard", label: t("ask_discard"), kind: "ghost" },
+        { key: "cancel", label: t("ask_cancel"), kind: "ghost" },
+      ],
+    }).then((r) => (r ? r.key : "cancel"));
   }
 
   async function closeTab(tabId) {

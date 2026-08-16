@@ -753,6 +753,16 @@ body.sidebar-hidden #sidebar, body.sidebar-hidden #sidebar-resizer { display: no
 
 .ask-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 14px; }
 
+/* Dialogkarte: Text und Eingabefeld der gemeinsamen Rückfrage-Karte */
+.dlg-text { margin: 0; font-size: 13px; line-height: 1.45; white-space: pre-wrap; }
+.dlg-text[hidden] { display: none; }
+.dlg-input {
+  width: 100%; margin-top: 12px; padding: 7px 10px; font-size: 13px; font-family: inherit;
+  border: 1px solid var(--line); border-radius: 8px; background: #fff; color: var(--ink);
+  box-sizing: border-box;
+}
+.dlg-input:focus { outline: none; border-color: var(--accent); }
+
 /* Kein Modell offen: Einstiegskarte über der leeren Szene */
 .empty-state {
   position: absolute; inset: 0;

@@ -138,6 +138,9 @@ Koordinaten in **cm**, Three.js-Konvention **y = oben**, Boden bei y = 0.
   Preisänderungen bitte mit Quelle im Commit (z. B. quadroshop.com, Stand).
 - **Neue UI-Texte:** immer in **beide** Dictionaries (`de` und `en`) in `i18n.js`, dann `t('key')`
   bzw. `data-i18n`/`data-i18n-title` im HTML. Nie Strings in `ui.js` hardcoden.
+- **Rückfragen:** nie `alert`/`confirm`/`prompt`. In `ui.js` stehen `dialog()` und die
+  Kurzformen `askConfirm()`, `askInput()`, `showMessage()`; sie füllen die Karte
+  `#dlg-overlay` (Enter = erster Knopf, Escape/Klick daneben = Abbruch).
 - **Neue Bau-Richtung/Logik:** `config.js` + `builder.js` (+ ggf. `scene.js`).
 - **Tastatur:** zentral in `ui.js` (`keydown`). Pfeiltasten sind kamera-relativ über
   `scene.getHorizontalAxes()`.

@@ -266,16 +266,14 @@
 
       <div id="status" class="status"></div>
 
-      <!-- Rückfrage beim Schließen eines Tabs mit ungespeicherten Änderungen -->
-      <div id="ask-overlay" class="help-overlay" hidden>
-        <div class="help-card">
-          <h3 id="ask-title" data-i18n="ask_close_title">Ungespeicherte Änderungen</h3>
-          <p id="ask-text"></p>
-          <div class="ask-actions">
-            <button id="ask-save" class="btn" data-i18n="ask_save">Speichern</button>
-            <button id="ask-discard" class="btn ghost" data-i18n="ask_discard">Verwerfen</button>
-            <button id="ask-cancel" class="btn ghost" data-i18n="ask_cancel">Abbrechen</button>
-          </div>
+      <!-- Eine Karte für alle Rückfragen und Eingaben (statt Browser-Popups).
+           Titel, Text, Feld und Knöpfe setzt ui.js je Aufruf. -->
+      <div id="dlg-overlay" class="help-overlay" hidden>
+        <div class="help-card dlg-card" role="dialog" aria-modal="true" aria-labelledby="dlg-title">
+          <h3 id="dlg-title"></h3>
+          <p id="dlg-text" class="dlg-text"></p>
+          <input id="dlg-input" class="dlg-input" type="text" autocomplete="off" spellcheck="false" hidden>
+          <div id="dlg-actions" class="ask-actions"></div>
         </div>
       </div>
 
