@@ -857,5 +857,6 @@ body.tab-dragging .tab { cursor: grabbing; }
 .bom-opts { display: flex; gap: 14px; flex-wrap: wrap; margin-bottom: 6px; }
 .bom-row .inv-input { width: 58px; }
 
-/* Hinweiszeile "Offene Enden": Zahl bis zum rechten Rand, rechtsbündig. */
-.bom-open-count { grid-column: 2 / -1; text-align: right; }
+/* Mengen-Spalte: rechtsbündig, damit die Zahlen aller Zeilen untereinander
+   stehen (auch die Hinweiszeile "Offene Enden"). */
+.bom-count { text-align: right; min-width: 44px; }

@@ -1919,10 +1919,12 @@ export function initUI({ scene, model, builder }) {
         { kind: "connectors", id: r.type });
     }
     if (bom.openEnds > 0) {
-      // Hinweiszeile, kein Teil: die Zahl steht rechts und ohne "x".
+      // Hinweiszeile, kein Teil: die Zahl steht in derselben Spalte wie die
+      // Mengen der übrigen Zeilen, nur ohne "x".
       const row = el("div", "bom-row muted");
       row.appendChild(el("span", "bom-name", t("bom_open_ends")));
-      row.appendChild(el("span", "bom-count bom-open-count", String(bom.openEnds)));
+      row.appendChild(el("span", "bom-count", String(bom.openEnds)));
+      if (bomShowPrice) row.appendChild(el("span", "bom-sub", ""));
       cb.appendChild(row);
     }
 
