@@ -1862,9 +1862,9 @@ export function initUI({ scene, model, builder }) {
       flash(t("flash_selected_n", n));
       return;
     }
-    // Neues Modell: Strg/Cmd+N faengt der Browser in einem normalen Fenster
-    // selbst ab (neues Fenster) -- die Seite bekommt die Taste dort nie zu
-    // sehen. Alt+N ist der Weg, der immer ankommt.
+    // Neues Modell: Alt+N. Strg/Cmd+N bleibt mit drin, kommt in Chrome aber
+    // nicht an -- der Browser oeffnet damit ein eigenes Fenster, bevor die
+    // Seite die Taste sieht. Deshalb steht in der Hilfe nur Alt+N.
     if ((e.metaKey || e.ctrlKey || e.altKey) && e.key.toLowerCase() === "n" && !e.shiftKey) {
       e.preventDefault();
       $("btn-doc-new").click();
