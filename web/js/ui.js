@@ -968,6 +968,13 @@ export function initUI({ scene, model, builder }) {
     flash(t("flash_exported_qdf", parts));
   }
 
+  /** Das gerade offene Modell als QDF sichern (Strg/Cmd+E). */
+  function exportActiveTab() {
+    const tab = ui.captureActiveTab();
+    if (!tab) return;
+    exportiereModell(tab.name, tab.model);
+  }
+
   /** Aus einem Entwurfsnamen einen brauchbaren Dateinamen machen. */
   function dateiName(name) {
     return (name || "quadro").replace(/[\\/:*?"<>|]/g, "-").trim() || "quadro";
@@ -1777,6 +1784,15 @@ export function initUI({ scene, model, builder }) {
       flash(t("flash_selected_n", n));
       return;
     }
+    // Datei-Tasten: was der Browser damit vorhat (Seite speichern, Datei
+    // oeffnen), ist hier fehl am Platz -- der Editor ist die Anwendung.
+    if (e.metaKey || e.ctrlKey) {
+      switch (e.key.toLowerCase()) {
+        case "s": e.preventDefault(); (e.shiftKey ? $("btn-doc-saveas") : $("btn-doc-save")).click(); return;
+        case "o": e.preventDefault(); $("btn-doc-open").click(); return;
+        case "e": e.preventDefault(); exportActiveTab(); return;
+      }
+    }
     if (e.metaKey || e.ctrlKey || e.altKey) return;
     const k = e.key;
 
@@ -1822,6 +1838,8 @@ export function initUI({ scene, model, builder }) {
     switch (k.toLowerCase()) {
       case "b": setMode("add"); break;
       case "p": setMode("panel"); break;
+      case "r": setMode("slide"); break;
+      case "f": setMode("fitting"); break;
       case "s": setMode("select"); break;
       case "v": setMode("reinforce"); break;
       case "a": setMode("assembly"); break;
@@ -1830,6 +1848,13 @@ export function initUI({ scene, model, builder }) {
       case "n": toggleLabels(); break;
       case "h": toggleHints(); break;
       case "c": scene.resetCamera(); break;
+      // Die Liste der Tasten selbst: F1 wie ueberall, "?" fuer die Tastatur
+      // ohne F-Reihe.
+      case "f1":
+      case "?":
+        e.preventDefault();
+        $("help-overlay").hidden = !$("help-overlay").hidden;
+        break;
       // Escape fuehrt zurueck in den Cursor-Modus -- ausser im Aufbau-Modus:
       // dort ist die Auswahl nur zum Nachschlagen da, Escape raeumt sie weg und
       // laesst den Modus stehen (ihn zu verlassen waere ein Verlust an
