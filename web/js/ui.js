@@ -1862,6 +1862,14 @@ export function initUI({ scene, model, builder }) {
       flash(t("flash_selected_n", n));
       return;
     }
+    // Neues Modell: Strg/Cmd+N faengt der Browser in einem normalen Fenster
+    // selbst ab (neues Fenster) -- die Seite bekommt die Taste dort nie zu
+    // sehen. Alt+N ist der Weg, der immer ankommt.
+    if ((e.metaKey || e.ctrlKey || e.altKey) && e.key.toLowerCase() === "n" && !e.shiftKey) {
+      e.preventDefault();
+      $("btn-doc-new").click();
+      return;
+    }
     // Datei-Tasten: was der Browser damit vorhat (Seite speichern, Datei
     // oeffnen), ist hier fehl am Platz -- der Editor ist die Anwendung.
     if (e.metaKey || e.ctrlKey) {
@@ -1869,6 +1877,18 @@ export function initUI({ scene, model, builder }) {
         case "s": e.preventDefault(); (e.shiftKey ? $("btn-doc-saveas") : $("btn-doc-save")).click(); return;
         case "o": e.preventDefault(); $("btn-doc-open").click(); return;
         case "e": e.preventDefault(); exportActiveTab(); return;
+      }
+      // Strg/Cmd+1…9 springt zum n-ten Entwurf, die 9 ans Ende -- wie die
+      // Tab-Tasten im Browser. Ob der Browser die Taste durchlaesst, haengt an
+      // ihm; Firefox und Safari tun es nicht, Chrome schon.
+      if (e.key >= "1" && e.key <= "9" && !e.shiftKey) {
+        const n = parseInt(e.key, 10);
+        const ziel = n === 9 ? tabs[tabs.length - 1] : tabs[n - 1];
+        if (ziel) {
+          e.preventDefault();
+          if (ziel.tabId !== activeTabId) activateTab(ziel.tabId);
+        }
+        return;
       }
     }
     if (e.metaKey || e.ctrlKey || e.altKey) return;
