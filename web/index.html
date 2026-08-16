@@ -25,22 +25,33 @@
       <div id="toolbar-left">
         <div class="brand">QUADRO <span>Builder</span></div>
         <span class="divider"></span>
+        <!-- Datei-Gruppe: ein Knopf, die Einträge klappen wie bei den Bauteilen
+             auf. Die vier Knöpfe dahinter bleiben (versteckt) stehen -- an
+             ihnen hängt die ganze Datei-Logik, das Popup und die Tastenkürzel
+             lösen sie nur aus. -->
+        <div class="group" id="file-actions">
+          <button id="btn-file-menu" class="btn ghost icon-btn" data-i18n-title="menu_file_title">
+            <svg viewBox="0 0 18 18" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round">
+              <path d="M4 2.5h5l4 4v9H4z"/>
+              <path d="M9 2.5v4h4"/>
+            </svg>
+            <span data-i18n="menu_file">Datei</span>
+          </button>
+          <button id="btn-doc-new" hidden></button>
+          <button id="btn-doc-open" hidden></button>
+          <button id="btn-doc-save" hidden></button>
+          <button id="btn-doc-saveas" hidden></button>
+          <input id="file-import" type="file" accept=".qdf,application/json,.json" multiple hidden />
+        </div>
+        <span class="divider"></span>
         <div class="group seg">
           <button id="mode-add" class="btn active" data-i18n="btn_build" data-i18n-title="btn_build_title">Bauen</button>
           <button id="mode-assembly" class="btn" data-i18n="btn_assembly" data-i18n-title="btn_assembly_title">Aufbau</button>
         </div>
-        <span class="divider"></span>
-        <div class="group" id="file-actions">
-          <button id="btn-doc-new" class="btn ghost" data-i18n="btn_doc_new" data-i18n-title="btn_doc_new_title">Neu</button>
-          <button id="btn-doc-open" class="btn ghost" data-i18n="btn_doc_open" data-i18n-title="btn_doc_open_title">Öffnen</button>
-          <button id="btn-doc-save" class="btn ghost" data-i18n="btn_doc_save">Speichern</button>
-          <button id="btn-doc-saveas" class="btn ghost" data-i18n="btn_doc_saveas">Speichern unter…</button>
-          <label class="autosave-toggle" data-i18n-title="settings_autosave_hint">
-            <input type="checkbox" id="opt-autosave" checked>
-            <span data-i18n="settings_autosave">Automatisch speichern</span>
-          </label>
-          <input id="file-import" type="file" accept=".qdf,application/json,.json" hidden />
-        </div>
+        <label class="autosave-toggle" data-i18n-title="settings_autosave_hint">
+          <input type="checkbox" id="opt-autosave" checked>
+          <span data-i18n="settings_autosave">Automatisch speichern</span>
+        </label>
       </div><!-- #toolbar-left -->
 
       <!-- Fixierter rechter Bereich: Undo · Entwürfe · Toggles · Sidebar · Mehr -->

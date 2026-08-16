@@ -653,6 +653,34 @@ export function initUI({ scene, model, builder }) {
     setTimeout(() => document.addEventListener("click", onPopupOutsideClick, true), 0);
   }
 
+  /**
+   * Popup mit freien Einträgen im Stil der Bauteil-Listen.
+   * `entries` sind `{ icon, label, run }` -- `icon` ist fertiges SVG-Markup.
+   */
+  function showMenuPopup(anchorBtn, entries) {
+    if (activePopup && popupAnchor === anchorBtn) { closePopup(); return; }
+    closePopup();
+
+    const pop = el("div", "part-popup");
+    for (const eintrag of entries) {
+      const row = el("button", "part-popup-row");
+      row.innerHTML = eintrag.icon + `<span class="pp-name"></span>`;
+      row.querySelector(".pp-name").textContent = eintrag.label;
+      row.addEventListener("click", (e) => {
+        e.stopPropagation();
+        closePopup();
+        eintrag.run();
+      });
+      pop.appendChild(row);
+    }
+
+    document.body.appendChild(pop);
+    placePopupUnder(pop, anchorBtn);
+    activePopup = pop;
+    popupAnchor = anchorBtn;
+    setTimeout(() => document.addEventListener("click", onPopupOutsideClick, true), 0);
+  }
+
   // --- Rohr-Auswahl (Button + Popup) -------------------------------------
   // Frueher stand je Rohrlaenge ein eigener Button in der Leiste; auf schmalen
   // Screens musste die Haelfte davon per hide-narrow verschwinden. Jetzt zeigt
@@ -1025,44 +1053,58 @@ export function initUI({ scene, model, builder }) {
   });
 
   $("own-import").addEventListener("click", () => $("file-import").click());
-  $("file-import").addEventListener("change", async (e) => {
-    const f = e.target.files[0];
-    if (!f) return;
-    try {
-      // Importiertes landet in einem EIGENEN Tab -- das offene Modell bleibt,
-      // wie es ist. Der Dateiname wird zum Modellnamen.
-      let daten = null, info = "";
-      if (/\.qdf$/i.test(f.name)) {
-        const text = await f.text();
-        const data = parseQDF(text, {
-          tubes: buildableTubes(),
-          panels: panels(),
-          connectorSize: geometry().connectorSize,
-          mergeEps: 2,
-        });
-        if (!data.nodes.length) throw new Error(t("qdf_no_parts"));
-        daten = data;
-        const st = data.stats;
-        const skip = Object.entries(st.skipped || {});
-        const skipTxt = skip.length
-          ? t("qdf_skipped", skip.map(([k, v]) => `${v}× ${k.replace(/2$|-new2$|-end2$/, "")}`).join(", "))
-          : "";
-        const panelTxt = st.panels ? `, ${st.panels} ${t("bom_panels").toLowerCase()}` : "";
-        const clampTxt = st.clamps ? `, ${st.clamps} ${t("btn_clamp").toLowerCase()}` : "";
-        const stats = `${st.nodes} ${t("bom_connectors").split(" ")[0].toLowerCase()}, ${st.tubes} ${t("bom_tubes").toLowerCase()}${panelTxt}${clampTxt}`;
-        info = t("qdf_imported", stats, skipTxt);
-      } else {
-        daten = await storage.importFile(f);
-        info = t("flash_imported_json");
-      }
-      const name = f.name.replace(/\.[^.]+$/, "").trim() || t("doc_untitled");
-      openTab({ name, data: daten, dirty: true });
-      scene.resetCamera();
-      flash(info);
-    } catch (err) {
-      showMessage(err.message);
+
+  /** Eine QDF- oder JSON-Datei einlesen. Liefert { daten, info }. */
+  async function leseModellDatei(f) {
+    if (!/\.qdf$/i.test(f.name)) {
+      return { daten: await storage.importFile(f), info: t("flash_imported_json") };
     }
+    const text = await f.text();
+    const data = parseQDF(text, {
+      tubes: buildableTubes(),
+      panels: panels(),
+      connectorSize: geometry().connectorSize,
+      mergeEps: 2,
+    });
+    if (!data.nodes.length) throw new Error(t("qdf_no_parts"));
+    const st = data.stats;
+    const skip = Object.entries(st.skipped || {});
+    const skipTxt = skip.length
+      ? t("qdf_skipped", skip.map(([k, v]) => `${v}× ${k.replace(/2$|-new2$|-end2$/, "")}`).join(", "))
+      : "";
+    const panelTxt = st.panels ? `, ${st.panels} ${t("bom_panels").toLowerCase()}` : "";
+    const clampTxt = st.clamps ? `, ${st.clamps} ${t("btn_clamp").toLowerCase()}` : "";
+    const stats = `${st.nodes} ${t("bom_connectors").split(" ")[0].toLowerCase()}, ${st.tubes} ${t("bom_tubes").toLowerCase()}${panelTxt}${clampTxt}`;
+    return { daten: data, info: t("qdf_imported", stats, skipTxt) };
+  }
+
+  $("file-import").addEventListener("change", async (e) => {
+    // FileList ist LEBENDIG: erst kopieren, dann das Feld freigeben -- sonst
+    // laesst sich dieselbe Datei kein zweites Mal waehlen.
+    const dateien = [...e.target.files];
     e.target.value = "";
+    if (!dateien.length) return;
+
+    // Jede Datei bekommt einen EIGENEN Tab; offene Modelle bleiben stehen.
+    // Eine kaputte Datei bricht den Rest nicht ab, sie wird am Ende gemeldet.
+    const fehler = [];
+    let geladen = 0, letzteInfo = "";
+    for (const f of dateien) {
+      try {
+        const { daten, info } = await leseModellDatei(f);
+        const name = f.name.replace(/\.[^.]+$/, "").trim() || t("doc_untitled");
+        openTab({ name, data: daten, dirty: true });
+        geladen++;
+        letzteInfo = info;
+      } catch (err) {
+        fehler.push(`${f.name}: ${err.message}`);
+      }
+    }
+    if (geladen) {
+      scene.resetCamera();
+      flash(geladen === 1 ? letzteInfo : t("flash_imported_n", geladen));
+    }
+    if (fehler.length) showMessage(fehler.join("\n"));
   });
 
   // --- Dateien: Neu, Öffnen, Speichern, Speichern unter ------------------
@@ -1158,6 +1200,29 @@ export function initUI({ scene, model, builder }) {
   // Ein neues Modell heißt erst einmal "Unbenannt" und gehört zu keiner Datei.
   // Nach dem Namen wird gefragt, wenn gespeichert wird -- nicht vorher.
   $("btn-doc-new").addEventListener("click", () => { openTab({ name: freierName() }); });
+
+  // Datei-Menü: die Einträge lösen die (versteckten) Knöpfe aus, an denen die
+  // Logik hängt -- so gibt es jede Aktion genau einmal.
+  const DATEI_ICONS = {
+    neu: `<svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round" stroke-linecap="round">
+            <path d="M3.5 1.5h5l4 4v9h-9z"/><path d="M8.5 1.5v4h4"/><path d="M8 8v4M6 10h4"/></svg>`,
+    oeffnen: `<svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round">
+            <path d="M1.5 12.5v-9h4l1.5 2h7.5v7z"/></svg>`,
+    speichern: `<svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round">
+            <path d="M2 2h9l3 3v9H2z"/><path d="M5 2v4h5V2"/><rect x="4.5" y="9" width="7" height="5"/></svg>`,
+    speichernUnter: `<svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round" stroke-linecap="round">
+            <path d="M2 2h8l3 3v4"/><path d="M2 2v12h5"/><path d="M5 2v3.5h4V2"/>
+            <path d="M14.2 10.6 10 14.8l-2 .5.5-2 4.2-4.2z"/></svg>`,
+  };
+  $("btn-file-menu").addEventListener("click", (e) => {
+    e.stopPropagation();
+    showMenuPopup($("btn-file-menu"), [
+      { icon: DATEI_ICONS.neu, label: t("btn_doc_new"), run: () => $("btn-doc-new").click() },
+      { icon: DATEI_ICONS.oeffnen, label: t("btn_doc_open"), run: () => $("btn-doc-open").click() },
+      { icon: DATEI_ICONS.speichern, label: t("btn_doc_save"), run: () => $("btn-doc-save").click() },
+      { icon: DATEI_ICONS.speichernUnter, label: t("btn_doc_saveas"), run: () => $("btn-doc-saveas").click() },
+    ]);
+  });
 
   // "Öffnen" hat keine eigene Liste mehr: es zeigt den Seitenleisten-Tab
   // "Meine Modelle", dort steht jedes Modell mit Öffnen, Umbenennen, Löschen.
