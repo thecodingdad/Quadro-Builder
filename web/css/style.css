@@ -875,3 +875,10 @@ body.tab-dragging .tab { cursor: grabbing; }
 /* Knöpfe, die nur ein Sinnbild tragen (Zurück/Wieder). */
 .btn.icon-only { padding: 5px 7px; }
 .btn.icon-only svg { display: block; }
+
+/* Bis der Katalog da ist, sind die Bauteil-Knöpfe noch nicht gebaut. Die
+   Leiste bleibt so lange unsichtbar und erscheint dann vollständig, statt dass
+   die Knöpfe einzeln hineinspringen. */
+body.booting #toolbar-ctx,
+body.booting #tab-bar,
+body.booting #sidebar { visibility: hidden; }

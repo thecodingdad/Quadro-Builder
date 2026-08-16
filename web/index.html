@@ -5,6 +5,10 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Quadro Builder</title>
   <link rel="stylesheet" href="./css/style.css" />
+  <!-- Der Teilekatalog wird für die Werkzeugleiste gebraucht. Ohne diesen
+       Hinweis startet sein Abruf erst, wenn der ganze Modulbaum geladen ist --
+       die Bauteil-Knöpfe erschienen dadurch sichtbar später. -->
+  <link rel="preload" href="../data/parts.json" as="fetch" crossorigin="anonymous" />
   <script type="importmap">
     {
       "imports": {
@@ -13,7 +17,7 @@
     }
   </script>
 </head>
-<body class="sidebar-hidden">
+<body class="sidebar-hidden booting">
   <header id="toolbar">
 
     <!-- Hauptzeile: Modi + Sonderfunktionen links (scrollt) · Aktionen rechts (fixiert) -->

@@ -31,6 +31,9 @@ async function boot() {
   // Offene Dateien wiederherstellen (oder die erste anlegen).
   await ui.start();
 
+  // Ab hier steht die Oberfläche vollständig.
+  document.body.classList.remove("booting");
+
   // Dev-Hook (nur mit ?dev im URL): erlaubt programmatischen QDF-Import fuer Tests.
   if (location.search.includes("dev")) {
     const { parseQDF } = await import("./qdfimport.js");
