@@ -51,6 +51,7 @@ const hooks = {
   onDocUpdated: () => {},          // (record) -- Serverstand übernommen
   onDocRemoved: () => {},          // (docId)
   onLibChanged: () => {},
+  onInventoryUpdated: () => {},    // (data) -- Bestand vom Server übernommen
   // ({kind, local, server}) -> "server" | "local" | "later"
   onConflict: async () => "later",
 };
@@ -199,6 +200,7 @@ async function handleEvent(event) {
     if (event.type === "doc-saved") await syncOneDoc(event.id);
     else if (event.type === "doc-deleted") await handleRemoteDelete(event.id);
     else if (event.type === "lib-changed") await syncLibrary();
+    else if (event.type === "inv-changed") { await syncInventory(); await countPending(); }
   } catch (e) {
     if (!(e instanceof OfflineError)) console.warn("Sync-Ereignis:", e);
   }
@@ -229,6 +231,7 @@ export function reconcile() {
   running = (async () => {
     try {
       await syncDocs();
+      await syncInventory();
       await syncLibrary();
       lastSyncAt = Date.now();
       setState("online");
@@ -247,7 +250,8 @@ export function reconcile() {
 async function countPending() {
   const [docRows, libRows] = await Promise.all([docs.allRecords(), storage.libAllRecords()]);
   pendingCount = docRows.filter((d) => d.dirty || d.deletedAt).length
-    + libRows.filter((e) => e.dirty || e.deletedAt).length;
+    + libRows.filter((e) => e.dirty || e.deletedAt).length
+    + (storage.inventoryMeta().dirty ? 1 : 0);
   reportStatus();
 }
 
@@ -377,6 +381,61 @@ async function push(local, force = false) {
       return null;
     }
     throw e;
+  }
+}
+
+// --- Bestand ------------------------------------------------------------
+// Ein einziger Datensatz, also auch nur ein Vergleich: hat ihn nur eine Seite
+// angefasst, gewinnt sie; haben es beide getan, wird gefragt.
+
+async function syncInventory() {
+  if (!active) return;
+  let remote;
+  try {
+    remote = await api("GET", "inventory");
+  } catch (e) {
+    // Ein älterer Server kennt den Bestand noch nicht -- dann bleibt er lokal,
+    // statt den ganzen Abgleich scheitern zu lassen.
+    if (e instanceof OfflineError) throw e;
+    return;
+  }
+  const meta = storage.inventoryMeta();
+  const local = storage.loadInventory();
+  const remoteRev = (remote && remote.rev) || 0;
+
+  if (!meta.dirty) {
+    if (remoteRev > meta.rev) {
+      storage.putRemoteInventory(remote);
+      hooks.onInventoryUpdated(remote.data || {});
+    }
+    return;
+  }
+  if (remoteRev !== meta.rev) {
+    const choice = await hooks.onConflict({ kind: "inventory", local: null, server: null });
+    if (choice === "server") {
+      storage.putRemoteInventory(remote);
+      hooks.onInventoryUpdated(remote.data || {});
+      return;
+    }
+    if (choice !== "local") return;
+    await pushInventory(local, meta, true);
+    return;
+  }
+  await pushInventory(local, meta, false);
+}
+
+async function pushInventory(data, meta, force) {
+  try {
+    const reply = await api("PUT", "inventory", { data: data || {}, baseRev: meta.rev, force, clientId });
+    storage.markInventorySynced(reply.rev, meta.updatedAt);
+  } catch (e) {
+    if (!(e instanceof ConflictError)) throw e;
+    const choice = await hooks.onConflict({ kind: "inventory", local: null, server: null });
+    if (choice === "local") await pushInventory(data, meta, true);
+    else if (choice === "server" && e.current) {
+      storage.putRemoteInventory(e.current);
+      hooks.onInventoryUpdated(e.current.data || {});
+    }
   }
 }
 

@@ -102,7 +102,9 @@ beide Seiten dieselbe Datei geändert haben (`onConflict` in `ui.js`, serielle W
 ein zweiter `dialog()` den ersten abbricht). Der Server vergibt `rev` und lehnt ein Schreiben mit
 veralteter `baseRev` mit **409** ab; ist der Inhalt identisch, bleibt `rev` stehen und es gibt
 kein Ereignis. Bibliothek: Kennzahlen sofort, QDF-Text erst beim Öffnen (`sync.libQdf`) – ohne
-Server wirft das `OfflineError` und die App meldet es.
+Server wirft das `OfflineError` und die App meldet es. Abgeglichen werden **Modelle, Bestand und
+Bibliothek**; der Bestand ist ein einziger Datensatz (`/api/inventory`) und liegt weiter in
+localStorage, seine Marken daneben in `quadro.inventory.meta.v1`.
 
 ## Datenmodell
 
@@ -209,7 +211,7 @@ Koordinaten in **cm**, Three.js-Konvention **y = oben**, Boden bei y = 0.
 - In `localStorage` stehen nur noch Einstellungen: `quadro.inventory.v1`, `quadro.sidebarWidth.v1`,
   `quadro.sidebarPanel.v1`, `quadro.autosaveMode.v1`, `quadro.quality.v1`, `quadro.slice.v1`,
   `quadro.camera.v1`, `quadro.projection.v1`, `quadro.scene.v1`, `quadro.migrated.v2`,
-  `quadro.backend.v1`, `quadro.clientId.v1`, Sprache in `i18n.js`. Die alten Schlüssel `quadro.autosave.v1`/`quadro.design.v1.<name>` werden beim ersten
+  `quadro.backend.v1`, `quadro.clientId.v1`, `quadro.inventory.meta.v1`, Sprache in `i18n.js`. Die alten Schlüssel `quadro.autosave.v1`/`quadro.design.v1.<name>` werden beim ersten
   Start einmalig nach `docs` übernommen (`docs.migrateOldDrafts()`) und danach nur noch gelesen.
 - Dev-Hook: App mit `?dev` in der URL öffnen ⇒ `window.__qdf.import(text)` importiert QDF
   programmatisch (für Tests aus der Konsole).

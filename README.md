@@ -62,8 +62,9 @@ Die App ist direkt unter der GitHub-Pages-URL erreichbar – einfach den [Link](
 
 ### Optional: gemeinsamer Speicher (Server)
 
-Wer an mehreren Rechnern plant, kann die gespeicherten Modelle und die
-QDF-Sammlung auf einen kleinen Server legen. Am einfachsten mit Docker:
+Wer an mehreren Rechnern plant, kann die gespeicherten Modelle, den eigenen
+Bestand und die QDF-Sammlung auf einen kleinen Server legen. Am einfachsten mit
+Docker:
 
 ```bash
 docker compose up --build      # App: http://localhost:8000/web/index.html
@@ -77,7 +78,8 @@ QUADRO_DATA=/pfad/zu/daten python server.py
 ```
 
 Der Server legt alles als gewöhnliche Dateien ab (`data-store/docs/*.json`,
-`data-store/library/*.qdf`) – eine Sicherung ist ein simples Kopieren.
+`data-store/inventory.json`, `data-store/library/*.qdf`) – eine Sicherung ist ein
+simples Kopieren.
 
 Wissenswertes:
 

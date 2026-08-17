@@ -155,6 +155,59 @@ export function libClear() {
   }));
 }
 
+// --- Bestand ------------------------------------------------------------
+// Der eigene Teilebestand ist EIN kleiner Datensatz und bleibt deshalb in
+// localStorage. Fuer den Abgleich braucht er dieselben Marken wie Modelle und
+// Sammlung; sie stehen daneben in einem eigenen Schluessel.
+
+const INV_KEY = "quadro.inventory.v1";
+const INV_META_KEY = "quadro.inventory.meta.v1";   // { rev, dirty, updatedAt }
+
+export function loadInventory() {
+  try { return JSON.parse(localStorage.getItem(INV_KEY)) || null; }
+  catch { return null; }
+}
+
+export function inventoryMeta() {
+  try {
+    const meta = JSON.parse(localStorage.getItem(INV_META_KEY)) || {};
+    return { rev: meta.rev || 0, dirty: !!meta.dirty, updatedAt: meta.updatedAt || 0 };
+  } catch { return { rev: 0, dirty: false, updatedAt: 0 }; }
+}
+
+function saveInventoryMeta(meta) {
+  localStorage.setItem(INV_META_KEY, JSON.stringify(meta));
+}
+
+/** Bestand schreiben. Ohne Gegenrede gilt er als noch nicht hochgeladen. */
+export function saveInventory(inv, { dirty = true, rev = null } = {}) {
+  localStorage.setItem(INV_KEY, JSON.stringify(inv));
+  const meta = inventoryMeta();
+  saveInventoryMeta({
+    rev: rev == null ? meta.rev : rev,
+    dirty,
+    updatedAt: Date.now(),
+  });
+}
+
+/** Serverstand uebernehmen. */
+export function putRemoteInventory(record) {
+  localStorage.setItem(INV_KEY, JSON.stringify(record.data || {}));
+  saveInventoryMeta({ rev: record.rev || 0, dirty: false, updatedAt: record.updatedAt || Date.now() });
+  return record;
+}
+
+/** Nach dem Hochladen: Revision merken. Wurde inzwischen weitergearbeitet
+ *  (`updatedAt` weicht ab), bleibt die Marke stehen. */
+export function markInventorySynced(rev, expectUpdatedAt) {
+  const meta = inventoryMeta();
+  saveInventoryMeta({
+    rev,
+    dirty: expectUpdatedAt != null && meta.updatedAt !== expectUpdatedAt,
+    updatedAt: meta.updatedAt,
+  });
+}
+
 // --- Datei Export/Import (echte Offline-Sicherung) ----------------------
 export function exportFile(data, filename) {
   const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });

@@ -16,6 +16,7 @@ Der Datenbestand liegt als gewoehnliche Dateien unter QUADRO_DATA (Vorgabe
 `./data-store`) -- lesbar, sicherbar, ohne Datenbank:
 
     docs/<id>.json          {id,name,data,createdAt,updatedAt,rev}
+    inventory.json          {data,rev,updatedAt} -- der eigene Teilebestand
     library/<hash>.qdf      Originaltext der Sammlung
     library/index.json      {id: {name,file,meta,rev}}
 
@@ -137,6 +138,32 @@ class Store:
             return "conflict", old
         self._doc_path(doc_id).unlink(missing_ok=True)
         return "ok", old
+
+    # --- Bestand ---------------------------------------------------------
+    # Ein einziger kleiner Datensatz, gleiche Revisionsregel wie bei Modellen.
+
+    @property
+    def _inventory_path(self) -> Path:
+        return self.root / "inventory.json"
+
+    def get_inventory(self):
+        path = self._inventory_path
+        if not path.exists():
+            return {"data": {}, "rev": 0, "updatedAt": 0}
+        try:
+            return json.loads(path.read_text(encoding="utf-8"))
+        except (ValueError, OSError):
+            return {"data": {}, "rev": 0, "updatedAt": 0}
+
+    def put_inventory(self, data, base_rev, force=False):
+        old = self.get_inventory()
+        if canonical(old.get("data")) == canonical(data):
+            return "unchanged", old
+        if not force and base_rev != old.get("rev"):
+            return "conflict", old
+        record = {"data": data, "rev": int(old.get("rev") or 0) + 1, "updatedAt": now_ms()}
+        write_atomic(self._inventory_path, json.dumps(record, ensure_ascii=False))
+        return "ok", record
 
     # --- Bibliothek ------------------------------------------------------
     # Die Kennung eines Eintrags kommt aus Dateiname und -groesse ("Haus.qdf|8123")
@@ -298,6 +325,25 @@ async def doc_delete(request):
     return web.Response(status=204)
 
 
+async def inventory_get(request):
+    return json_response(store.get_inventory())
+
+
+async def inventory_put(request):
+    body = await read_json(request)
+    data = body.get("data")
+    if data is None:
+        raise web.HTTPBadRequest(text="data fehlt")
+    async with write_lock:
+        status, record = store.put_inventory(data, int(body.get("baseRev") or 0), bool(body.get("force")))
+    if status == "conflict":
+        return json_response({"conflict": True, "current": record}, status=409)
+    if status == "unchanged":
+        return json_response({**record, "unchanged": True})
+    await broadcast({"type": "inv-changed", "rev": record["rev"], "by": body.get("clientId") or ""})
+    return json_response(record)
+
+
 async def library_list(request):
     return json_response(store.list_library())
 
@@ -374,6 +420,8 @@ def build_app():
     app.router.add_get("/api/docs/{id}", doc_get)
     app.router.add_put("/api/docs/{id}", doc_put)
     app.router.add_delete("/api/docs/{id}", doc_delete)
+    app.router.add_get("/api/inventory", inventory_get)
+    app.router.add_put("/api/inventory", inventory_put)
     app.router.add_get("/api/library", library_list)
     app.router.add_post("/api/library", library_post)
     app.router.add_delete("/api/library", library_clear)

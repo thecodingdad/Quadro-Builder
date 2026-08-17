@@ -14,8 +14,6 @@ import { designEntry, parseDesign, checkAgainstInventory, missingCount } from ".
 import { buildQDF } from "./qdfexport.js";
 import { t, getLang, setLang, applyTranslations } from "./i18n.js";
 
-const INV_KEY = "quadro.inventory.v1";
-
 function $(id) { return document.getElementById(id); }
 
 // Zeitstempel "YYYY-MM-DD HH:MM" fuer eindeutige Entwurf-Namen beim Import.
@@ -132,9 +130,7 @@ function queueDialog(fn) {
 }
 
 function loadInv() {
-  let inv;
-  try { inv = JSON.parse(localStorage.getItem(INV_KEY)) || {}; }
-  catch { inv = {}; }
+  const inv = storage.loadInventory() || {};
   inv.tubes = inv.tubes || {};
   inv.connectors = inv.connectors || {};
   inv.panels = inv.panels || {};
@@ -142,7 +138,7 @@ function loadInv() {
   inv.fittings = inv.fittings || {};
   return inv;
 }
-function saveInv(inv) { localStorage.setItem(INV_KEY, JSON.stringify(inv)); }
+function saveInv(inv) { storage.saveInventory(inv); }
 
 /** Rendert die Hilfe-Tabelle aus den Übersetzungen neu. */
 function renderHelpTable() {
@@ -1505,6 +1501,7 @@ export function initUI({ scene, model, builder }) {
       both: [t("sync_conflict_text", name), t("sync_take_server"), t("sync_take_local")],
       "deleted-remote": [t("sync_gone_text", name), t("sync_delete_here"), t("sync_upload_again")],
       "deleted-local": [t("sync_kept_text", name), t("sync_restore"), t("sync_delete_there")],
+      inventory: [t("sync_inv_conflict"), t("sync_take_server"), t("sync_take_local")],
     };
     const [text, serverLabel, localLabel] = texts[kind] || texts.both;
     const answer = await queueDialog(() => dialog({
@@ -1540,12 +1537,27 @@ export function initUI({ scene, model, builder }) {
     lastSyncState = state;
   }
 
+  /** Bestand kam vom Server: in das laufende Objekt übernehmen und neu zeichnen. */
+  function onInventoryUpdated(data) {
+    // Das Objekt selbst bleibt -- an ihm hängen Stückliste und Machbarkeit.
+    for (const key of Object.keys(inventory)) delete inventory[key];
+    Object.assign(inventory, {
+      tubes: data.tubes || {}, connectors: data.connectors || {},
+      panels: data.panels || {}, reinforcements: data.reinforcements || {},
+      fittings: data.fittings || {},
+    });
+    update();
+    if (currentPanel === "library") renderLibrary();
+    flash(t("sync_inv_updated"));
+  }
+
   sync.configure({
     onStatus: onSyncStatus,
     onDocUpdated,
     onDocRemoved,
     onConflict: onSyncConflict,
     onLibChanged: () => { loadLibrary(); },
+    onInventoryUpdated,
   });
 
   /** Datei in einem Tab öffnen -- ist sie schon offen, wird der Tab gewählt. */
@@ -2775,6 +2787,7 @@ export function initUI({ scene, model, builder }) {
       inventory.panels = next.panels;
       inventory.reinforcements = next.reinforcements;
       saveInv(inventory);
+      sync.nudge();
       update();
       flash(t("flash_inv_imported"));
     } catch (err) { showMessage(err.message); }
@@ -2784,6 +2797,7 @@ export function initUI({ scene, model, builder }) {
     if (bomEditMode) {
       // Speichern: Eingaben stehen schon im Bestand, jetzt festschreiben.
       saveInv(inventory);
+      sync.nudge();
       bomEditMode = false;
       flash(t("flash_inv_saved"));
     } else {
