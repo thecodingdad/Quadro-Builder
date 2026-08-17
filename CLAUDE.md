@@ -214,6 +214,13 @@ Koordinaten in **cm**, Three.js-Konvention **y = oben**, Boden bei y = 0.
   und bricht ihn ab, sobald ein zweiter Finger dazukommt (`_abortGesture`).
 - Undo/Redo in `builder.js` arbeiten mit vollständigen JSON-Snapshots (`recordHistory`,
   max. 60 Schritte). Modelländerungen deshalb immer durch `recordHistory(...)` kapseln.
+- **Änderungs-Punkt am Tab:** `builder.onChange` feuert bei JEDEM Neuzeichnen, auch bei Auswahl,
+  Schnittebene oder Moduswechsel. `ui.touchActiveTab()` setzt deshalb nichts mehr direkt, sondern
+  vergleicht entprellt (200 ms) `model.toJSON()` mit `tab.savedJson` – dem Stand, wie er in der
+  Datei liegt. Gepflegt wird der beim Öffnen, Speichern und bei Übernahmen vom Server; ein
+  importiertes Modell hat `savedJson = null` und gilt bis zum ersten Speichern als geändert. In
+  die Sitzung wandert `savedJson` **nicht** (sie wäre doppelt so groß), beim Start wird es aus
+  `model`/`dirty` neu gebildet.
 - **IndexedDB** `quadro.library.v1` (Version 2) hält drei Speicher: `designs` (eingelesene
   QDF-Sammlung, Originaltext + Kennzahlen), `docs` (eigene Modelle als virtuelle Dateien) und
   `session` (die offenen Tabs samt Arbeitsstand – damit übersteht auch Ungespeichertes einen

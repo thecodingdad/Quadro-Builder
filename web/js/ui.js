@@ -1329,6 +1329,7 @@ export function initUI({ scene, model, builder }) {
       const alt = await docs.getDoc(ziel);
       if (alt && JSON.stringify(alt.data) === JSON.stringify(tab.model)) {
         tab.dirty = false;
+        tab.savedJson = JSON.stringify(tab.model);
         renderTabs();
         // Auch die Sitzung muss die Marke loswerden, sonst zeigt der Tab nach
         // einem Reload den Änderungs-Punkt, obwohl nichts offen ist.
@@ -1341,6 +1342,7 @@ export function initUI({ scene, model, builder }) {
       tab.docId = doc.id;
       tab.name = doc.name;
       tab.dirty = false;
+      tab.savedJson = JSON.stringify(tab.model);
       renderTabs();
       refreshDocList();
       scheduleSessionSave();
@@ -1434,6 +1436,7 @@ export function initUI({ scene, model, builder }) {
     tab.name = doc.name;
     tab.model = doc.data;
     tab.dirty = false;
+    tab.savedJson = JSON.stringify(doc.data);
     if (tab.tabId === activeTabId) {
       const camera = scene.cameraState();
       ladeVorgang = true;
@@ -1481,6 +1484,7 @@ export function initUI({ scene, model, builder }) {
       if (tab.docId !== docId) continue;
       tab.docId = null;
       tab.dirty = true;
+      tab.savedJson = null;
       flash(t("sync_doc_removed", tab.name));
     }
     renderTabs();
@@ -1808,7 +1812,9 @@ export function initUI({ scene, model, builder }) {
       werkzeuge.appendChild(iconKnopf(MUELL, t("btn_doc_delete_title"), async () => {
         if (!(await askConfirm(t("confirm_delete_save", d.name), { title: t("dlg_delete_title"), ok: t("dlg_delete_ok"), danger: true }))) return;
         await docs.removeDoc(d.id);
-        for (const tab of tabs) if (tab.docId === d.id) { tab.docId = null; tab.dirty = true; }
+        for (const tab of tabs) if (tab.docId === d.id) {
+          tab.docId = null; tab.dirty = true; tab.savedJson = null;
+        }
         sync.nudge();
         renderTabs(); renderOwnModels();
       }));
@@ -3011,6 +3017,10 @@ export function initUI({ scene, model, builder }) {
       model: data || { format: 1, nodes: [], tubes: [] },
       view: view || defaultView(!data),
     };
+    // Stand "wie auf Datei": daran hängt der Änderungs-Punkt. Ein importiertes
+    // oder aus der Bibliothek kopiertes Modell hat keinen -- es gilt so lange
+    // als ungespeichert, bis es wirklich gespeichert wird.
+    tab.savedJson = dirty ? null : JSON.stringify(tab.model);
     tabs.push(tab);
     activeTabId = tab.tabId;
     ladeVorgang = true;
@@ -3103,24 +3113,50 @@ export function initUI({ scene, model, builder }) {
     scheduleSessionSave();
   }
 
-  /** Der laufende Tab hat sich geändert: Markierung setzen, Sitzung sichern. */
+  /**
+   * Am laufenden Tab hat sich etwas getan. Der Builder meldet das bei JEDEM
+   * Neuzeichnen -- auch bei Auswahl, Schnittebene oder Moduswechsel. Der
+   * Änderungs-Punkt gehört aber nur dem MODELL: er hängt deshalb an einem
+   * Vergleich mit dem zuletzt gespeicherten Stand (`savedJson`), nicht am
+   * Ereignis. Der Vergleich läuft entprellt, damit er nicht bei jedem Klick
+   * das ganze Modell serialisiert.
+   */
   function touchActiveTab() {
     if (ladeVorgang) return;
     const tab = activeTab();
     if (!tab) return;
-    tab.dirty = true;
+    scheduleSessionSave();
+    clearTimeout(dirtyTimer);
+    dirtyTimer = setTimeout(evaluateDirty, 200);
+  }
+
+  let dirtyTimer = null;
+
+  function evaluateDirty() {
+    const tab = activeTab();
+    if (!tab) return;
+    // Ohne bekannten Vergleichsstand (importiert, aus der Bibliothek geöffnet)
+    // bleibt der Tab ungespeichert, bis er einmal in eine Datei geht.
+    if (tab.savedJson == null) return;
+    const current = JSON.stringify(model.toJSON());
+    const changed = current !== tab.savedJson;
+    if (changed === tab.dirty) return;
+    tab.dirty = changed;
     renderTabs();
     scheduleSessionSave();
     // Auto-Save schreibt direkt in die Datei; ist er aus, bleibt der Stand
     // nur in der Sitzung (überlebt einen Reload, gilt aber als ungespeichert).
-    if (tab.docId) scheduleDocSave();
+    if (changed && tab.docId) scheduleDocSave();
   }
 
   function scheduleSessionSave() {
     clearTimeout(sessionTimer);
     sessionTimer = setTimeout(() => {
       captureActiveTab();
-      docs.saveSession({ tabs, activeTabId }).catch((e) => console.warn("Sitzung:", e));
+      // `savedJson` bleibt draußen: es ist eine Kopie des Modells und würde die
+      // Sitzung verdoppeln. Beim Start wird es aus `model`/`dirty` neu gebildet.
+      const lean = tabs.map(({ savedJson, ...rest }) => rest);
+      docs.saveSession({ tabs: lean, activeTabId }).catch((e) => console.warn("Sitzung:", e));
     }, 600);
   }
 
@@ -3131,6 +3167,11 @@ export function initUI({ scene, model, builder }) {
     try { sitzung = await docs.loadSession(); } catch (e) { console.warn("Sitzung:", e); }
     if (sitzung && sitzung.tabs.length) {
       tabs = sitzung.tabs;
+      // Ein Tab ohne offene Änderung zeigt genau seinen gespeicherten Stand --
+      // daran misst sich ab jetzt der Änderungs-Punkt.
+      for (const tab of tabs) {
+        tab.savedJson = tab.dirty ? null : JSON.stringify(tab.model);
+      }
       activeTabId = sitzung.activeTabId && tabs.some((x) => x.tabId === sitzung.activeTabId)
         ? sitzung.activeTabId : tabs[0].tabId;
       const tab = activeTab();
