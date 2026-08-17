@@ -1326,6 +1326,9 @@ export function initUI({ scene, model, builder }) {
       if (alt && JSON.stringify(alt.data) === JSON.stringify(tab.model)) {
         tab.dirty = false;
         renderTabs();
+        // Auch die Sitzung muss die Marke loswerden, sonst zeigt der Tab nach
+        // einem Reload den Änderungs-Punkt, obwohl nichts offen ist.
+        scheduleSessionSave();
         return alt;
       }
     }
@@ -1336,6 +1339,7 @@ export function initUI({ scene, model, builder }) {
       tab.dirty = false;
       renderTabs();
       refreshDocList();
+      scheduleSessionSave();
       sync.nudge();
       return doc;
     } catch (e) {
