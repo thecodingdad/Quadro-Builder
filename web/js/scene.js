@@ -1999,7 +1999,12 @@ export class SceneManager {
       // KARDINALEN Arm der Basiskupplung gesteckt, davon zweigt ein 45°-Arm ab,
       // der in die Tube greift.
       if (n.c45 && st !== "future") {
-        const c45mat = matFor(n.id, this._c45Material());
+        // Im Aufbau bleicht der Adapter genau wie die uebrigen fertigen Teile
+        // aus -- sonst steht die 45-Grad-Kupplung als einziges Stueck kraeftig
+        // schwarz im schon Gebauten.
+        const c45base = (asm && st === "done")
+          ? this._fadedMaterial(connectorColor().hex) : this._c45Material();
+        const c45mat = matFor(n.id, c45base);
         if (n.c45body) {
           // Import: n ist der Adapter-Koerper am Diagonal-Fuss; die Basis sitzt
           // am anderen Ende der Arm-Kante. Huelse laeuft kardinal von der Basis.

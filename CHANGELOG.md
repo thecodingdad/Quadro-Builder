@@ -33,6 +33,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - `applyTranslations()` übersetzt jetzt auch `data-i18n-placeholder` · `applyTranslations()` now also translates `data-i18n-placeholder`
 
 ### Behoben · Fixed
+- Im **Aufbau** blieben die **45°-Kupplungen** der schon gebauten Schritte kräftig schwarz, statt wie alle anderen fertigen Teile blass durchzuscheinen · In **assembly mode** the **45° couplings** of finished steps stayed solid instead of fading out like every other built part
 - Anbauteile fehlten in **Stückliste und Machbarkeit** – beide kannten sie nicht. Anbauteile, deren Katalogteil eine Kupplung ist (Radlager, Lochzapfenkupplung), zählen im Kupplungs-Topf, damit sie nicht doppelt im Bestand stehen · Accessories were missing from the parts list and the feasibility check
 - **45°-Kupplungen am freien Ende einer Schräge** wurden übersehen: dort steht in den Herstellerdateien eine gewöhnliche `connector3`-Zeile, die Winkelkupplung sitzt trotzdem da. Jetzt entscheidet die Eck-Zeile (`connector45_2`) in Armreichweite. In „Basic II_Auto mit Garage" 4 statt 2 · **45° couplings at the free end of a diagonal** were missed
 - **Räder** saßen an der falschen Stelle: das Multirad gehört auf ein Radlager (5-cm-Stück an einer Kupplung) oder auf ein Rohr, das Schwimmrad auf ein Rohr; Radarretierung und Radkappe sitzen in der Nabe ihres Rades statt an der Kupplung dahinter. Schwimmräder nehmen die gewählte Farbe an · **Wheels** sat in the wrong place and float wheels ignored the colour
