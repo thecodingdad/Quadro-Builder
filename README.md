@@ -92,7 +92,9 @@ Wissenswertes:
   weiter; Änderungen gehen beim nächsten Verbinden hoch. Nur ein Eintrag der
   Sammlung, von dem noch kein QDF-Text im Browser liegt, lässt sich dann nicht
   öffnen – das sagt die App auch.
-- Abschalten lässt sich der Server-Speicher in den Einstellungen (Zahnrad).
+- **Wo man ihn sieht:** im Seitenleisten-Tab „Meine Modelle" steht eine Zeile mit
+  dem Zustand – aber erst, sobald einmal eine Verbindung stand. Ohne Server sagt
+  die App nichts, sie verhält sich einfach wie immer.
 
 
 ### Lizenz

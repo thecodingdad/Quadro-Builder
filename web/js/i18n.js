@@ -80,9 +80,6 @@ const de = {
   quality_medium: 'Mittel',
   quality_high: 'Hoch (rund)',
   // Abgleich mit dem optionalen Backend
-  settings_sync: 'Server-Speicher',
-  settings_sync_use: 'Server verwenden',
-  sync_state_off: 'Kein Server – alles bleibt in diesem Browser.',
   sync_state_connecting: 'Verbinde …',
   sync_state_online: (wann) => `Verbunden, zuletzt abgeglichen ${wann}.`,
   sync_state_offline: (n) => `Getrennt – ${n} Änderung(en) warten auf den Abgleich.`,
@@ -482,9 +479,6 @@ const en = {
   quality_medium: 'Medium',
   quality_high: 'High (round)',
   // Sync with the optional backend
-  settings_sync: 'Server storage',
-  settings_sync_use: 'Use server',
-  sync_state_off: 'No server – everything stays in this browser.',
   sync_state_connecting: 'Connecting …',
   sync_state_online: (wann) => `Connected, last synced ${wann}.`,
   sync_state_offline: (n) => `Disconnected – ${n} change(s) waiting to sync.`,

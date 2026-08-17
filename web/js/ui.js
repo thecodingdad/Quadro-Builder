@@ -424,18 +424,6 @@ export function initUI({ scene, model, builder }) {
     });
   }
 
-  // Server-Speicher: der Schalter entscheidet nur, ob überhaupt nach einem
-  // Backend gesucht wird. Umgestellt wird beim Neuladen -- an einer halb
-  // umgeschalteten Ablage hätte niemand Freude.
-  const syncToggle = $("sync-toggle");
-  if (syncToggle) {
-    syncToggle.checked = sync.mode() !== "off";
-    syncToggle.addEventListener("change", () => {
-      sync.setMode(syncToggle.checked ? "auto" : "off");
-      location.reload();
-    });
-  }
-
   // --- Installieren (PWA) ------------------------------------------------
   // Der Browser meldet selbst, wenn die App installierbar ist. Vorher hat ein
   // Knopf keinen Sinn, deshalb steht der Abschnitt bis dahin auf hidden.
@@ -1519,17 +1507,23 @@ export function initUI({ scene, model, builder }) {
 
   /** Zustandszeile in den Einstellungen (und Meldung beim Wechsel). */
   let lastSyncState = null;
+  let serverSeen = false;          // stand die Verbindung in dieser Sitzung schon?
   function onSyncStatus(state, { pending, lastSyncAt }) {
+    if (state === "online") serverSeen = true;
     const line = $("sync-state");
     if (line) {
-      const when = lastSyncAt ? new Date(lastSyncAt).toLocaleTimeString() : "–";
-      line.textContent = state === "off" ? t("sync_state_off")
-        : state === "online" ? t("sync_state_online", when)
-        : state === "connecting" ? t("sync_state_connecting")
-        : t("sync_state_offline", pending);
+      // Ohne Server steht dort nichts -- die App verhält sich dann wie immer,
+      // und ein "kein Server" wäre nur eine Meldung über eine Nicht-Funktion.
+      // Erst wenn eine Verbindung bestand, ist ihr Zustand eine Nachricht wert.
+      line.hidden = !serverSeen;
+      if (serverSeen) {
+        const when = lastSyncAt ? new Date(lastSyncAt).toLocaleTimeString() : "–";
+        line.textContent = state === "online" ? t("sync_state_online", when)
+          : state === "connecting" ? t("sync_state_connecting")
+          : t("sync_state_offline", pending);
+        line.classList.toggle("sync-off", state !== "online");
+      }
     }
-    const box = $("sync-toggle");
-    if (box) box.checked = sync.mode() !== "off";
     if (lastSyncState && state !== lastSyncState && state !== "connecting") {
       if (state === "offline") flash(t("sync_lost"));
       else if (state === "online" && lastSyncState === "offline") flash(t("sync_back"));

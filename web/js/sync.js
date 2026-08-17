@@ -9,7 +9,7 @@
 //   * bei jedem Ereignis vom Server derselbe Abgleich für die eine Datei
 //
 // Ist der Server weg, läuft alles mit dem gecachten Bestand weiter; Änderungen
-// bleiben als `dirty` liegen und gehen beim nächsten Verbinden uploads. Gefragt
+// bleiben als `dirty` liegen und gehen beim nächsten Verbinden hoch. Gefragt
 // wird nur bei echten Konflikten -- wenn beide Seiten dieselbe Datei geändert
 // haben.
 //
@@ -19,7 +19,6 @@
 import * as docs from "./docs.js";
 import * as storage from "./storage.js";
 
-const MODE_KEY = "quadro.backend.v1";      // "auto" (Vorgabe) | "off"
 const CLIENT_KEY = "quadro.clientId.v1";
 const PROBE_MS = 1500;
 const RETRY_MIN = 1000;
@@ -63,9 +62,6 @@ export function state() { return connState; }
 export function status() {
   return { state: connState, pending: pendingCount, lastSyncAt };
 }
-
-export function mode() { return localStorage.getItem(MODE_KEY) === "off" ? "off" : "auto"; }
-export function setMode(m) { localStorage.setItem(MODE_KEY, m === "off" ? "off" : "auto"); }
 
 export const clientId = (() => {
   let existing = localStorage.getItem(CLIENT_KEY);
@@ -121,9 +117,9 @@ async function api(method, path, body, { signal } = {}) {
  * alles wie ohne Server. Mit `?nobackend` in der Adresse bleibt es aus.
  */
 export async function probe() {
-  if (mode() === "off" || location.search.includes("nobackend")) {
+  if (location.search.includes("nobackend")) {
     setState("off");
-    reportStatus();          // die Zeile in den Einstellungen will auch "aus" wissen
+    reportStatus();
     return false;
   }
   const abort = new AbortController();
@@ -226,7 +222,7 @@ export function nudge() {
 export function reconcile() {
   if (!active) return Promise.resolve();
   // Während ein Abgleich läuft, kann schon die nächste Änderung eintreffen --
-  // die käme sonst nie uploads. Sie bekommt einen Durchgang hinterher.
+  // die käme sonst nie hoch. Sie bekommt einen Durchgang hinterher.
   if (running) { again = true; return running; }
   running = (async () => {
     try {

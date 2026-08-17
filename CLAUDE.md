@@ -111,10 +111,17 @@ bis der Server die Löschung übernommen hat). Gefragt wird **nur** bei echten K
 beide Seiten dieselbe Datei geändert haben (`onConflict` in `ui.js`, serielle Warteschlange, weil
 ein zweiter `dialog()` den ersten abbricht). Der Server vergibt `rev` und lehnt ein Schreiben mit
 veralteter `baseRev` mit **409** ab; ist der Inhalt identisch, bleibt `rev` stehen und es gibt
-kein Ereignis. Bibliothek: Kennzahlen sofort, QDF-Text erst beim Öffnen (`sync.libQdf`) – ohne
-Server wirft das `OfflineError` und die App meldet es. Abgeglichen werden **Modelle, Bestand und
-Bibliothek**; der Bestand ist ein einziger Datensatz (`/api/inventory`) und liegt weiter in
-localStorage, seine Marken daneben in `quadro.inventory.meta.v1`.
+kein Ereignis.
+
+Abgeglichen werden **Modelle, Bestand und Bibliothek**. Der Bestand ist ein einziger Datensatz
+(`/api/inventory`) und liegt weiter in localStorage, seine Marken daneben in
+`quadro.inventory.meta.v1`. Die Bibliothek liefert Kennzahlen sofort, den QDF-Text erst beim
+Öffnen (`sync.libQdf`) – ohne Server wirft das `OfflineError` und die App meldet es.
+
+Sichtbar ist der Abgleich an **einer** Stelle: der Zeile `#sync-state` im Seitenleisten-Tab
+„Meine Modelle". Sie bleibt versteckt, bis in dieser Sitzung einmal eine Verbindung stand – ohne
+Server meldet die App nichts, danach aber sehr wohl den Verlust. Abschalten lässt sich das
+Backend nur über `?nobackend`; einen Schalter in den Einstellungen gibt es bewusst nicht.
 
 ## Datenmodell
 
@@ -217,11 +224,11 @@ Koordinaten in **cm**, Three.js-Konvention **y = oben**, Boden bei y = 0.
   darf nie mit einer geratenen Serverliste laufen: `nudge()` ruft bewusst den vollen
   `reconcile()`, sonst hält ein fehlendes Gegenstück eine Datei fälschlich für „anderswo
   gelöscht". Und `?dev` schaltet nur den Service Worker ab, **nicht** das Backend – dafür gibt es
-  `?nobackend` und den Schalter in den Einstellungen (`quadro.backend.v1`).
+  `?nobackend`.
 - In `localStorage` stehen nur noch Einstellungen: `quadro.inventory.v1`, `quadro.sidebarWidth.v1`,
   `quadro.sidebarPanel.v1`, `quadro.autosaveMode.v1`, `quadro.quality.v1`, `quadro.slice.v1`,
   `quadro.camera.v1`, `quadro.projection.v1`, `quadro.scene.v1`, `quadro.migrated.v2`,
-  `quadro.backend.v1`, `quadro.clientId.v1`, `quadro.inventory.meta.v1`, Sprache in `i18n.js`. Die alten Schlüssel `quadro.autosave.v1`/`quadro.design.v1.<name>` werden beim ersten
+  `quadro.clientId.v1`, `quadro.inventory.meta.v1`, Sprache in `i18n.js`. Die alten Schlüssel `quadro.autosave.v1`/`quadro.design.v1.<name>` werden beim ersten
   Start einmalig nach `docs` übernommen (`docs.migrateOldDrafts()`) und danach nur noch gelesen.
 - Dev-Hook: App mit `?dev` in der URL öffnen ⇒ `window.__qdf.import(text)` importiert QDF
   programmatisch (für Tests aus der Konsole).

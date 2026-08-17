@@ -586,6 +586,15 @@ body.sidebar-hidden #sidebar, body.sidebar-hidden #sidebar-resizer { display: no
 .help-card td:first-child { font-weight: 600; white-space: nowrap; padding-right: 14px; }
 
 /* Modell-Bibliothek */
+/* Zustand des Server-Abgleichs. Steht nur da, wenn die Verbindung in dieser
+   Sitzung schon einmal stand -- ohne Server sagt die Liste nichts dazu. */
+.sync-line { margin: 0 0 8px; display: flex; align-items: center; gap: 6px; }
+.sync-line::before {
+  content: ""; width: 7px; height: 7px; border-radius: 50%;
+  background: #2ea043; flex: 0 0 auto;
+}
+.sync-line.sync-off::before { background: #d29922; }
+
 .lib-actions { display: flex; gap: 4px; margin: 10px 0 8px; }
 .lib-actions .btn { flex: 1; }
 .lib-actions .btn.danger { flex: 0 0 auto; }
