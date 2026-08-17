@@ -370,9 +370,7 @@ const de = {
   flash_save_failed: (msg) => `Speichern fehlgeschlagen: ${msg}`,
 
   // Aufbauplan: Schritt-Titel
-  buildplan_ground_frame: (h) => `Bodenebene – Rahmen (${h} cm)`,
-  buildplan_level_frame: (level, h) => `Ebene ${level} – Rahmen (${h} cm)`,
-  buildplan_risers: (from, to) => `Ebene ${from} → ${to} – Stützen`,
+  buildplan_level: (level, cm) => `Ebene ${level} – ${cm} cm`,
 
   // Sprach-Toggle
   lang_toggle_title: 'Sprache wechseln / Switch language',
@@ -745,9 +743,7 @@ const en = {
   flash_save_failed: (msg) => `Save failed: ${msg}`,
 
   // Build plan: step titles
-  buildplan_ground_frame: (h) => `Ground level – frame (${h} cm)`,
-  buildplan_level_frame: (level, h) => `Level ${level} – frame (${h} cm)`,
-  buildplan_risers: (from, to) => `Level ${from} → ${to} – uprights`,
+  buildplan_level: (level, cm) => `Level ${level} – ${cm} cm`,
 
   // Language toggle
   lang_toggle_title: 'Sprache wechseln / Switch language',

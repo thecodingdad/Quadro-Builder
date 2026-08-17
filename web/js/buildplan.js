@@ -219,6 +219,10 @@ export function computeBuildPlan(model, order = "y+") {
     slidesByLevel[levelIndex(levels, coord(anchor))].push(sl);
   }
 
+  // Fortschritt in Baurichtung: Abstand zur ersten Ebene. `levels` waechst
+  // dank orderCoord() immer in Baureihenfolge, auch bei x-/z-.
+  const progressAt = (i) => (levels[i] ?? levels[levels.length - 1]) - levels[0];
+
   for (let i = 0; i < levels.length; i++) {
     const nodes = nodesByLevel[i];
     const horiz = horizByLevel[i];
@@ -230,9 +234,7 @@ export function computeBuildPlan(model, order = "y+") {
     // Rahmen-Schritt (nur, wenn er etwas Neues bringt)
     if (nodes.length || horiz.length || pans.length || txs.length || sls.length || fts.length) {
       const conn = countConnectors(model, nodes);
-      const title = i === 0
-        ? t("buildplan_ground_frame", round1(levels[i]))
-        : t("buildplan_level_frame", i + 1, round1(levels[i]));
+      const title = t("buildplan_level", i + 1, round1(progressAt(i)));
       steps.push({
         kind: "frame", title, level: i, y: levels[i],
         connectors: conn.rows, openEnds: conn.openEnds,
@@ -251,7 +253,9 @@ export function computeBuildPlan(model, order = "y+") {
     if (risers.length) {
       steps.push({
         kind: "risers",
-        title: t("buildplan_risers", i + 1, i + 2),
+        // Die Stuetzen fuehren zur naechsten Ebene -- der Titel nennt sie,
+        // damit die Schritte in Baurichtung durchzaehlen.
+        title: t("buildplan_level", i + 2, round1(progressAt(i + 1))),
         level: i, y: levels[i],
         connectors: [], openEnds: 0,
         tubes: countTubes(risers), panels: [],
