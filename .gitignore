@@ -1,3 +1,6 @@
+# Datenverzeichnis des optionalen Backends (server.py)
+data-store/
+
 # Python
 .venv/
 venv/

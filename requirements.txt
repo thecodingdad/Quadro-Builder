@@ -1,5 +1,6 @@
-# Der MVP braucht KEINE Pakete – serve.py nutzt nur die Python-Standardbibliothek.
+# Die App selbst braucht KEINE Pakete – sie ist reines Vanilla-JS, und serve.py
+# (statischer Dev-Server) nutzt nur die Python-Standardbibliothek.
 #
-# Fuer das spaetere optionale Backend (siehe README, Roadmap) hier eintragen:
-# Django>=5.0
-# djangorestframework>=3.15
+# Nur das OPTIONALE Backend (server.py: gemeinsame Ablage fuer Modelle und
+# Bibliothek, siehe README) braucht ein Paket:
+aiohttp>=3.9

@@ -1,0 +1,18 @@
+# Quadro Builder samt Backend.
+#
+#   docker compose up --build     App unter http://localhost:8000/web/index.html
+#
+# Die gespeicherten Modelle und die QDF-Sammlung liegen im Volume `quadro-data`
+# als gewoehnliche Dateien -- eine Sicherung ist ein simples Kopieren.
+
+services:
+  quadro:
+    build: .
+    ports:
+      - "8000:8000"
+    volumes:
+      - quadro-data:/data
+    restart: unless-stopped
+
+volumes:
+  quadro-data: {}

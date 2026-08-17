@@ -37,6 +37,7 @@ const SCHALE = [
   "web/js/qdfimport.js",
   "web/js/scene.js",
   "web/js/storage.js",
+  "web/js/sync.js",
   "web/js/ui.js",
   "web/js/util.js",
 ];
@@ -61,7 +62,12 @@ self.addEventListener("activate", (e) => {
 
 self.addEventListener("fetch", (e) => {
   const req = e.request;
-  if (req.method !== "GET" || new URL(req.url).origin !== self.location.origin) return;
+  const url = new URL(req.url);
+  if (req.method !== "GET" || url.origin !== self.location.origin) return;
+  // Die Backend-Schnittstelle bleibt außen vor: eine zwischengespeicherte
+  // Dateiliste wäre offline eine Behauptung, keine Wahrheit -- und der
+  // Abgleich in sync.js muss merken, dass der Server nicht antwortet.
+  if (url.pathname.includes("/api/")) return;
 
   e.respondWith(
     fetch(req)

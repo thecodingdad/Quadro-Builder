@@ -10,6 +10,7 @@ Historie: `CHANGELOG.md`.
 ```bash
 python serve.py            # Port 8000, öffnet http://127.0.0.1:8000/web/index.html
 python serve.py 8080       # anderer Port
+python server.py 8000      # dasselbe PLUS optionales Backend (braucht aiohttp)
 ```
 
 Nie `web/index.html` per `file://` öffnen – Browser blockieren dort ES-Module und `fetch()`.
@@ -64,6 +65,8 @@ Three.js ausschließlich in `scene.js`, DOM ausschließlich in `ui.js`/`scene.js
 | `web/js/builder.js` | Interaktion: Auswahl, Handles, Setzen/Löschen, Modi, Undo/Redo |
 | `web/js/storage.js` | IndexedDB-Zugriff (`dbTx`), Modell-Sammlung, Datei-Export/Import |
 | `web/js/docs.js` | Virtuelle Dateien: Modelle speichern/laden/umbenennen, offene Sitzung, Migration |
+| `web/js/sync.js` | Abgleich mit dem optionalen Backend: Suche (`probe`), WebSocket-Ereignisse, `reconcile`, Konflikte |
+| `server.py` | Optionales Backend (aiohttp): statische App + `/api/` + Ereignis-Kanal, Ablage als Dateien |
 | `web/js/ui.js` | Toolbar, Datei-Tabs, Seitenleiste (Stückliste & Bestand / Modelle / Aufbau), Tastatur |
 | `web/js/qdfimport.js` | Parser für QDF-Dateien der Original-QUADRO-3D-Software |
 | `web/js/qdfexport.js` | Schreibt ein Modell als QDF (Gegenstück zu `qdfimport.js`) |
@@ -85,8 +88,21 @@ beide relativ, damit es unter GitHub Pages im Unterordner passt. Mit `?dev` wird
 **nicht** angemeldet, und ohne sicheren Kontext (http:// auf einem fremden Host) lehnt der Browser
 ihn ab; dann fehlen Offline-Betrieb und Installieren-Knopf, die App selbst läuft normal.
 
-**Backend-Andockpunkte:** nur `storage.js`/`docs.js` und `catalog.loadCatalog()`. Ein optionales
-Django-Backend (Roadmap) darf ausschließlich diese Module ersetzen.
+**Optionales Backend (ein Datenbestand!):** Die App liest und schreibt **immer** IndexedDB –
+auch mit Server. `sync.js` hält diese Kopie mit `server.py` im Gleichklang: `probe()` beim Start
+(`GET ../api/health`, 1,5 s Zeitgrenze), danach `reconcile()` bei jedem Verbinden, nach jeder
+lokalen Änderung (`nudge()`, entprellt) und bei jedem Ereignis vom Server. Es gibt **keinen**
+Umschaltbetrieb „Server-Daten vs. Browser-Daten": ohne Server läuft alles mit dem gecachten
+Bestand weiter, Änderungen bleiben `dirty` liegen und gehen beim nächsten Verbinden hoch.
+
+Dafür tragen die Datensätze in `docs`/`designs` drei Felder: `rev` (Revision, aus der der Inhalt
+stammt, 0 = dem Server unbekannt), `dirty` (noch nicht hochgeladen) und `deletedAt` (Grabstein,
+bis der Server die Löschung übernommen hat). Gefragt wird **nur** bei echten Konflikten – wenn
+beide Seiten dieselbe Datei geändert haben (`onConflict` in `ui.js`, serielle Warteschlange, weil
+ein zweiter `dialog()` den ersten abbricht). Der Server vergibt `rev` und lehnt ein Schreiben mit
+veralteter `baseRev` mit **409** ab; ist der Inhalt identisch, bleibt `rev` stehen und es gibt
+kein Ereignis. Bibliothek: Kennzahlen sofort, QDF-Text erst beim Öffnen (`sync.libQdf`) – ohne
+Server wirft das `OfflineError` und die App meldet es.
 
 ## Datenmodell
 
@@ -184,10 +200,16 @@ Koordinaten in **cm**, Three.js-Konvention **y = oben**, Boden bei y = 0.
   `session` (die offenen Tabs samt Arbeitsstand – damit übersteht auch Ungespeichertes einen
   Reload). Alles Größere gehört hierhin: `localStorage` teilt 5 MB unter allen Schlüsseln auf,
   ein großes Modell wiegt allein ~150 KB.
+- **Backend-Fallen:** Der Service Worker darf `/api/` **nicht** cachen (eine gespeicherte
+  Dateiliste wäre offline eine Behauptung) – `sw.js` klinkt diese Pfade früh aus. Ein Abgleich
+  darf nie mit einer geratenen Serverliste laufen: `nudge()` ruft bewusst den vollen
+  `reconcile()`, sonst hält ein fehlendes Gegenstück eine Datei fälschlich für „anderswo
+  gelöscht". Und `?dev` schaltet nur den Service Worker ab, **nicht** das Backend – dafür gibt es
+  `?nobackend` und den Schalter in den Einstellungen (`quadro.backend.v1`).
 - In `localStorage` stehen nur noch Einstellungen: `quadro.inventory.v1`, `quadro.sidebarWidth.v1`,
   `quadro.sidebarPanel.v1`, `quadro.autosaveMode.v1`, `quadro.quality.v1`, `quadro.slice.v1`,
-  `quadro.camera.v1`, `quadro.projection.v1`, `quadro.scene.v1`, `quadro.migrated.v2`, Sprache in
-  `i18n.js`. Die alten Schlüssel `quadro.autosave.v1`/`quadro.design.v1.<name>` werden beim ersten
+  `quadro.camera.v1`, `quadro.projection.v1`, `quadro.scene.v1`, `quadro.migrated.v2`,
+  `quadro.backend.v1`, `quadro.clientId.v1`, Sprache in `i18n.js`. Die alten Schlüssel `quadro.autosave.v1`/`quadro.design.v1.<name>` werden beim ersten
   Start einmalig nach `docs` übernommen (`docs.migrateOldDrafts()`) und danach nur noch gelesen.
 - Dev-Hook: App mit `?dev` in der URL öffnen ⇒ `window.__qdf.import(text)` importiert QDF
   programmatisch (für Tests aus der Konsole).

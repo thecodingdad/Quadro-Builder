@@ -5,6 +5,7 @@ import { BuildModel } from "./model.js";
 import { SceneManager } from "./scene.js";
 import { Builder } from "./builder.js";
 import { initUI } from "./ui.js";
+import * as sync from "./sync.js";
 import { t } from "./i18n.js";
 
 async function boot() {
@@ -27,6 +28,15 @@ async function boot() {
     ui.update();
     ui.touchActiveTab();
   };
+
+  // Gibt es hier ein Backend? Wenn ja, wird der Speicher im Browser einmal mit
+  // dem Server abgeglichen, bevor die Sitzung aufgeht -- so öffnen die Tabs
+  // gleich den aktuellen Stand. Antwortet niemand, bleibt alles rein lokal.
+  try {
+    await sync.probe();
+  } catch (e) {
+    console.warn("Backend:", e);
+  }
 
   // Offene Dateien wiederherstellen (oder die erste anlegen).
   await ui.start();

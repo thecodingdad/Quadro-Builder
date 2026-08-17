@@ -51,6 +51,7 @@ Keine Installation, kein Account, keine Cloud – alles läuft lokal im Browser.
 - **Zweisprachig** – Deutsch und Englisch (Sprache wechseln mit dem DE/EN-Button)
 - **Installierbar (PWA)** – als eigenes Fenster einrichten und offline weiterbauen
 - **Mobil bedienbar** – im Hochformat wandert die Bauteil-Leiste nach unten, Werkzeuge klappen bei Platzmangel zusammen, und der Aufbau läuft als Karte über der Szene
+- **Optionaler Server** – wer mag, stellt Modelle und Bibliothek über mehrere Rechner bereit (siehe unten); ohne Server bleibt alles wie gehabt im Browser
 - **GitHub Pages ready** – läuft ohne Server direkt aus dem Repository
 
 ### Schnellstart
@@ -58,6 +59,38 @@ Keine Installation, kein Account, keine Cloud – alles läuft lokal im Browser.
 Die App ist direkt unter der GitHub-Pages-URL erreichbar – einfach den [Link](https://thecodingdad.github.io/Quadro-Builder/) aufrufen, fertig. Alternativ kann sie auch selbst gehostet werden.
 
 > Für eigene Änderungen: Fork erstellen → Pages aktivieren (Settings → Pages → Branch `main`, Ordner `/`) → fertig.
+
+### Optional: gemeinsamer Speicher (Server)
+
+Wer an mehreren Rechnern plant, kann die gespeicherten Modelle und die
+QDF-Sammlung auf einen kleinen Server legen. Am einfachsten mit Docker:
+
+```bash
+docker compose up --build      # App: http://localhost:8000/web/index.html
+```
+
+Oder direkt mit Python (`pip install -r requirements.txt`):
+
+```bash
+python server.py 8000          # App + API aus einem Ursprung
+QUADRO_DATA=/pfad/zu/daten python server.py
+```
+
+Der Server legt alles als gewöhnliche Dateien ab (`data-store/docs/*.json`,
+`data-store/library/*.qdf`) – eine Sicherung ist ein simples Kopieren.
+
+Wissenswertes:
+
+- **Der Browser bleibt der Arbeitsplatz.** Er hält weiterhin den ganzen
+  Bestand; der Server ist die gemeinsame Ablage, mit der abgeglichen wird.
+  Offene Tabs, ungespeicherte Stände und Einstellungen bleiben rein lokal.
+- **Live:** speichert ein Rechner, laden die anderen das Modell sofort nach –
+  sofern sie darin nichts Ungespeichertes haben. Sonst wird gefragt.
+- **Ohne Server** (GitHub Pages, `serve.py`, oder Server gerade aus) läuft alles
+  weiter; Änderungen gehen beim nächsten Verbinden hoch. Nur ein Eintrag der
+  Sammlung, von dem noch kein QDF-Text im Browser liegt, lässt sich dann nicht
+  öffnen – das sagt die App auch.
+- Abschalten lässt sich der Server-Speicher in den Einstellungen (Zahnrad).
 
 
 ### Lizenz

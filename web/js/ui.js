@@ -9,6 +9,7 @@ import { QUALITY_LEVELS } from "./scene.js";
 import { RANDOM_COLOR } from "./builder.js";
 import * as storage from "./storage.js";
 import * as docs from "./docs.js";
+import * as sync from "./sync.js";
 import { designEntry, parseDesign, checkAgainstInventory, missingCount } from "./library.js";
 import { buildQDF } from "./qdfexport.js";
 import { t, getLang, setLang, applyTranslations } from "./i18n.js";
@@ -114,6 +115,20 @@ function askInput(text, vorgabe = "", { title = t("dlg_input_title"), ok = t("dl
 /** Meldung mit einem einzigen Knopf -- Ersatz für alert(). */
 function showMessage(text, { title = t("dlg_error_title") } = {}) {
   return dialog({ title, text, cancelKey: "ok", buttons: [{ key: "ok", label: t("dlg_ok") }] });
+}
+
+// Rückfragen des Server-Abgleichs kommen von selbst -- sie dürfen keine Karte
+// verdrängen, vor der gerade jemand sitzt (ein zweiter `dialog()` beendet den
+// ersten mit "Abbruch"). Deshalb laufen sie nacheinander und warten, bis die
+// Oberfläche frei ist.
+let dialogChain = Promise.resolve();
+function queueDialog(fn) {
+  const next = dialogChain.then(async () => {
+    while (dialogOpen()) await new Promise((r) => setTimeout(r, 200));
+    return fn();
+  }).catch((e) => { console.warn("Rückfrage:", e); return null; });
+  dialogChain = next.then(() => {}, () => {});
+  return next;
 }
 
 function loadInv() {
@@ -410,6 +425,18 @@ export function initUI({ scene, model, builder }) {
     $("btn-settings").addEventListener("click", (e) => { e.stopPropagation(); toggleSettingsMenu(); });
     document.addEventListener("click", (e) => {
       if (settingsMenu && !settingsMenu.contains(e.target)) toggleSettingsMenu(false);
+    });
+  }
+
+  // Server-Speicher: der Schalter entscheidet nur, ob überhaupt nach einem
+  // Backend gesucht wird. Umgestellt wird beim Neuladen -- an einer halb
+  // umgeschalteten Ablage hätte niemand Freude.
+  const syncToggle = $("sync-toggle");
+  if (syncToggle) {
+    syncToggle.checked = sync.mode() !== "off";
+    syncToggle.addEventListener("change", () => {
+      sync.setMode(syncToggle.checked ? "auto" : "off");
+      location.reload();
     });
   }
 
@@ -1325,6 +1352,7 @@ export function initUI({ scene, model, builder }) {
       tab.dirty = false;
       renderTabs();
       refreshDocList();
+      sync.nudge();
       return doc;
     } catch (e) {
       flash(t("flash_save_failed", e.message));
@@ -1402,6 +1430,122 @@ export function initUI({ scene, model, builder }) {
   $("btn-doc-open").addEventListener("click", () => {
     showSidebarPanel("own");
     renderOwnModels();
+  });
+
+  // --- Abgleich mit dem Server -------------------------------------------
+  // Der Speicher im Browser bleibt der Arbeitsbestand; sync.js hält ihn mit dem
+  // Server im Gleichklang und meldet sich hier, sobald sich dort etwas getan
+  // hat. Ohne Backend passiert in diesem Abschnitt schlicht nichts.
+
+  /** Serverstand in einen offenen Tab übernehmen. */
+  function applyRemoteToTab(tab, doc) {
+    tab.name = doc.name;
+    tab.model = doc.data;
+    tab.dirty = false;
+    if (tab.tabId === activeTabId) {
+      const camera = scene.cameraState();
+      ladeVorgang = true;
+      builder.modelReplaced();
+      model.loadJSON(doc.data || { format: 1, nodes: [], tubes: [] });
+      // Die Schrittspeicher gehören zum alten Inhalt -- der neue kommt von
+      // woanders, dahin führt kein Rückgängig.
+      builder.clearHistory();
+      builder.refresh();
+      if (camera) scene.restoreCameraState(camera);
+      ladeVorgang = false;
+      update();
+    } else {
+      tab.view = { ...(tab.view || {}), undo: [], redo: [] };
+    }
+    renderTabs();
+    scheduleSessionSave();
+  }
+
+  /** Eine Datei wurde anderswo gespeichert und liegt jetzt frisch im Speicher. */
+  async function onDocUpdated(doc) {
+    if (currentPanel === "own") renderOwnModels();
+    const tab = tabs.find((x) => x.docId === doc.id);
+    if (!tab) return;
+    if (!tab.dirty) {
+      applyRemoteToTab(tab, doc);
+      flash(t("sync_doc_updated", doc.name));
+      return;
+    }
+    const answer = await queueDialog(() => dialog({
+      title: t("sync_remote_title"),
+      text: t("sync_remote_text", doc.name),
+      cancelKey: "keep",
+      buttons: [
+        { key: "load", label: t("sync_take_server") },
+        { key: "keep", label: t("sync_keep_local"), kind: "ghost" },
+      ],
+    }));
+    if (answer && answer.key === "load") applyRemoteToTab(tab, doc);
+  }
+
+  /** Eine Datei ist anderswo gelöscht worden. */
+  function onDocRemoved(docId) {
+    for (const tab of tabs) {
+      if (tab.docId !== docId) continue;
+      tab.docId = null;
+      tab.dirty = true;
+      flash(t("sync_doc_removed", tab.name));
+    }
+    renderTabs();
+    if (currentPanel === "own") renderOwnModels();
+  }
+
+  /**
+   * Echter Konflikt: beide Seiten haben dieselbe Datei angefasst. Nur hier
+   * wird gefragt -- alles andere gleicht sich still ab.
+   */
+  async function onSyncConflict({ kind, local, server }) {
+    const name = (local && local.name) || (server && server.name) || "";
+    const texts = {
+      both: [t("sync_conflict_text", name), t("sync_take_server"), t("sync_take_local")],
+      "deleted-remote": [t("sync_gone_text", name), t("sync_delete_here"), t("sync_upload_again")],
+      "deleted-local": [t("sync_kept_text", name), t("sync_restore"), t("sync_delete_there")],
+    };
+    const [text, serverLabel, localLabel] = texts[kind] || texts.both;
+    const answer = await queueDialog(() => dialog({
+      title: t("sync_conflict_title"),
+      text,
+      cancelKey: "later",
+      buttons: [
+        { key: "server", label: serverLabel },
+        { key: "local", label: localLabel },
+        { key: "later", label: t("sync_later"), kind: "ghost" },
+      ],
+    }));
+    return answer ? answer.key : "later";
+  }
+
+  /** Zustandszeile in den Einstellungen (und Meldung beim Wechsel). */
+  let lastSyncState = null;
+  function onSyncStatus(state, { pending, lastSyncAt }) {
+    const line = $("sync-state");
+    if (line) {
+      const when = lastSyncAt ? new Date(lastSyncAt).toLocaleTimeString() : "–";
+      line.textContent = state === "off" ? t("sync_state_off")
+        : state === "online" ? t("sync_state_online", when)
+        : state === "connecting" ? t("sync_state_connecting")
+        : t("sync_state_offline", pending);
+    }
+    const box = $("sync-toggle");
+    if (box) box.checked = sync.mode() !== "off";
+    if (lastSyncState && state !== lastSyncState && state !== "connecting") {
+      if (state === "offline") flash(t("sync_lost"));
+      else if (state === "online" && lastSyncState === "offline") flash(t("sync_back"));
+    }
+    lastSyncState = state;
+  }
+
+  sync.configure({
+    onStatus: onSyncStatus,
+    onDocUpdated,
+    onDocRemoved,
+    onConflict: onSyncConflict,
+    onLibChanged: () => { loadLibrary(); },
   });
 
   /** Datei in einem Tab öffnen -- ist sie schon offen, wird der Tab gewählt. */
@@ -1492,6 +1636,7 @@ export function initUI({ scene, model, builder }) {
     if (fresh.length) {
       try {
         await storage.libPut(fresh);
+        sync.nudge();
       } catch (e) {
         console.warn("Bibliothek nicht speicherbar:", e);
       }
@@ -1624,6 +1769,7 @@ export function initUI({ scene, model, builder }) {
         if (!gewaehlt) return;
         await docs.renameDoc(d.id, gewaehlt.name);
         for (const tab of tabs) if (tab.docId === d.id) tab.name = gewaehlt.name;
+        sync.nudge();
         renderTabs(); renderOwnModels();
       }));
       werkzeuge.appendChild(iconKnopf(PFEIL, t("btn_export_qdf"), () => {
@@ -1636,6 +1782,7 @@ export function initUI({ scene, model, builder }) {
         if (!(await askConfirm(t("confirm_delete_save", d.name), { title: t("dlg_delete_title"), ok: t("dlg_delete_ok"), danger: true }))) return;
         await docs.removeDoc(d.id);
         for (const tab of tabs) if (tab.docId === d.id) { tab.docId = null; tab.dirty = true; }
+        sync.nudge();
         renderTabs(); renderOwnModels();
       }));
       rechts.appendChild(werkzeuge);
@@ -1645,8 +1792,19 @@ export function initUI({ scene, model, builder }) {
     }
   }
 
-  function openFromLibrary(entry) {
-    const data = parseDesign(entry.qdf);
+  async function openFromLibrary(entry) {
+    // Mit Server liegen zunächst nur die Kennzahlen vor -- der QDF-Text kommt
+    // beim Öffnen nach. Ist der Server gerade weg, geht das eben nicht.
+    let qdf = entry.qdf;
+    if (!qdf) {
+      try {
+        qdf = await sync.libQdf(entry);
+      } catch (e) {
+        showMessage(t("sync_lib_offline", entry.name), { title: t("dlg_error_title") });
+        return;
+      }
+    }
+    const data = parseDesign(qdf);
     if (!data) { flash(t("lib_load_failed")); return; }
     // Die Sammlung bleibt, wie sie ist: geöffnet wird eine KOPIE in einem
     // eigenen Tab, die noch zu keiner Datei gehört.
@@ -1672,6 +1830,7 @@ export function initUI({ scene, model, builder }) {
     if (!libEntries.length) return;
     if (!(await askConfirm(t("lib_confirm_clear"), { title: t("dlg_delete_title"), ok: t("dlg_delete_ok"), danger: true }))) return;
     await storage.libClear();
+    sync.nudge();
     await loadLibrary();
   });
   $("lib-search").addEventListener("input", renderLibrary);

@@ -85,23 +85,74 @@ function libTx(mode, fn) {
   return dbTx(LIB_STORE, mode, fn);
 }
 
-/** Eintraege ablegen (gleiche id ueberschreibt). */
+// Mit Backend (sync.js) ist dieser Speicher zugleich Kopie der Server-Sammlung:
+// `rev`/`dirty`/`deletedAt` wie bei den Modellen (siehe docs.js), und `qdf` darf
+// null sein -- dann liegen nur die Kennzahlen vor und der Text wird beim Oeffnen
+// nachgeholt.
+let syncMode = false;
+export function setSyncMode(on) { syncMode = !!on; }
+
+/** Eintraege ablegen (gleiche id ueberschreibt). Sie gelten als noch nicht hochgeladen. */
 export function libPut(entries) {
-  return libTx("readwrite", (store) => { for (const e of entries) store.put(e); });
+  return libTx("readwrite", (store) => {
+    for (const e of entries) store.put({ ...e, rev: e.rev || 0, dirty: true });
+  });
 }
 
-/** Alle Eintraege, nach Namen sortiert. */
+/** Alle Eintraege, nach Namen sortiert. Grabsteine bleiben aussen vor. */
 export function libAll() {
-  return libTx("readonly", (store) => store.getAll())
-    .then((rows) => (rows || []).sort((a, b) => a.name.localeCompare(b.name, "de")));
+  return libAllRecords()
+    .then((rows) => rows.filter((e) => !e.deletedAt)
+      .sort((a, b) => a.name.localeCompare(b.name, "de")));
+}
+
+/** Roh, mit Grabsteinen -- nur fuer den Abgleich in sync.js. */
+export function libAllRecords() {
+  return libTx("readonly", (store) => store.getAll()).then((rows) => rows || []);
 }
 
 export function libGet(id) {
   return libTx("readonly", (store) => store.get(id));
 }
 
+/** Serverstand uebernehmen (Kennzahlen, Text folgt bei Bedarf). */
+export function libPutRemote(entry) {
+  return libTx("readwrite", (store) => store.put({ ...entry, dirty: false }));
+}
+
+export function libDrop(id) {
+  return libTx("readwrite", (store) => store.delete(id));
+}
+
+/** Nachgeladenen QDF-Text im Cache ablegen. */
+export function libSetQdf(id, qdf, rev) {
+  return libGet(id).then((entry) => {
+    if (!entry) return null;
+    const updated = { ...entry, qdf, rev: rev || entry.rev || 0 };
+    return libTx("readwrite", (store) => store.put(updated)).then(() => updated);
+  });
+}
+
+export function libMarkSynced(id, rev) {
+  return libGet(id).then((entry) => {
+    if (!entry) return null;
+    const updated = { ...entry, rev: rev || entry.rev || 0, dirty: false };
+    return libTx("readwrite", (store) => store.put(updated)).then(() => updated);
+  });
+}
+
+/**
+ * Sammlung leeren. Mit Sync bleiben Grabsteine liegen, bis der Server die
+ * Loeschung uebernommen hat -- sonst kaeme die Sammlung beim Abgleich zurueck.
+ */
 export function libClear() {
-  return libTx("readwrite", (store) => store.clear());
+  if (!syncMode) return libTx("readwrite", (store) => store.clear());
+  return libAllRecords().then((rows) => libTx("readwrite", (store) => {
+    for (const e of rows) {
+      if (!e.rev) store.delete(e.id);          // war nie auf dem Server
+      else store.put({ ...e, qdf: null, deletedAt: Date.now(), dirty: true });
+    }
+  }));
 }
 
 // --- Datei Export/Import (echte Offline-Sicherung) ----------------------
