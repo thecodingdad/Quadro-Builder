@@ -118,6 +118,11 @@ Abgeglichen werden **Modelle, Bestand und Bibliothek**. Der Bestand ist ein einz
 `quadro.inventory.meta.v1`. Die Bibliothek liefert Kennzahlen sofort, den QDF-Text erst beim
 Öffnen (`sync.libQdf`) – ohne Server wirft das `OfflineError` und die App meldet es.
 
+`server.py` ist **ungeschützt** (keine Anmeldung, keine Rechte, kein TLS) und gehört ins eigene
+Netz – siehe README. Statisch liefert er deshalb nur `/web`, `/data`, `/icons` und die drei
+Dateien im Wurzelverzeichnis aus, **nicht** das ganze Arbeitsverzeichnis: sonst lägen `.git/`,
+eigene QDF-Sammlungen und (bei der Vorgabe `./data-store`) der Datenbestand offen.
+
 Sichtbar ist der Abgleich an **einer** Stelle: der Zeile `#sync-state` im Seitenleisten-Tab
 „Meine Modelle". Sie bleibt versteckt, bis in dieser Sitzung einmal eine Verbindung stand – ohne
 Server meldet die App nichts, danach aber sehr wohl den Verlust. Abschalten lässt sich das

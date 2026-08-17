@@ -96,6 +96,16 @@ Wissenswertes:
   dem Zustand – aber erst, sobald einmal eine Verbindung stand. Ohne Server sagt
   die App nichts, sie verhält sich einfach wie immer.
 
+> ⚠️ **Nur im eigenen Netz betreiben.** Der Server hat **keine Anmeldung, keine
+> Rechte und keine Verschlüsselung**: wer ihn erreicht, darf alle Modelle lesen,
+> ändern und löschen. Den Port also **nicht** im Router freigeben und nicht ins
+> Internet stellen. Soll er von unterwegs erreichbar sein, gehört ein VPN davor
+> oder ein Reverse-Proxy, der HTTPS und eine Anmeldung mitbringt (`/api/ws`
+> muss dabei als WebSocket durchgereicht werden). Ausgeliefert werden bewusst
+> nur die Dateien der App (`/web`, `/data`, `/icons` und die drei Dateien im
+> Wurzelverzeichnis) – das Datenverzeichnis und der Rest des Projekts bleiben
+> außen vor.
+
 
 ### Lizenz
 

@@ -428,11 +428,19 @@ def build_app():
     app.router.add_get("/api/library/{id}", library_get)
     app.router.add_delete("/api/library/{id}", library_delete)
     app.router.add_get("/api/ws", websocket)
-    # Alles Uebrige ist die App selbst. Der Katalog liegt unter /data, die
-    # Oberflaeche unter /web -- deshalb das ganze Verzeichnis. Die Wurzel
-    # bekommt die Weiterleitungsseite, die auch unter GitHub Pages liegt.
-    app.router.add_get("/", lambda r: web.FileResponse(ROOT / "index.html"))
-    app.router.add_static("/", ROOT, show_index=False, follow_symlinks=False)
+
+    # Statisch wird NUR ausgeliefert, was die App wirklich braucht. Das ganze
+    # Arbeitsverzeichnis freizugeben waere bequem, gaebe aber auch `.git/`,
+    # `server.py`, eigene QDF-Sammlungen und (bei der Vorgabe `./data-store`)
+    # den gesamten Datenbestand ungefragt heraus.
+    for route, folder in (("/web", ROOT / "web"), ("/data", ROOT / "data"), ("/icons", ROOT / "icons")):
+        if folder.is_dir():
+            app.router.add_static(route, folder, show_index=False, follow_symlinks=False)
+    for route, file in (("/", ROOT / "index.html"),
+                        ("/index.html", ROOT / "index.html"),
+                        ("/manifest.webmanifest", ROOT / "manifest.webmanifest"),
+                        ("/sw.js", ROOT / "sw.js")):
+        app.router.add_get(route, lambda request, target=file: web.FileResponse(target))
     return app
 
 
