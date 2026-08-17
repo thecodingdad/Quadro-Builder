@@ -183,6 +183,7 @@ export function initUI({ scene, model, builder }) {
       renderPartButtons();
       renderQualityOptions();
       renderSyncLine();
+      renderLibHint();
       syncProjectionButton();
       // Dynamische UI-Texte aktualisieren
       setMode(builder.mode);
@@ -1570,7 +1571,7 @@ export function initUI({ scene, model, builder }) {
   }
 
   sync.configure({
-    onStatus: onSyncStatus,
+    onStatus: (state, info) => { renderLibHint(); onSyncStatus(state, info); },
     onDocUpdated,
     onDocRemoved,
     onConflict: onSyncConflict,
@@ -1630,6 +1631,15 @@ export function initUI({ scene, model, builder }) {
   let libLoaded = false;
 
   function libStatus(msg) { $("lib-status").textContent = msg || ""; }
+
+  /**
+   * Wohin die eingelesenen Dateien gehen. Ohne Server bleiben sie im Browser --
+   * mit Server wandern sie dorthin, und dann wäre der alte Satz schlicht falsch.
+   */
+  function renderLibHint() {
+    const box = $("lib-hint-where");
+    if (box) box.textContent = t(sync.enabled() ? "lib_hint_server" : "lib_hint_local");
+  }
 
   async function loadLibrary() {
     try {

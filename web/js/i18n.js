@@ -114,7 +114,9 @@ const de = {
 
   // Seitenleiste – Modell-Bibliothek
   lib_title: 'Modelle',
-  lib_hint: 'Lies deine eigene QDF-Sammlung ein (z. B. den Beispiel-Ordner der QUADRO-Software). Die Dateien bleiben im Browser, es wird nichts hochgeladen.',
+  lib_hint: 'Lies deine eigene QDF-Sammlung ein (z. B. den Beispiel-Ordner der QUADRO-Software).',
+  lib_hint_local: 'Die Dateien bleiben im Browser, es wird nichts hochgeladen.',
+  lib_hint_server: 'Die Dateien liegen auf dem Server und stehen auf allen Geräten bereit.',
   btn_lib_folder: '📂 Ordner…',
   btn_lib_folder_title: 'Einen ganzen Ordner mit QDF-Dateien einlesen',
   btn_lib_files: '＋ Dateien…',
@@ -513,7 +515,9 @@ const en = {
 
   // Sidebar – model library
   lib_title: 'Models',
-  lib_hint: 'Read in your own QDF collection (for example the sample folder of the QUADRO software). The files stay in your browser, nothing is uploaded.',
+  lib_hint: 'Read in your own QDF collection (for example the sample folder of the QUADRO software).',
+  lib_hint_local: 'The files stay in your browser, nothing is uploaded.',
+  lib_hint_server: 'The files live on the server and are available on every device.',
   btn_lib_folder: '📂 Folder…',
   btn_lib_folder_title: 'Read in a whole folder of QDF files',
   btn_lib_files: '＋ Files…',

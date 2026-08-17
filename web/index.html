@@ -406,7 +406,11 @@
 
       <section class="panel" id="panel-library" hidden>
         <h2 data-i18n="lib_title">Bibliothek</h2>
-        <p class="hint" data-i18n="lib_hint">Lies deine eigene QDF-Sammlung ein (z. B. den Beispiel-Ordner der QUADRO-Software). Die Dateien bleiben im Browser.</p>
+        <p class="hint">
+          <span data-i18n="lib_hint">Lies deine eigene QDF-Sammlung ein (z. B. den Beispiel-Ordner der QUADRO-Software).</span>
+          <!-- Wohin die Dateien gehen, hängt vom Server ab: ui.js setzt den Text. -->
+          <span id="lib-hint-where"></span>
+        </p>
         <div class="lib-actions">
           <button id="lib-add-folder" class="btn ghost small" data-i18n="btn_lib_folder" data-i18n-title="btn_lib_folder_title">📂 Ordner…</button>
           <button id="lib-add-files" class="btn ghost small" data-i18n="btn_lib_files" data-i18n-title="btn_lib_files_title">＋ Dateien…</button>

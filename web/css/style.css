@@ -312,6 +312,8 @@ body.compact-view .view-row { display: none; }
 #color-buttons .pp-name,
 .toolbar-icon-row .pp-name { display: none; }
 .part-popup .pp-name,
+/* Mit ID, sonst gewinnt #color-buttons oben und die Farben blieben namenlos. */
+.part-popup #color-buttons .pp-name,
 #menu-file-rows .pp-name { display: block; flex: 1; text-align: left; white-space: nowrap; font-size: 13px; }
 .part-popup.color-popup #color-buttons,
 .part-popup.view-popup .view-row { flex-direction: column; align-items: stretch; gap: 2px; }
@@ -668,8 +670,8 @@ body.sidebar-hidden #sidebar, body.sidebar-hidden #sidebar-resizer { display: no
    stufenweise ein (erst "Automatisch speichern", dann das Menü). */
 #toolbar-left > * { flex-shrink: 0; }
 /* Stufe 1: nur noch der Kasten, der Text wandert in den Tooltip. */
-body.compact-autosave .autosave-toggle span { display: none; }
-body.compact-autosave .autosave-toggle { padding: 0 2px; }
+body.compact-autosave #toolbar-left .autosave-toggle span { display: none; }
+body.compact-autosave #toolbar-left .autosave-toggle { padding: 0 2px; }
 
 /* --- Enge Kopfzeile ----------------------------------------------------
    Reicht der Platz oben nicht, bleiben Datei, Zurück und Wieder stehen; alles
