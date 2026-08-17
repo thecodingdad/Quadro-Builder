@@ -22,6 +22,9 @@ function importStamp() {
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
 }
 function eur(v) { return v.toFixed(2).replace(".", ",") + " €"; }
+/** Gebietsschema für Datum und Uhrzeit: die App-Sprache, nicht die des Browsers. */
+function locale() { return getLang() === "de" ? "de-DE" : "en-US"; }
+
 function el(tag, cls, text) {
   const e = document.createElement(tag);
   if (cls) e.className = cls;
@@ -179,6 +182,7 @@ export function initUI({ scene, model, builder }) {
       renderOrderOptions();
       renderPartButtons();
       renderQualityOptions();
+      renderSyncLine();
       syncProjectionButton();
       // Dynamische UI-Texte aktualisieren
       setMode(builder.mode);
@@ -1511,28 +1515,40 @@ export function initUI({ scene, model, builder }) {
 
   /** Zustandszeile in den Einstellungen (und Meldung beim Wechsel). */
   let lastSyncState = null;
+  let lastSyncInfo = { pending: 0, lastSyncAt: 0 };
   let serverSeen = false;          // stand die Verbindung in dieser Sitzung schon?
+
+  /**
+   * Zustandszeile schreiben. Getrennt vom Rückruf, damit sie auch ein
+   * Sprachwechsel neu setzen kann -- ihr Text steht nicht im HTML und wird
+   * deshalb von applyTranslations() nicht erwischt.
+   */
+  function renderSyncLine() {
+    const line = $("sync-state");
+    if (!line) return;
+    // Ohne Server steht dort nichts -- die App verhält sich dann wie immer,
+    // und ein "kein Server" wäre nur eine Meldung über eine Nicht-Funktion.
+    // Erst wenn eine Verbindung bestand, ist ihr Zustand eine Nachricht wert.
+    line.hidden = !serverSeen;
+    if (!serverSeen) return;
+    const when = lastSyncInfo.lastSyncAt
+      ? new Date(lastSyncInfo.lastSyncAt).toLocaleTimeString(locale()) : "–";
+    line.textContent = lastSyncState === "online" ? t("sync_state_online", when)
+      : lastSyncState === "connecting" ? t("sync_state_connecting")
+      : t("sync_state_offline", lastSyncInfo.pending);
+    line.classList.toggle("sync-off", lastSyncState !== "online");
+  }
+
   function onSyncStatus(state, { pending, lastSyncAt }) {
     if (state === "online") serverSeen = true;
-    const line = $("sync-state");
-    if (line) {
-      // Ohne Server steht dort nichts -- die App verhält sich dann wie immer,
-      // und ein "kein Server" wäre nur eine Meldung über eine Nicht-Funktion.
-      // Erst wenn eine Verbindung bestand, ist ihr Zustand eine Nachricht wert.
-      line.hidden = !serverSeen;
-      if (serverSeen) {
-        const when = lastSyncAt ? new Date(lastSyncAt).toLocaleTimeString() : "–";
-        line.textContent = state === "online" ? t("sync_state_online", when)
-          : state === "connecting" ? t("sync_state_connecting")
-          : t("sync_state_offline", pending);
-        line.classList.toggle("sync-off", state !== "online");
-      }
-    }
-    if (lastSyncState && state !== lastSyncState && state !== "connecting") {
-      if (state === "offline") flash(t("sync_lost"));
-      else if (state === "online" && lastSyncState === "offline") flash(t("sync_back"));
-    }
+    const previous = lastSyncState;
     lastSyncState = state;
+    lastSyncInfo = { pending, lastSyncAt };
+    renderSyncLine();
+    if (previous && state !== previous && state !== "connecting") {
+      if (state === "offline") flash(t("sync_lost"));
+      else if (state === "online" && previous === "offline") flash(t("sync_back"));
+    }
   }
 
   /** Bestand kam vom Server: in das laufende Objekt übernehmen und neu zeichnen. */
@@ -1764,7 +1780,8 @@ export function initUI({ scene, model, builder }) {
         links.appendChild(el("span", "lib-meta",
           t("lib_size", kennzahlen.size[0], kennzahlen.size[1], kennzahlen.size[2])));
       }
-      links.appendChild(el("span", "lib-meta", new Date(d.updatedAt || Date.now()).toLocaleString()));
+      links.appendChild(el("span", "lib-meta",
+        new Date(d.updatedAt || Date.now()).toLocaleString(locale())));
       row.appendChild(links);
 
       // Rechte Spalte: oben das Abzeichen (Haken oder fehlende Teile), unten

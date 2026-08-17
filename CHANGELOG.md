@@ -34,6 +34,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - `applyTranslations()` übersetzt jetzt auch `data-i18n-placeholder` · `applyTranslations()` now also translates `data-i18n-placeholder`
 
 ### Behoben · Fixed
+- Die **Zustandszeile des Server-Abgleichs** wechselte die Sprache erst nach einem Reload; Datum und Uhrzeit folgen jetzt ebenfalls der eingestellten Sprache statt der des Browsers · The **sync status line** only switched language after a reload; dates and times now follow the app language too
 - Nach einem **Reload** trug ein gespeicherter Entwurf wieder den Änderungs-Punkt: das Speichern hat die Marke zwar im Tab gelöscht, aber nicht in der gesicherten Sitzung · After a **reload** a saved design showed the modified dot again – saving cleared the mark in the tab but not in the stored session
 - Im **Aufbau** blieben die **45°-Kupplungen** der schon gebauten Schritte kräftig schwarz, statt wie alle anderen fertigen Teile blass durchzuscheinen · In **assembly mode** the **45° couplings** of finished steps stayed solid instead of fading out like every other built part
 - Anbauteile fehlten in **Stückliste und Machbarkeit** – beide kannten sie nicht. Anbauteile, deren Katalogteil eine Kupplung ist (Radlager, Lochzapfenkupplung), zählen im Kupplungs-Topf, damit sie nicht doppelt im Bestand stehen · Accessories were missing from the parts list and the feasibility check
