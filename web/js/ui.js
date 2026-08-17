@@ -461,7 +461,9 @@ export function initUI({ scene, model, builder }) {
 
 
   // --- Modus -------------------------------------------------------------
-  $("mode-add").addEventListener("click", () => setMode("add"));
+  // Modus-Wechsel aus dem Menue heraus: das Menue hat seinen Zweck erfuellt
+  // und macht sonst die halbe Szene zu.
+  $("mode-add").addEventListener("click", () => { toggleHamburger(false); setMode("add"); });
   $("mode-select").addEventListener("click", () => setMode("select"));
   $("mode-clamp").addEventListener("click", () => setMode("clamp"));
   // Loeschen arbeitet auf der Cursor-Auswahl; der Button ist sonst ausgeblendet.
@@ -471,7 +473,7 @@ export function initUI({ scene, model, builder }) {
     syncDeleteButton();
   });
   $("mode-reinforce").addEventListener("click", () => setMode(builder.mode === "reinforce" ? "select" : "reinforce"));
-  $("mode-assembly").addEventListener("click", () => setMode("assembly"));
+  $("mode-assembly").addEventListener("click", () => { toggleHamburger(false); setMode("assembly"); });
   $("btn-hints").addEventListener("click", () => toggleHints());
   $("btn-diagonal").addEventListener("click", () => toggleDiagonal());
 

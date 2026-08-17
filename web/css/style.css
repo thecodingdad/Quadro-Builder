@@ -306,9 +306,13 @@ body.compact-view .view-row { display: none; }
 .part-popup #color-buttons,
 .part-popup .view-row { display: flex !important; }
 /* Im Popup werden aus den Icon-Knöpfen Listenzeilen mit Icon UND Name --
-   ohne Beschriftung rät man bei Schnitt/Perspektive nur. */
-.pp-name { display: none; }
-.part-popup .pp-name { display: block; flex: 1; text-align: left; white-space: nowrap; font-size: 13px; }
+   ohne Beschriftung rät man bei Schnitt/Perspektive nur. Versteckt wird der
+   Name nur DORT, wo er stört: in den Werkzeugleisten selbst. */
+.view-row .pp-name,
+#color-buttons .pp-name,
+.toolbar-icon-row .pp-name { display: none; }
+.part-popup .pp-name,
+#menu-file-rows .pp-name { display: block; flex: 1; text-align: left; white-space: nowrap; font-size: 13px; }
 .part-popup.color-popup #color-buttons,
 .part-popup.view-popup .view-row { flex-direction: column; align-items: stretch; gap: 2px; }
 .part-popup.view-popup .btn,
@@ -755,6 +759,9 @@ body.mobile-portrait #toolbar-ctx {
   padding-left: max(10px, env(safe-area-inset-left));
   padding-right: max(10px, env(safe-area-inset-right));
 }
+/* Trenner kosten in der unteren Leiste nur Breite -- die Gruppen stehen dort
+   ohnehin dicht an dicht und werden gescrollt. */
+body.mobile-portrait #toolbar-ctx .divider { display: none; }
 /* Ein einziger Entwurf braucht keine Tableiste -- die Zeile ist Canvas wert. */
 body.mobile-portrait #tab-bar.single { display: none; }
 
