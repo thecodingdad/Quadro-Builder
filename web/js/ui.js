@@ -2983,10 +2983,12 @@ export function initUI({ scene, model, builder }) {
   // Kollaps-Stufen der Bauteil-Zeile: 0 = alles ausgeschrieben,
   // 1 = Farben als EIN Knopf, 2 = zusaetzlich die Ansichts-Schalter im Popup.
   let collapseStage = 0;
-  // Breite, bei der die jeweilige Stufe noetig wurde. Zurueckgeschaltet wird
-  // erst deutlich darueber -- sonst schafft das Einklappen selbst wieder Platz,
-  // die Messung schaltet zurueck, es wird wieder eng: Dauerpendeln.
+  // FENSTERbreite, bei der die jeweilige Stufe noetig wurde. Bezugsgroesse ist
+  // bewusst nicht die Leiste selbst: das Einklappen aendert deren Breite (die
+  // Kopfzeile wird rechts schmaler, also der linke Teil breiter) -- gemessen an
+  // ihr schaukelt sich das zu Dauerpendeln auf. Das Fenster liegt fest.
   const tightAt = [0, 0, 0];
+  // Sicherheitsabstand oben drauf, damit Rundungen nicht doch noch pendeln.
   const HYSTERESIS = 24;
   // Ruht, solange eine Gruppe im Popup haengt (siehe openGroupPopup).
   let measurePaused = false;
@@ -3011,16 +3013,20 @@ export function initUI({ scene, model, builder }) {
 
   function measureCollapse() {
     if (measurePaused) return;
-    const breite = $("toolbar-ctx").clientWidth;
-    if (!breite) return;                       // unsichtbar (Boot, Drucken)
+    if (!$("toolbar-ctx").clientWidth) return;  // unsichtbar (Boot, Drucken)
+    const breite = window.innerWidth;
     // Je Durchgang EINE Stufe. Danach gleich noch einmal messen: das Einklappen
     // aendert nur die INNERE Breite der Bauteil-Gruppe, der Beobachter an der
     // Zeile meldet sich dafuer nicht -- ohne die Wiederholung bliebe es bei
     // Stufe 1, obwohl es immer noch zu eng ist.
     if (overflows() && collapseStage < 2) {
-      tightAt[collapseStage + 1] = breite;
+      const vorher = $("grp-build").scrollWidth;
       collapseStage++;
       applyCollapse();
+      // Wie viel Platz hat dieser Schritt gebracht? Genau so viel muss das
+      // Fenster spaeter wieder breiter sein, sonst klappt es sofort zurueck
+      // und wieder zu -- ein sichtbares Zucken bei jeder Zwischenbreite.
+      tightAt[collapseStage] = breite + Math.max(0, vorher - $("grp-build").scrollWidth);
       requestAnimationFrame(measureCollapse);
       return;
     }
@@ -3037,7 +3043,10 @@ export function initUI({ scene, model, builder }) {
   // Bauen/Aufbau und "Automatisch speichern" wandern ins Menue, der
   // Seitenleisten-Schalter direkt neben den Menue-Knopf.
   let headCompact = false;
-  let headTightAt = 0;
+  // Stufen der Kopfzeile: 0 = alles ausgeschrieben, 1 = "Automatisch speichern"
+  // nur noch als Kasten, 2 = alles ausser Datei/Zurueck/Wieder im Menue.
+  let headStage = 0;
+  const headTightAt = [0, 0, 0];
 
   function applyHeadCollapse(compact) {
     if (compact === headCompact) return;
@@ -3051,16 +3060,35 @@ export function initUI({ scene, model, builder }) {
     tidyDividers();
   }
 
+  function applyHeadStage() {
+    document.body.classList.toggle("compact-autosave", headStage >= 1);
+    applyHeadCollapse(headStage >= 2);
+  }
+
   function measureHead() {
+    // Im Hochformat ist die Kopfzeile IMMER die kompakte: dort faellt der
+    // Datei-Knopf weg und seine Eintraege stehen im Menue. Ohne diese Regel
+    // haette ein breites Hochformat (Tablet, ~800 px) die Menue-Zeilen offen in
+    // der Leiste stehen -- das Menue selbst wird ja erst mit compact-head zum
+    // Ausklapp-Feld.
+    if (mqPortrait.matches) { headStage = 2; applyHeadStage(); return; }
     const left = $("toolbar-left");
-    const breite = left.clientWidth;
-    if (!breite) return;
-    if (!headCompact && left.scrollWidth > breite + 1) {
-      headTightAt = breite;
-      applyHeadCollapse(true);
-    } else if (headCompact && breite > headTightAt + HYSTERESIS) {
-      applyHeadCollapse(false);
-      // Passt es doch nicht, faengt die naechste Messung es wieder ein.
+    if (!left.clientWidth) return;
+    const breite = window.innerWidth;
+    // Die Knoepfe schrumpfen nicht mehr (flex-shrink: 0), die Zeile laeuft
+    // stattdessen ueber -- daran erkennt man den Platzmangel.
+    const eng = left.scrollWidth > left.clientWidth + 1;
+    if (eng && headStage < 2) {
+      const vorher = left.scrollWidth;
+      headStage++;
+      applyHeadStage();
+      headTightAt[headStage] = breite + Math.max(0, vorher - left.scrollWidth);
+      requestAnimationFrame(measureHead);
+      return;
+    }
+    if (!eng && headStage > 0 && breite > headTightAt[headStage] + HYSTERESIS) {
+      headStage--;
+      applyHeadStage();
       requestAnimationFrame(measureHead);
     }
   }

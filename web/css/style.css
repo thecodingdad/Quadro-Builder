@@ -655,6 +655,13 @@ body.sidebar-hidden #sidebar, body.sidebar-hidden #sidebar-resizer { display: no
    sidebar-overlay                — Seitenleiste legt sich über die Seite
    mobile-portrait                — Telefon im Hochformat (Bedienung unten) */
 
+/* Kopfzeile: nichts wird gequetscht -- läuft die Zeile über, klappt ui.js
+   stufenweise ein (erst "Automatisch speichern", dann das Menü). */
+#toolbar-left > * { flex-shrink: 0; }
+/* Stufe 1: nur noch der Kasten, der Text wandert in den Tooltip. */
+body.compact-autosave .autosave-toggle span { display: none; }
+body.compact-autosave .autosave-toggle { padding: 0 2px; }
+
 /* --- Enge Kopfzeile ----------------------------------------------------
    Reicht der Platz oben nicht, bleiben Datei, Zurück und Wieder stehen; alles
    Weitere hängt ui.js in das Menü (#toolbar-right-inner), der Seitenleisten-

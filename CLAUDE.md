@@ -163,8 +163,12 @@ Koordinaten in **cm**, Three.js-Konvention **y = oben**, Boden bei y = 0.
 - **Layout ohne feste Breakpoints:** `ui.js` setzt Klassen auf `<body>`, das CSS liest nur diese –
   `compact-colors`/`compact-view` (Bauteil-Zeile eng), `compact-head` (Kopfzeile eng),
   `sidebar-overlay`, `mobile-portrait`, `asm-sheet-on`. Die beiden Kollaps-Stufen misst ein
-  `ResizeObserver` (`grp-build.scrollWidth > clientWidth`). **Falle:** das Einklappen schafft
-  selbst Platz – ohne die Hysterese (`tightAt[…] + HYSTERESIS`) pendelt der Zustand endlos.
+  `ResizeObserver` (`grp-build.scrollWidth > clientWidth`). **Zwei Fallen:** gemessen wird gegen
+  `window.innerWidth`, nicht gegen die Leiste selbst (der Kollaps ändert deren Breite – daran
+  gemessen schaukelt es sich auf); und zurückgeschaltet wird erst, wenn das Fenster um so viel
+  breiter ist, wie der Kollaps damals freigemacht hat (`tightAt`), sonst zuckt es bei jeder
+  Zwischenbreite einmal auf und zu. Die Kopfzeile hat dieselbe Mechanik in zwei Stufen
+  (`compact-autosave`, `compact-head`); im Hochformat gilt immer die kompakte.
   Kollabiert wird durch **Umhängen des Original-Knotens** (`moveNode`), nicht durch eine zweite
   Garnitur Knöpfe; die Rückkehr-Stelle hält ein Kommentar-Knoten.
 - **Zeiger-Eingaben teilen sich `builder.js` und OrbitControls:** ein Finger/die linke Maustaste
