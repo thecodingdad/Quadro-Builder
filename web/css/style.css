@@ -726,7 +726,21 @@ body.sidebar-overlay #sidebar {
   box-shadow: -8px 0 28px rgba(0, 0, 0, 0.18);
   padding-right: max(14px, env(safe-area-inset-right));
   padding-bottom: max(14px, env(safe-area-inset-bottom));
+  /* Sie fährt von rechts herein wie ein übliches Menü. Geschlossen steht sie
+     neben dem Bild -- display:none würde die Bewegung verschlucken, deshalb
+     hebt die Regel unten das Ausblenden im Overlay-Modus auf. */
+  transform: translateX(0);
+  transition: transform 0.2s ease;
 }
+body.sidebar-overlay.sidebar-hidden #sidebar {
+  display: block;
+  transform: translateX(100%);
+  pointer-events: none;
+}
+/* Der Hintergrund blendet mit -- ohne hidden-Attribut, sonst schluckt
+   `[hidden] { display: none !important }` die Blende. */
+#sidebar-backdrop { opacity: 0; pointer-events: none; transition: opacity 0.2s ease; }
+#sidebar-backdrop.open { opacity: 1; pointer-events: auto; }
 body.sidebar-overlay #sidebar-resizer { display: none; }
 /* Schließen-Kreuz gehört zur überlagernden Leiste; im Desktop-Layout schließt
    der Schalter oben rechts, dort wäre es doppelt. */
@@ -783,27 +797,41 @@ body.mobile-portrait #tab-bar.single { display: none; }
   box-shadow: 0 -6px 24px rgba(0, 0, 0, 0.14);
   display: flex;
   flex-direction: column;
-  max-height: 42%;
+  max-height: 80%;
+  /* Die Höhe setzt ui.js in Pixeln: eingeklappt die Ruhehöhe, aufgeklappt die
+     halbe Szene, dazwischen beim Ziehen jeder Wert. Aufgeklappt IMMER gleich
+     hoch -- sonst springt die Karte bei jedem Schrittwechsel, weil mal drei und
+     mal zwölf Teile in der Liste stehen. */
+  transition: height 0.18s ease;
 }
-/* Aufgeklappt IMMER die halbe Szene hoch: sonst springt die Karte bei jedem
-   Schrittwechsel auf eine andere Höhe, weil mal drei und mal zwölf Teile in
-   der Liste stehen. Gescrollt wird dann innerhalb der Liste. */
-#asm-sheet.open { height: 50%; max-height: none; }
+/* Während der Finger zieht, folgt die Karte ohne Übergang. */
+#asm-sheet.dragging, #asm-sheet.no-anim { transition: none; }
 .asm-sheet-handle {
-  border: none; background: none; padding: 8px 0 4px; cursor: pointer;
+  border: none; background: none; padding: 10px 0 6px; cursor: pointer;
   display: flex; justify-content: center; flex: 0 0 auto;
+  /* Der Wisch gehört dem Griff, nicht dem Scrollen der Seite. */
+  touch-action: none;
 }
 .asm-sheet-grip {
   display: block; width: 42px; height: 4px; border-radius: 2px; background: #c4ccd6;
 }
-#asm-sheet-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 0 14px 10px; }
+#asm-sheet-body {
+  flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 0 14px 10px;
+  /* Gescrollt wird nur innerhalb der Liste. Ob aus einem senkrechten Wisch
+     Scrollen oder ein Zug an der Karte wird, entscheidet ui.js anhand der
+     Scrollposition (touchmove mit preventDefault). */
+  overscroll-behavior: contain;
+  touch-action: pan-y;
+}
 /* Eingeklappt bleiben Schrittzähler, Fortschritt und Titel stehen -- die
    Teileliste und die Einstellungen kommen erst beim Aufklappen. */
-#asm-sheet:not(.open) #asm-body,
-#asm-sheet:not(.open) .asm-order-row,
-#asm-sheet:not(.open) .asm-opt,
-#asm-sheet:not(.open) .asm-head,
-#asm-sheet:not(.open) .hint { display: none; }
+/* Eingeklappt bleiben Schrittzähler, Fortschritt und Titel stehen. Während des
+   Ziehens ist der Inhalt schon da, sonst zöge man an einer leeren Fläche. */
+#asm-sheet:not(.open):not(.dragging) #asm-body,
+#asm-sheet:not(.open):not(.dragging) .asm-order-row,
+#asm-sheet:not(.open):not(.dragging) .asm-opt,
+#asm-sheet:not(.open):not(.dragging) .asm-head,
+#asm-sheet:not(.open):not(.dragging) .hint { display: none; }
 #asm-sheet .panel { margin: 0; }
 #asm-sheet .asm-nav { margin: 0 0 8px; }
 #asm-sheet .asm-nav .btn { flex: 1 1 0; min-height: 44px; font-size: 20px; }

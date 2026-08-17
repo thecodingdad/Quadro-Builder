@@ -561,7 +561,7 @@ export function initUI({ scene, model, builder }) {
       applyScene(false, false);
       // Im Hochformat steht der Aufbau als Karte ueber der Szene -- dort waere
       // eine aufspringende Seitenleiste im Weg.
-      if (!document.body.classList.contains("mobile-portrait")) showSidebarPanel("assembly");
+      if (!document.body.classList.contains("sidebar-overlay")) showSidebarPanel("assembly");
     }
     else if (currentPanel === "assembly")
       showSidebarPanel(localStorage.getItem(SIDEBAR_PANEL_KEY) || null);
@@ -1714,9 +1714,10 @@ export function initUI({ scene, model, builder }) {
       && !document.body.classList.contains("asm-sheet-on");
     document.body.classList.toggle("sidebar-hidden", currentPanel === null);
     $("toggle-sidebar").classList.toggle("active", currentPanel !== null);
-    // Der Hintergrund gehoert nur zur ueberlagernden Leiste.
-    $("sidebar-backdrop").hidden =
-      currentPanel === null || !document.body.classList.contains("sidebar-overlay");
+    // Der Hintergrund gehoert nur zur ueberlagernden Leiste. Er bleibt im
+    // Dokument stehen und wird ein-/ausgeblendet, damit die Blende laeuft.
+    $("sidebar-backdrop").classList.toggle("open",
+      currentPanel !== null && document.body.classList.contains("sidebar-overlay"));
     renderSideTabs();
     requestAnimationFrame(() => scene.onResize());
   }
@@ -3150,23 +3151,137 @@ export function initUI({ scene, model, builder }) {
   let sheetOpen = false;
 
   function applyAssemblySheet() {
-    const imSheet = document.body.classList.contains("mobile-portrait")
+    // Sobald die Seitenleiste ueberlagert, waere sie im Aufbau-Modus im Weg --
+    // dann uebernimmt die Karte.
+    const inSheet = document.body.classList.contains("sidebar-overlay")
       && builder.mode === "assembly";
-    moveNode($("panel-assembly"), imSheet ? $("asm-sheet-body") : null);
-    $("asm-sheet").hidden = !imSheet;
-    document.body.classList.toggle("asm-sheet-on", imSheet);
+    moveNode($("panel-assembly"), inSheet ? $("asm-sheet-body") : null);
+    $("asm-sheet").hidden = !inSheet;
+    document.body.classList.toggle("asm-sheet-on", inSheet);
     $("asm-sheet").classList.toggle("open", sheetOpen);
     // In der Karte ist das Panel immer sichtbar; zurueck in der Leiste gilt
     // wieder deren Auswahl (sonst stuende der Aufbau unter der Stueckliste).
-    $("panel-assembly").hidden = imSheet ? false : currentPanel !== "assembly";
+    $("panel-assembly").hidden = inSheet ? false : currentPanel !== "assembly";
     renderSideTabs();
+    if (inSheet) {
+      // Erst ohne feste Hoehe messen, dann den Ruhezustand ohne Animation setzen.
+      $("asm-sheet").style.height = "";
+      peekPx = 0;
+      requestAnimationFrame(() => { measurePeek(); setSheetOpen(sheetOpen, false); });
+    }
     requestAnimationFrame(() => scene.onResize());
   }
 
-  $("asm-sheet-handle").addEventListener("click", () => {
-    sheetOpen = !sheetOpen;
-    $("asm-sheet").classList.toggle("open", sheetOpen);
+  // Ruhehoehe der eingeklappten Karte (Griff, Schrittzeile, Fortschritt, Titel).
+  // Sie haengt am Inhalt und wird deshalb nach jedem Neuaufbau gemessen.
+  let peekPx = 0;
+
+  /** Aufgeklappte Hoehe: die halbe Szene. */
+  function openPx() {
+    return Math.round($("canvas-wrap").getBoundingClientRect().height * 0.5);
+  }
+
+  function measurePeek() {
+    const sheet = $("asm-sheet");
+    if (sheet.hidden || sheetOpen) return;      // nur im Ruhezustand messbar
+    const before = sheet.style.height;
+    sheet.style.height = "";
+    peekPx = sheet.offsetHeight;
+    sheet.style.height = before || `${peekPx}px`;
+  }
+
+  function setSheetOpen(on, animate = true) {
+    sheetOpen = !!on;
+    const sheet = $("asm-sheet");
+    if (!animate) sheet.classList.add("no-anim");
+    sheet.classList.toggle("open", sheetOpen);
+    sheet.style.height = `${sheetOpen ? openPx() : (peekPx || sheet.offsetHeight)}px`;
+    if (!animate) requestAnimationFrame(() => sheet.classList.remove("no-anim"));
+  }
+
+  // Ziehen: auf der GANZEN Karte, nicht nur am Griff. Wer im Listenbereich
+  // anfasst, scrollt -- ausser die Liste steht schon ganz oben und der Zug geht
+  // nach unten. Dieselbe Geste schliesst damit die Karte, ohne dem Scrollen in
+  // die Quere zu kommen.
+  const MIN_DRAG = 6;
+  let sheetDrag = null;
+
+  /** Zug beginnen. `target` entscheidet, ob er ueberhaupt in Frage kommt. */
+  function startSheetDrag(y, target) {
+    // Bedienelemente behalten Vorrang -- nur der Griff darf auch ziehen.
+    if (target.closest("button, select, input, a") && !target.closest("#asm-sheet-handle")) return;
+    sheetDrag = {
+      y,
+      height: $("asm-sheet").offsetHeight,
+      inBody: $("asm-sheet-body").contains(target),
+      active: false,
+    };
+  }
+
+  /**
+   * Zug fortsetzen. Liefert true, wenn die Karte ihn uebernommen hat -- dann
+   * muss der Aufrufer das Ereignis abfangen, sonst scrollt der Browser mit.
+   */
+  function moveSheetDrag(y) {
+    if (!sheetDrag) return false;
+    const dy = y - sheetDrag.y;
+    if (!sheetDrag.active) {
+      if (Math.abs(dy) < MIN_DRAG) return false;
+      const body = $("asm-sheet-body");
+      const canScroll = body.scrollHeight > body.clientHeight + 1;
+      if (sheetDrag.inBody && canScroll && !(dy > 0 && body.scrollTop <= 0)) {
+        sheetDrag = null;                       // gehoert dem Scrollen
+        return false;
+      }
+      sheetDrag.active = true;
+      $("asm-sheet").classList.add("dragging");
+    }
+    // Die Karte folgt dem Finger, geklemmt zwischen Ruhe- und Vollhoehe.
+    $("asm-sheet").style.height =
+      `${Math.max(peekPx, Math.min(openPx(), sheetDrag.height - dy))}px`;
+    return true;
+  }
+
+  function endSheetDrag() {
+    if (!sheetDrag) return;
+    const dragged = sheetDrag.active;
+    sheetDrag = null;
+    const sheet = $("asm-sheet");
+    sheet.classList.remove("dragging");
+    if (!dragged) return;                       // war ein Tipp -> Klick entscheidet
+    // Naeher an offen oder an zu? Dorthin faellt die Karte zurueck.
+    setSheetOpen(sheet.offsetHeight > (peekPx + openPx()) / 2);
+  }
+
+  // Maus laeuft ueber Zeiger-Ereignisse ...
+  $("asm-sheet").addEventListener("pointerdown", (e) => {
+    if (e.pointerType === "touch") return;      // Finger: siehe touch-Handler
+    startSheetDrag(e.clientY, e.target);
   });
+  window.addEventListener("pointermove", (e) => {
+    if (e.pointerType === "touch") return;
+    if (moveSheetDrag(e.clientY) && e.cancelable) e.preventDefault();
+  }, { passive: false });
+  window.addEventListener("pointerup", endSheetDrag);
+
+  // ... der Finger dagegen ueber Touch-Ereignisse. Der Umweg ist noetig: sobald
+  // der Browser eine Wischgeste als Scrollen erkennt, bricht er die
+  // Zeiger-Ereignisse mit pointercancel ab -- der Zug blieb dann nach einem
+  // Zucken stehen. Ein nicht-passives touchmove mit preventDefault nimmt ihm
+  // die Geste ab, bevor er sie beansprucht.
+  $("asm-sheet").addEventListener("touchstart", (e) => {
+    if (e.touches.length !== 1) return;
+    startSheetDrag(e.touches[0].clientY, e.target);
+  }, { passive: true });
+  $("asm-sheet").addEventListener("touchmove", (e) => {
+    if (e.touches.length !== 1) return;
+    if (moveSheetDrag(e.touches[0].clientY) && e.cancelable) e.preventDefault();
+  }, { passive: false });
+  $("asm-sheet").addEventListener("touchend", endSheetDrag);
+  $("asm-sheet").addEventListener("touchcancel", endSheetDrag);
+
+  // Tippen auf den Griff klappt um.
+  $("asm-sheet-handle").addEventListener("click", () => setSheetOpen(!sheetOpen));
 
   // --- Bildschirm wachhalten (nur im Aufbau) -----------------------------
   // Beim Zusammenbauen liegt das Geraet daneben und wird lange nicht beruehrt.
