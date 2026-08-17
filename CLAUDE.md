@@ -16,11 +16,21 @@ python server.py 8000      # dasselbe PLUS optionales Backend (braucht aiohttp)
 Nie `web/index.html` per `file://` öffnen – Browser blockieren dort ES-Module und `fetch()`.
 Three.js r160 + OrbitControls liegen gevendort unter `web/vendor/three/` (kein Netz nötig).
 
-### Live-Instanz (bevorzugt zum Prüfen)
+### Eigener Dev-Server (der einzige Ort zum Prüfen)
 
-Die App läuft dauerhaft unter **http://nuc-quadro** und serviert direkt dieses Arbeitsverzeichnis –
-Code-Änderungen sind ohne Neustart sofort live. Erreichbar über **Chrome MCP**
-(`navigate_page`, `take_screenshot`, `list_console_messages`, `evaluate_script`).
+**http://nuc-quadro gehört dem Nutzer – dort wird nicht getestet, auch nicht „nur kurz".**
+Zum Prüfen einen **eigenen** Server aus diesem Arbeitsverzeichnis starten und ihn per Chrome MCP
+(`navigate_page`, `take_screenshot`, `list_console_messages`, `evaluate_script`) ansteuern:
+
+```bash
+python serve.py 8090                                   # ohne Backend
+QUADRO_DATA=<scratchpad>/store python server.py 8090   # mit Backend
+```
+
+Der Chrome-Container erreicht ihn über die **IP dieses Containers**, nicht über `localhost`
+(`hostname -i`, zuletzt `http://192.168.168.119:8090/web/index.html`). Datenverzeichnis in den
+Scratchpad legen, nie ins Repo. Für das Backend braucht es `aiohttp` – in dieser Umgebung fehlt
+`pip`, es lässt sich aber per `get-pip.py` in ein `venv` im Scratchpad nachrüsten.
 
 **Wichtig:** Nach jeder Code-Änderung den Browser-Cache umgehen, sonst lädt die Seite alte
 ES-Module. Entweder `navigate_page` mit `type: "reload"` **und `ignoreCache: true`**, oder per
