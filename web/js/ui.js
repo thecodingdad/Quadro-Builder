@@ -3214,6 +3214,11 @@ export function initUI({ scene, model, builder }) {
       y,
       height: $("asm-sheet").offsetHeight,
       inBody: $("asm-sheet-body").contains(target),
+      // Aus der Ruhelage (und am Griff) gehoert die Geste von Anfang an der
+      // Karte: der Inhalt ist ausgeblendet, es gibt nichts zu scrollen. Das
+      // muss VOR der ersten Bewegung feststehen, sonst reisst der Browser die
+      // Geste als Scrollen an sich und gibt sie nicht mehr her.
+      owns: !sheetOpen || !!target.closest("#asm-sheet-handle"),
       active: false,
     };
   }
@@ -3226,14 +3231,18 @@ export function initUI({ scene, model, builder }) {
     if (!sheetDrag) return false;
     const dy = y - sheetDrag.y;
     if (!sheetDrag.active) {
-      if (Math.abs(dy) < MIN_DRAG) return false;
+      // Unterhalb der Schwelle bleibt es ein Tipp -- die Geste ist aber schon
+      // beansprucht, damit der Browser sie nicht doch als Scrollen startet.
+      if (Math.abs(dy) < MIN_DRAG) return sheetDrag.owns;
       const body = $("asm-sheet-body");
       const canScroll = body.scrollHeight > body.clientHeight + 1;
-      if (sheetDrag.inBody && canScroll && !(dy > 0 && body.scrollTop <= 0)) {
+      if (!sheetDrag.owns && sheetDrag.inBody && canScroll && !(dy > 0 && body.scrollTop <= 0)) {
         sheetDrag = null;                       // gehoert dem Scrollen
         return false;
       }
       sheetDrag.active = true;
+      // Der Inhalt wird gleich sichtbar -- er soll oben anfangen.
+      if (sheetDrag.owns) $("asm-sheet-body").scrollTop = 0;
       $("asm-sheet").classList.add("dragging");
     }
     // Die Karte folgt dem Finger, geklemmt zwischen Ruhe- und Vollhoehe.

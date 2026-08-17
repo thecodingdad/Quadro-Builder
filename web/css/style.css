@@ -806,6 +806,14 @@ body.mobile-portrait #tab-bar.single { display: none; }
 }
 /* Während der Finger zieht, folgt die Karte ohne Übergang. */
 #asm-sheet.dragging, #asm-sheet.no-anim { transition: none; }
+/* ... und die Liste rührt sich dabei nicht: sonst wächst die Karte, während
+   der gerade eingeblendete Inhalt unter dem Finger wegscrollt. */
+#asm-sheet.dragging #asm-sheet-body { overflow: hidden; touch-action: none; }
+/* Eingeklappt gibt es nichts zu scrollen -- und vor allem darf der Browser die
+   Wischgeste gar nicht erst als Scrollen beanspruchen. Er entscheidet das im
+   Compositor, BEVOR das erste touchmove bei uns ankommt; ein preventDefault
+   käme dann zu spät und die Liste flöge beim Loslassen weiter. */
+#asm-sheet:not(.open) #asm-sheet-body { touch-action: none; }
 .asm-sheet-handle {
   border: none; background: none; padding: 10px 0 6px; cursor: pointer;
   display: flex; justify-content: center; flex: 0 0 auto;
@@ -823,10 +831,9 @@ body.mobile-portrait #tab-bar.single { display: none; }
   overscroll-behavior: contain;
   touch-action: pan-y;
 }
-/* Eingeklappt bleiben Schrittzähler, Fortschritt und Titel stehen -- die
-   Teileliste und die Einstellungen kommen erst beim Aufklappen. */
-/* Eingeklappt bleiben Schrittzähler, Fortschritt und Titel stehen. Während des
-   Ziehens ist der Inhalt schon da, sonst zöge man an einer leeren Fläche. */
+/* Eingeklappt bleiben Schrittzähler, Fortschritt und Titel stehen; die
+   Teileliste kommt erst beim Aufklappen. Während des Ziehens ist sie schon da,
+   sonst zöge man an einer leeren Fläche. */
 #asm-sheet:not(.open):not(.dragging) #asm-body,
 #asm-sheet:not(.open):not(.dragging) .asm-order-row,
 #asm-sheet:not(.open):not(.dragging) .asm-opt,
