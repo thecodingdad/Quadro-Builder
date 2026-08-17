@@ -222,6 +222,10 @@ export function computeBuildPlan(model, order = "y+") {
   // Fortschritt in Baurichtung: Abstand zur ersten Ebene. `levels` waechst
   // dank orderCoord() immer in Baureihenfolge, auch bei x-/z-.
   const progressAt = (i) => (levels[i] ?? levels[levels.length - 1]) - levels[0];
+  // Im Titel steht, wie weit man NACH dem Schritt ist: der Rahmen nennt also
+  // schon die Hoehe der naechsten Ebene, die Stuetzen die Hoehe, die sie
+  // erreichen. Beim letzten Schritt bleibt es bei der eigenen Ebene.
+  const reachedAfter = (i) => round1(progressAt(i + 1));
 
   for (let i = 0; i < levels.length; i++) {
     const nodes = nodesByLevel[i];
@@ -234,7 +238,7 @@ export function computeBuildPlan(model, order = "y+") {
     // Rahmen-Schritt (nur, wenn er etwas Neues bringt)
     if (nodes.length || horiz.length || pans.length || txs.length || sls.length || fts.length) {
       const conn = countConnectors(model, nodes);
-      const title = t("buildplan_level", i + 1, round1(progressAt(i)));
+      const title = t("buildplan_level", i + 1, reachedAfter(i));
       steps.push({
         kind: "frame", title, level: i, y: levels[i],
         connectors: conn.rows, openEnds: conn.openEnds,
@@ -255,7 +259,7 @@ export function computeBuildPlan(model, order = "y+") {
         kind: "risers",
         // Die Stuetzen fuehren zur naechsten Ebene -- der Titel nennt sie,
         // damit die Schritte in Baurichtung durchzaehlen.
-        title: t("buildplan_level", i + 2, round1(progressAt(i + 1))),
+        title: t("buildplan_level", i + 2, reachedAfter(i)),
         level: i, y: levels[i],
         connectors: [], openEnds: 0,
         tubes: countTubes(risers), panels: [],
