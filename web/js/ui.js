@@ -2175,15 +2175,18 @@ export function initUI({ scene, model, builder }) {
     renderAssembly();
   });
 
-  function asmRow(container, name, colorId, count, badge, sel) {
+  function asmRow(container, name, colorId, count, icon, sel) {
     const row = el("div", "asm-row");
     const label = el("span", "asm-name");
+    // Dasselbe Sinnbild wie in der Stückliste und an den Knöpfen.
+    const sinnbild = el("span", "bom-icon");
+    if (icon) sinnbild.innerHTML = icon;
+    label.appendChild(sinnbild);
     if (colorId) {
       const dot = el("span", "dot"); dot.style.background = colorHex(colorId);
       label.appendChild(dot);
     }
     label.appendChild(document.createTextNode(name));
-    if (badge) label.appendChild(el("span", "asm-badge", badge));
     row.appendChild(label);
     row.appendChild(el("span", "asm-count", `${count}×`));
     if (sel) {
@@ -2272,33 +2275,33 @@ export function initUI({ scene, model, builder }) {
     $("asm-next").disabled = i >= total - 1;
     $("asm-progress-bar").style.width = total ? `${((i + 1) / total) * 100}%` : "0%";
 
-    const title = $("asm-title"), body = $("asm-body");
+    const body = $("asm-body");
     body.innerHTML = "";
     const step = plan.steps[i];
     if (!step) {
-      title.textContent = t("asm_empty_title");
       body.appendChild(el("div", "muted", t("asm_empty_body")));
       return;
     }
-    title.textContent = step.title;
     const plain = asmIgnoreColors;
     if (step.connectors.length || step.openEnds) {
       body.appendChild(el("h4", "asm-cat", t("asm_cat_connectors")));
       for (const c of step.connectors)
-        asmRow(body, c.name, null, c.count, c.code, { kind: "connector", type: c.type });
-      if (step.openEnds) asmRow(body, t("asm_open_ends"), null, step.openEnds, "", { kind: "openEnds" });
+        asmRow(body, c.name, null, c.count, bomIcon("connectors", c.type), { kind: "connector", type: c.type });
+      if (step.openEnds) asmRow(body, t("asm_open_ends"), null, step.openEnds, null, { kind: "openEnds" });
     }
     if (step.tubes.length) {
       body.appendChild(el("h4", "asm-cat", t("asm_cat_tubes")));
       for (const tube of (plain ? mergeByPart(step.tubes, "tubeId") : step.tubes))
         asmRow(body, plain ? tube.name : `${tube.name} · ${tube.colorName}`,
-          tube.color, tube.count, "", { kind: "tube", tubeId: tube.tubeId, color: tube.color });
+          tube.color, tube.count, bomIcon("tubes", tube.tubeId),
+          { kind: "tube", tubeId: tube.tubeId, color: tube.color });
     }
     if (step.panels.length) {
       body.appendChild(el("h4", "asm-cat", t("asm_cat_panels")));
       for (const p of (plain ? mergeByPart(step.panels, "panelId") : step.panels))
         asmRow(body, plain ? p.name : `${p.name} · ${p.colorName}`,
-          p.color, p.count, "", { kind: "panel", panelId: p.panelId, color: p.color });
+          p.color, p.count, bomIcon("panels", p.panelId),
+          { kind: "panel", panelId: p.panelId, color: p.color });
     }
   }
 

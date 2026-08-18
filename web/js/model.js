@@ -2081,21 +2081,22 @@ export class BuildModel {
    * Kosinus bleiben die Koordinaten exakt auf dem Raster.
    */
   _applyTurn(tg, schritte, cx, cz) {
-    // Ein Schritt: x' = cx + (z - cz), z' = cz - (x - cx)
+    // EIN Schritt dreht von oben gesehen im Uhrzeigersinn: +X wird zu +Z.
+    // (Von oben blickt man gegen die Y-Achse, dort liegt +Z unten im Bild.)
     const drehePunkt = (x, z) => {
       let dx = x - cx, dz = z - cz;
-      for (let k = 0; k < schritte; k++) { const nx = dz, nz = -dx; dx = nx; dz = nz; }
+      for (let k = 0; k < schritte; k++) { const nx = -dz, nz = dx; dx = nx; dz = nz; }
       return [round(cx + dx), round(cz + dz)];
     };
     // Richtungen drehen um den Ursprung, nicht um die Achse.
     const dreheDir = (v) => {
       if (!v || v.length !== 3) return v;
       let x = v[0], z = v[2];
-      for (let k = 0; k < schritte; k++) { const nx = z, nz = -x; x = nx; z = nz; }
+      for (let k = 0; k < schritte; k++) { const nx = -z, nz = x; x = nx; z = nz; }
       const r6 = (t) => Math.round(t * 1e6) / 1e6;
       return [r6(x), v[1], r6(z)];
     };
-    const grad = schritte * 90;
+    const grad = -schritte * 90;
     const dreheOrt = (o) => { if (!o) return; const [x, z] = drehePunkt(o.x, o.z); o.x = x; o.z = z; };
 
     for (const id of tg.nodes) {

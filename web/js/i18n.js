@@ -231,7 +231,6 @@ const de = {
   // Seitenleiste – Aufbaumodus
   asm_title: 'Aufbau',
   asm_sheet_toggle: 'Teileliste auf- oder zuklappen',
-  asm_hint: 'Lage für Lage von unten nach oben. Orange = im aktuellen Schritt anbauen, blass = kommt später.',
 
   // Statuszeile
   status_add: 'Bauen: Kupplung wählen, dann grünen Punkt klicken. Oder Pfeiltasten. Ziehen = drehen.',
@@ -646,7 +645,6 @@ const en = {
   // Sidebar – Assembly
   asm_title: 'Assembly',
   asm_sheet_toggle: 'Show or hide the part list',
-  asm_hint: 'Layer by layer, bottom to top. Orange = add in this step, pale = comes later.',
 
   // Status bar
   status_add: 'Build: select a connector, then click the green dot. Or use arrow keys. Drag = rotate.',

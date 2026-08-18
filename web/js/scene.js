@@ -2083,8 +2083,13 @@ export class SceneManager {
     // die Cursor-Auswahl waere das stoerend: dort waehlt man staendig etwas an.
     const selected = opts.selected && opts.selected.size ? opts.selected : null;
     const highlight = opts.highlight && opts.highlight.size ? opts.highlight : null;
-    const marked = selected || highlight;
-    const dimOthers = !selected && !!highlight;
+    // Beides zugleich ist der Normalfall: etwas ist im Modell gewaehlt UND in
+    // der Liste wird eine Zeile angeklickt. Frueher gewann die Auswahl und die
+    // Zeile blieb wirkungslos, bis man die Auswahl aufhob.
+    const marked = selected && highlight
+      ? new Set([...selected.keys(), ...highlight])
+      : (selected || highlight);
+    const dimOthers = !!highlight;
     // Im Vorschlags-Modus treten alle Teile zurueck, die keine Verstaerkung
     // brauchen -- sonst sucht man die orangen Rohre im Gewirr.
     const hintDim = !!opts.hintDim && !!opts.suggest;
