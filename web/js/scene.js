@@ -43,10 +43,9 @@ const CLAMP_LEN = 5;
 // Stirnflaeche.
 const CLAMP_WALL = 0.7;
 
-// Oeffnungswinkel der Rohrklammer in der Ringebene: der Bogen laeuft von
-// CLIP_A0 bis CLIP_A1, der Rest ist der Schlitz, in den das Rohr einklickt.
-const CLIP_A0 = -Math.PI * 0.15;
-const CLIP_A1 = Math.PI * 1.15;
+// Schlitz der Rohrklammer: so breit ist die Oeffnung, durch die das Rohr
+// einklickt (in der Ringebene gemessen).
+const CLIP_GAP = Math.PI * 0.55;
 
 // Tiefe des Spielsacks: er haengt an allen vier Seiten rund 17 cm hinunter.
 const BAG_DEPTH = 17;
@@ -249,9 +248,6 @@ export class SceneManager {
     this._hover = null;
 
     this._connGeo = null;     // lazy (braucht Katalog-Geometrie)
-    this._clampGeo = null;    // lazy (Klemmen-Ring)
-    this._clampRingGeo = null; // lazy (ein Ring der "8")
-    this._clampClipGeo = null; // lazy (offener Ring der Rohrklammer)
     this._c45Geo = null;      // lazy (45-Grad-Adapter-Koerper, Box)
     this._c45StubGeo = null;  // lazy (Diagonal-Stutzen des Adapters)
     this._panelGeos = new Map(); // lazy, pro Plattenmass/Lochbild (siehe _panelGeometry)
@@ -624,7 +620,7 @@ export class SceneManager {
     const prev = this._quality;
     this._quality = level;
     this._shadowsDirty();
-    for (const key of ["_connGeo", "_c45Geo", "_c45StubGeo", "_clampGeo", "_clampRingGeo", "_clampClipGeo"]) {
+    for (const key of ["_connGeo", "_c45Geo", "_c45StubGeo"]) {
       if (this[key]) { this._keepGeos.delete(this[key]); this[key].dispose(); }
       this[key] = null;
     }
@@ -717,46 +713,62 @@ export class SceneManager {
     return this._connGeo;
   }
 
-  // Geometrie fuer eine Klemme/Doppelrohrverbinder: kurzer dicker Ring.
-  _clampGeometry() {
-    if (!this._clampGeo) {
-      const r = geometry().tubeRadius;
-      this._clampGeo = new THREE.TorusGeometry(r * 1.7, r * 0.7, 10, 18);
-    }
-    return this._clampGeo;
-  }
-
-  // Ein Ring der "8": Loch genau so gross, dass eine Tube hindurchpasst. Zwei
-  // davon nebeneinander ergeben den Doppelrohrverbinder -- ein 5 cm langes
-  // Stueck, nicht ein duenner Reif (so sieht das echte Teil aus).
-  _clampRingGeometry(open = false) {
-    const key = open ? "_clampClipGeo" : "_clampRingGeo";
-    if (!this[key]) {
-      const ri = geometry().tubeRadius + 0.45;      // Loch: hier laeuft das Rohr durch
+  /**
+   * Koerper einer Klemme, in ihrer eigenen Ebene: die beiden Loecher liegen auf
+   * der X-Achse im Abstand `d`, die Rohre laufen entlang +Z.
+   *
+   * Der Doppelrohrverbinder ist eine geschlossene "8": ein einziger Koerper,
+   * dessen Aussenkreise sich schneiden (daher die eingezogene Taille) und aus
+   * dem zwei Loecher ausgespart sind -- nicht zwei Ringe uebereinander, denn
+   * dann ragte die Wand des einen Rings in das Loch des anderen.
+   *
+   * Die Rohrklammer hat dieselben zwei Ringe, jeder aber zu einer Seite offen,
+   * und zwar zu entgegengesetzten: so laesst sie sich auf zwei nebeneinander
+   * liegende Rohre klicken.
+   */
+  _clampBodyGeometry(open, d) {
+    const seg = Math.max(12, this._q().tube);
+    const key = `clampBody${open ? "o" : "c"}:${d.toFixed(1)}:${seg}`;
+    return this._cachedGeo(key, () => {
+      // Loch: so weit, dass das Rohr hindurchpasst -- aber nie so weit, dass
+      // sich die beiden Loecher treffen (sonst bliebe kein Steg dazwischen).
+      const ri = Math.min(geometry().tubeRadius + 0.45, d > 0 ? d / 2 - 0.02 : Infinity);
       const ro = ri + CLAMP_WALL;
-      const seg = Math.max(12, this._q().tube);
-      // Umriss in der XY-Ebene, danach zu einem Koerper ausgezogen -- so hat der
-      // Ring eine Wand statt nur einer Haut.
-      const shape = new THREE.Shape();
+      const shapes = [];
+      const lobes = d > 0 ? [-d / 2, d / 2] : [0];
       if (open) {
-        // Die Rohrklammer ist an einer Seite offen -- dort klickt das Rohr ein.
-        // Aussenbogen hin, Innenbogen zurueck; die Enden schliesst der Umriss.
-        shape.absarc(0, 0, ro, CLIP_A0, CLIP_A1, false);
-        shape.absarc(0, 0, ri, CLIP_A1, CLIP_A0, true);
+        // Oeffnungen nach +Y und -Y, also quer zur Verbindungslinie.
+        lobes.forEach((cx, i) => {
+          const mid = i === 0 ? Math.PI / 2 : -Math.PI / 2;
+          const s = new THREE.Shape();
+          s.absarc(cx, 0, ro, mid + CLIP_GAP / 2, mid - CLIP_GAP / 2 + Math.PI * 2, false);
+          s.absarc(cx, 0, ri, mid - CLIP_GAP / 2 + Math.PI * 2, mid + CLIP_GAP / 2, true);
+          shapes.push(s);
+        });
       } else {
-        shape.absarc(0, 0, ro, 0, Math.PI * 2, false);
-        const hole = new THREE.Path();
-        hole.absarc(0, 0, ri, 0, Math.PI * 2, true);
-        shape.holes.push(hole);
+        const s = new THREE.Shape();
+        if (d > 0 && ro > d / 2) {
+          // Aussenkreise schneiden sich: der Umriss laeuft ueber die beiden
+          // langen Boegen, die Schnittpunkte sind die Taille.
+          const a = Math.acos((d / 2) / ro);
+          s.absarc(-d / 2, 0, ro, a, Math.PI * 2 - a, false);
+          s.absarc(d / 2, 0, ro, Math.PI + a, Math.PI * 3 - a, false);
+        } else {
+          s.absarc(lobes[0], 0, ro, 0, Math.PI * 2, false);
+        }
+        for (const cx of lobes) {
+          const hole = new THREE.Path();
+          hole.absarc(cx, 0, ri, 0, Math.PI * 2, true);
+          s.holes.push(hole);
+        }
+        shapes.push(s);
       }
-      const g = new THREE.ExtrudeGeometry(shape, {
+      const g = new THREE.ExtrudeGeometry(shapes, {
         depth: CLAMP_LEN, bevelEnabled: false, curveSegments: seg,
       });
-      g.translate(0, 0, -CLAMP_LEN / 2);            // Achse auf +Z, um die Mitte
-      this[key] = g;
-      this._keepGeos.add(g);
-    }
-    return this[key];
+      g.translate(0, 0, -CLAMP_LEN / 2);            // um die Mitte, Achse auf +Z
+      return g;
+    });
   }
 
   // Platten-Geometrie, gecacht pro Mass + Lochbild. Volle Platten sind eine
@@ -1837,20 +1849,23 @@ export class SceneManager {
     }
     const seg = Math.max(10, this._q().tube);
     const at = new THREE.Vector3(n.x, n.y, n.z);
-    // Huelse um das Rohr: sie sitzt an der Muendung und laeuft mit dem Rohr.
-    const sleeveR = g.tubeRadius * 1.35;
+    // Sie sieht aus wie die Lagerkupplung: zwei Rohrstuecke im rechten Winkel.
+    // Das laengere nimmt das Rohr auf (und traegt die Loecher, daher der Name),
+    // das kuerzere greift ueber den Stutzen der Kupplung.
+    const sleeveR = g.tubeRadius * 1.3;
+    const sleeveLen = cs * 1.6;
     const sleeve = new THREE.Mesh(
-      this._cachedGeo(`pinSleeve${seg}`, () => new THREE.CylinderGeometry(sleeveR, sleeveR, cs, seg)), mat);
+      this._cachedGeo(`pinSleeve${seg}`, () => new THREE.CylinderGeometry(sleeveR, sleeveR, sleeveLen, seg)), mat);
     sleeve.quaternion.setFromUnitVectors(UP, stub);
-    sleeve.position.copy(at).addScaledVector(stub, cs / 2);
+    sleeve.position.copy(at).addScaledVector(stub, sleeveLen / 2);
     sleeve.userData = { kind: "node", id: n.id };
     this.buildGroup.add(sleeve);
     if (st !== "future") this.pickNodes.push(sleeve);
-    // Zapfen: er greift von der Muendung bis in die Kupplung, also genau eine
-    // Kupplungslaenge weit. Duenner als ein Rohr -- er steckt ja in einem Arm.
-    const pegR = g.tubeRadius * 0.8;
+    // Der Ring zum Stutzen hin: von der Muendung bis in die Kupplung, also eine
+    // Kupplungslaenge weit.
+    const ringR = g.tubeRadius * 1.18;
     const pin = new THREE.Mesh(
-      this._cachedGeo(`pinStub${seg}`, () => new THREE.CylinderGeometry(pegR, pegR, cs, seg)), mat);
+      this._cachedGeo(`pinRing${seg}`, () => new THREE.CylinderGeometry(ringR, ringR, cs, seg)), mat);
     pin.quaternion.setFromUnitVectors(UP, peg);
     pin.position.copy(at).addScaledVector(peg, cs / 2);
     pin.userData = { kind: "node", id: n.id };
@@ -2483,27 +2498,30 @@ export class SceneManager {
       }
     }
 
-    // Doppelrohrverbinder: "8" = zwei Ringe nebeneinander, durch jeden laeuft
-    // eine Tube. Ringachse = Tube-Richtung (c.dir), die beiden Ringe sind um den
-    // Versatz c.off (~5 cm) versetzt. Ohne Paar (manuell) -> ein Ring.
+    // Doppelrohrverbinder/Rohrklammer: ein "8"-foermiger Koerper, durch jedes
+    // Loch laeuft eine Tube. Loch-Achse = Tube-Richtung (c.dir), die beiden
+    // Loecher stehen um c.off (~5 cm) auseinander. Ohne Paar (die zweite Tube
+    // ist noch nicht gewaehlt) bleibt es bei einem Loch.
     for (const c of (model.clamps ? model.clamps.values() : [])) {
       const klammer = c.connectorId === "tube_clamp";
       const st = stateOf(c.id);
       if (st === "future") continue;
       const mat = matFor(c.id, this._clampMaterial());
       const dir = c.dir ? new THREE.Vector3(c.dir[0], c.dir[1], c.dir[2]).normalize() : new THREE.Vector3(1, 0, 0);
-      const q = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 0, 1), dir);
-      const h = c.off ? [c.off[0] / 2, c.off[1] / 2, c.off[2] / 2] : null;
-      const centers = h
-        ? [[c.x - h[0], c.y - h[1], c.z - h[2]], [c.x + h[0], c.y + h[1], c.z + h[2]]]
-        : [[c.x, c.y, c.z]];
-      // Bei der Rohrklammer ist das ZWEITE Loch offen -- dort klickt das Rohr ein.
-      centers.forEach(([px, py, pz], i) => {
-        const offen = klammer && i === centers.length - 1;
-        this._batchAdd(this._clampRingGeometry(offen), mat,
-          new THREE.Matrix4().compose(new THREE.Vector3(px, py, pz), q, ONE),
-          "clamp", c.id, this.pickClamps);
-      });
+      const off = c.off ? new THREE.Vector3(c.off[0], c.off[1], c.off[2]) : null;
+      const d = off ? off.length() : 0;
+      // Eigenes Achsenkreuz: +Z laeuft mit den Rohren, +X von Loch zu Loch.
+      // Ohne zweites Rohr steht die Querachse frei -- dann tut es irgendeine.
+      const zAxis = dir;
+      let xAxis = off ? off.clone().normalize() : new THREE.Vector3(0, 1, 0).cross(zAxis);
+      if (xAxis.lengthSq() < 1e-6) xAxis = new THREE.Vector3(1, 0, 0).cross(zAxis);
+      xAxis.sub(zAxis.clone().multiplyScalar(xAxis.dot(zAxis))).normalize();
+      const yAxis = new THREE.Vector3().crossVectors(zAxis, xAxis).normalize();
+      const q = new THREE.Quaternion().setFromRotationMatrix(
+        new THREE.Matrix4().makeBasis(xAxis, yAxis, zAxis));
+      this._batchAdd(this._clampBodyGeometry(klammer, d), mat,
+        new THREE.Matrix4().compose(new THREE.Vector3(c.x, c.y, c.z), q, ONE),
+        "clamp", c.id, this.pickClamps);
     }
 
     // Netze/Stoffe (textil2): Flaeche ueber 4 Eck-Kupplungen. Deckend -- ein
@@ -3425,7 +3443,7 @@ export class SceneManager {
 
   _disposeGroup(group) {
     const keep = this._keepGeos;
-    for (const g of [this._connGeo, this._clampGeo, this._clampRingGeo, this._c45Geo, this._c45StubGeo])
+    for (const g of [this._connGeo, this._c45Geo, this._c45StubGeo])
       if (g) keep.add(g);
     for (let i = group.children.length - 1; i >= 0; i--) {
       const c = group.children[i];
