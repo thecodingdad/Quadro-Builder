@@ -1,7 +1,7 @@
 // Verkabelt die Bedienoberflaeche (Toolbar, Tastatur, Stueckliste, Bestand).
 
-import { buildableTubes, buildableCurvedTubes, buildablePanels, tubeColors, geometry, allTubes, allConnectors, panels, reinforcements, screws, slideKindName, partName, partForFitting, accessories, getPartById } from "./catalog.js";
-import { PLACEABLE_FITTINGS } from "./model.js";
+import { buildableTubes, buildableCurvedTubes, buildablePanels, tubeColors, geometry, allTubes, allConnectors, panels, reinforcements, screws, slideKindName, partName, partForFitting, accessories, getPartById, poolLinerFor } from "./catalog.js";
+import { PLACEABLE_FITTINGS, POOL_KINDS } from "./model.js";
 import { computeBOM, compareInventory, connectorsForNode } from "./bom.js";
 import { computeBuildPlan, BUILD_ORDERS } from "./buildplan.js";
 import { parseQDF } from "./qdfimport.js";
@@ -2495,6 +2495,54 @@ export function initUI({ scene, model, builder }) {
   let bomHighlightKey = null;
   const hlKey = (hl) => `${hl.kind}:${hl.id}:${hl.color || ""}`;
 
+  // Teile, die die App zwar führt, aber nicht zeichnet (in `scene.js` fällt
+  // `_fittingMeshes` für sie in den Default). Hervorgehoben wird deshalb die
+  // Kupplung bzw. das Rohr, an der sie sitzen -- sonst bliebe der Klick auf die
+  // Zeile ohne jede Wirkung.
+  const UNDRAWN_FITTINGS = new Set(["flexi-connector3", "bolt2", "bearing-connector4", "tube-cap2"]);
+
+  /** Sichtbarer Stellvertreter für ein Teil, das nicht gezeichnet wird. */
+  function visibleStandIn(f) {
+    let best = null, bestDist = 8;
+    for (const n of model.nodes.values()) {
+      if (n.unused) continue;
+      const d = Math.hypot(n.x - f.x, n.y - f.y, n.z - f.z);
+      if (d < bestDist) { bestDist = d; best = n.id; }
+    }
+    if (best) return best;
+    // Die Lagerkupplung klemmt mitten auf einem Rohr, dort gibt es keinen Knoten.
+    bestDist = 8;
+    for (const tb of model.tubes.values()) {
+      if (tb.arm || tb.link) continue;
+      const a = model.nodes.get(tb.a), b = model.nodes.get(tb.b);
+      if (!a || !b) continue;
+      const ab = [b.x - a.x, b.y - a.y, b.z - a.z];
+      const len2 = ab[0] * ab[0] + ab[1] * ab[1] + ab[2] * ab[2] || 1;
+      let s2 = ((f.x - a.x) * ab[0] + (f.y - a.y) * ab[1] + (f.z - a.z) * ab[2]) / len2;
+      s2 = Math.max(0, Math.min(1, s2));
+      const d = Math.hypot(a.x + ab[0] * s2 - f.x, a.y + ab[1] * s2 - f.y, a.z + ab[2] * s2 - f.z);
+      if (d < bestDist) { bestDist = d; best = tb.id; }
+    }
+    return best;
+  }
+
+  /**
+   * Anbauteile, die zu einem Katalogteil gehören. Das Bällebad steht im Katalog
+   * als Poolfolie -- welche, sagt seine Grundfläche, nicht seine QDF-Art.
+   */
+  function fittingsForPart(partId) {
+    const ids = new Set();
+    for (const f of model.fittings.values()) {
+      const def = POOL_KINDS.has(f.kind)
+        ? poolLinerFor(Math.abs(f.w || 0), Math.abs(f.d || 0))
+        : partForFitting(f.kind, f.mask);
+      if (!def || def.id !== partId) continue;
+      const id = UNDRAWN_FITTINGS.has(f.kind) ? visibleStandIn(f) : f.id;
+      if (id) ids.add(id);
+    }
+    return ids;
+  }
+
   /** Teile im Modell, die zu einer Stücklisten-Zeile gehören. */
   function partsForBomRow(hl) {
     const ids = new Set();
@@ -2511,10 +2559,7 @@ export function initUI({ scene, model, builder }) {
         for (const typ of connectorsForNode(model, n)) if (typ === hl.id) { ids.add(n.id); break; }
       }
     } else if (hl.kind === "fittings") {
-      for (const f of model.fittings.values()) {
-        const def = partForFitting(f.kind, f.mask);
-        if (def && def.id === hl.id) ids.add(f.id);
-      }
+      for (const id of fittingsForPart(hl.id)) ids.add(id);
     } else if (hl.kind === "reinforcements") {
       for (const tb of model.tubes.values()) if (tb.reinforced) ids.add(tb.id);
     } else if (hl.kind === "textiles") {
@@ -2802,6 +2847,8 @@ export function initUI({ scene, model, builder }) {
         if ((c.connectorId || "double_tube") === r.key) ids.add(c.id);
     } else if (r.group === "reinforcements") {
       for (const t of model.tubes.values()) if (t.reinforced) ids.add(t.id);
+    } else if (r.group === "fittings") {
+      for (const id of fittingsForPart(r.key)) ids.add(id);
     }
     // "screws" bleibt leer: Schrauben werden gerechnet, nicht gebaut.
     return ids;

@@ -1866,9 +1866,10 @@ export class SceneManager {
     // "O--": ein Ring, der ueber den Stutzen der tragenden Kupplung greift, und
     // quer dazu ein eigener Stutzen, in dem das Rohr steckt.
     const ringLen = cs * 0.9;
+    const ringR = armR + 0.75;                   // Aussenmass des Rings
     const ring = new THREE.Mesh(this._cachedGeo(`pinRing${seg}`, () => {
       const s = new THREE.Shape();
-      s.absarc(0, 0, armR + 0.75, 0, Math.PI * 2, false);
+      s.absarc(0, 0, ringR, 0, Math.PI * 2, false);
       const loch = new THREE.Path();
       loch.absarc(0, 0, armR + 0.05, 0, Math.PI * 2, true);
       s.holes.push(loch);
@@ -1886,12 +1887,14 @@ export class SceneManager {
     this.buildGroup.add(ring);
     if (st !== "future") this.pickNodes.push(ring);
     // Der eigene Stutzen ist so duenn wie ein Kupplungs-Arm -- er steckt IM
-    // Rohr und ist deshalb nur an der Muendung zu sehen.
+    // Rohr und ist deshalb nur an der Muendung zu sehen. Er sitzt AUSSEN am
+    // Ring, faengt also erst an dessen Mantel an; vom Knoten aus gemessen ragte
+    // er sonst durch den Ring hindurch.
     const stubLen = cs * 0.85;
     const arm = new THREE.Mesh(
       this._cachedGeo(`pinStub${seg}`, () => this._tubeGeometry(armR, stubLen, Math.max(6, seg - 4))), mat);
     arm.quaternion.setFromUnitVectors(UP, stub);
-    arm.position.copy(at).addScaledVector(stub, stubLen / 2);
+    arm.position.copy(at).addScaledVector(stub, ringR + stubLen / 2);
     arm.userData = { kind: "node", id: n.id };
     this.buildGroup.add(arm);
     if (st !== "future") this.pickNodes.push(arm);
