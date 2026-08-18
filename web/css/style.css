@@ -690,7 +690,10 @@ body.compact-autosave #toolbar-left .autosave-toggle { padding: 0 2px; }
    Reicht der Platz oben nicht, bleiben Datei, Zurück und Wieder stehen; alles
    Weitere hängt ui.js in das Menü (#toolbar-right-inner), der Seitenleisten-
    Schalter rückt neben den Menü-Knopf. */
-body.compact-head .brand span { display: none; }
+/* Der Name bleibt vollständig stehen -- "QUADRO 3D" ist die App, ein halber
+   Name spart kaum Platz. Eng wird stattdessen die Schrift. */
+body.compact-head .brand { font-size: 16px; gap: 6px; }
+body.compact-head .brand-icon { width: 20px; height: 20px; }
 body.compact-head .hide-mobile { display: none !important; }
 body.compact-head #toolbar-left  { padding: 5px 10px; gap: 6px; }
 body.compact-head #toolbar-right { padding: 5px 8px; gap: 4px; border-left: none; }
