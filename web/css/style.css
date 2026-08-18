@@ -966,7 +966,11 @@ body.mobile-portrait .status { bottom: 16px; max-width: calc(100% - 24px); }
   position: fixed; inset: 0;
   background: rgba(20, 26, 34, 0.45);
   display: flex; align-items: center; justify-content: center;
-  z-index: 200;
+  /* Über allem: eine Rückfrage kommt meist AUS der Seitenleiste (Entwurf
+     löschen, umbenennen). Steht sie darunter, ist sie im Overlay-Modus
+     (schmales Fenster) nicht zu sehen -- und die Leiste nicht bedienbar,
+     weil der Dialog jeden Klick abfängt. */
+  z-index: 500;
 }
 
 /* Dialogkarte: Text und Eingabefeld der gemeinsamen Rückfrage-Karte */
