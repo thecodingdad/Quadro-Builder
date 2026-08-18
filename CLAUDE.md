@@ -237,6 +237,9 @@ Koordinaten in **cm**, Three.js-Konvention **y = oben**, Boden bei y = 0.
   Preisänderungen bitte mit Quelle im Commit (z. B. quadroshop.com, Stand).
 - **Neue UI-Texte:** immer in **beide** Dictionaries (`de` und `en`) in `i18n.js`, dann `t('key')`
   bzw. `data-i18n`/`data-i18n-title` im HTML. Nie Strings in `ui.js` hardcoden.
+- **Statuszeile (unten links):** `setStatusHint()` setzt den dauerhaften Hinweis zum laufenden
+  Werkzeug (aus `setMode`), `flash()` legt eine kurze Rückmeldung für 3,5 s darüber und stellt
+  danach den Hinweis wieder her. Nichts sonst schreibt in `#status`.
 - **Rückfragen:** nie `alert`/`confirm`/`prompt`. In `ui.js` stehen `dialog()` und die
   Kurzformen `askConfirm()`, `askInput()`, `showMessage()`; sie füllen die Karte
   `#dlg-overlay` (Enter = erster Knopf, Escape/Klick daneben = Abbruch).

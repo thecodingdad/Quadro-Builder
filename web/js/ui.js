@@ -557,6 +557,34 @@ export function initUI({ scene, model, builder }) {
     if (!gesperrt) { updateUndoButton(); syncDeleteButton(); }
   }
 
+  // --- Statuszeile unten links -------------------------------------------
+  // Sie sagt dauerhaft, was das laufende Werkzeug erwartet ("Kupplung waehlen,
+  // dann gruenen Punkt klicken"). Kurze Rueckmeldungen ("Rohr 35 cm gesetzt")
+  // legen sich fuer ein paar Sekunden darueber; danach steht wieder der
+  // Hinweis da, statt dass die Zeile beim Vollzug der letzten Tat verharrt.
+  const FLASH_MS = 3500;
+  let statusHint = "";
+  let flashTimer = null;
+
+  /** Dauerhafter Hinweis zum laufenden Werkzeug. */
+  function setStatusHint(text) {
+    statusHint = text;
+    // Ein Werkzeugwechsel raeumt eine noch stehende Meldung ab -- sie gehoert
+    // zum vorigen Werkzeug.
+    if (flashTimer) { clearTimeout(flashTimer); flashTimer = null; }
+    $("status").textContent = text;
+  }
+
+  /** Kurze Rueckmeldung; danach kommt der Hinweis des Werkzeugs zurueck. */
+  function flash(msg) {
+    $("status").textContent = msg;
+    clearTimeout(flashTimer);
+    flashTimer = setTimeout(() => {
+      flashTimer = null;
+      $("status").textContent = statusHint;
+    }, FLASH_MS);
+  }
+
   function setMode(m) {
     builder.setMode(m);
     // "Bauen" steht fuer ALLES, was am Modell arbeitet -- Rohre, Platten,
@@ -599,7 +627,7 @@ export function initUI({ scene, model, builder }) {
       fitting: "status_fitting",
       assembly: "status_assembly",
     };
-    $("status").textContent = t(statusMap[m] || "status_add");
+    setStatusHint(t(statusMap[m] || "status_add"));
     renderCurrentPart();
     if (m === "assembly") renderAssembly();
   }
@@ -2286,12 +2314,6 @@ export function initUI({ scene, model, builder }) {
   }
 
 
-
-  // Meldungen bleiben stehen, bis die naechste kommt -- eine Meldung, die man
-  // gerade nicht angesehen hat, war sonst weg.
-  function flash(msg) {
-    $("status").textContent = msg;
-  }
 
   // --- Tastatur ----------------------------------------------------------
   window.addEventListener("keydown", (e) => {
