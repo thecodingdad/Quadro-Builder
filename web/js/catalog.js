@@ -109,6 +109,25 @@ export function screws() {
   return catalog().screws || [];
 }
 
+/**
+ * Passende Poolfolie zu einer Baellebad-Grundflaeche. Verglichen wird mit den
+ * Katalogmassen (`pool` am Teil): XS gehoert zum kleinen Becken, S/L/XXL
+ * unterscheiden sich in der Tiefe. Passt nichts genau, gewinnt die
+ * flaechenmaessig naechste Groesse -- eine Folie braucht das Becken ohnehin.
+ */
+export function poolLinerFor(s1, s2) {
+  const liners = accessories().filter((a) => a.pool);
+  if (!liners.length || !s1 || !s2) return null;
+  const short = Math.min(s1, s2), long = Math.max(s1, s2);
+  const exact = liners.find((a) => a.pool.short === short && a.pool.long === long);
+  if (exact) return exact;
+  const area = short * long;
+  return liners.reduce((best, a) => {
+    const diff = Math.abs(a.pool.short * a.pool.long - area);
+    return !best || diff < best.diff ? { def: a, diff } : best;
+  }, null).def;
+}
+
 /** Schraube nach Kennung, z. B. "screw_panel". */
 export function getScrew(id) {
   return screws().find((s) => s.id === id) || null;

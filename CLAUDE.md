@@ -176,7 +176,8 @@ Koordinaten in **cm**, Three.js-Konvention **y = oben**, Boden bei y = 0.
   ist die Oberkante der Frontwand (so steht es in der Datei), dazu `w` (Breite), `h` (Wandhöhe)
   und `d` (Tiefe, **mit Vorzeichen** – die Datei führt die Tiefe nicht, sie wird beim Import aus
   dem Kupplungsnetz abgeleitet). Wände, Boden und Wasser zeichnet `scene.js` daraus.
-  `poolLinerFor(w, d)` wählt daraus die Poolfolie XS/S/L/XXL (Maße am Katalogteil unter `pool`);
+  Die Folie hängt innen im Rahmen: an den vier Seiten und oben 2,5 cm eingerückt (halbe
+  Rohrbreite), unten liegt sie auf. `catalog.poolLinerFor(w, d)` wählt daraus die Poolfolie XS/S/L/XXL (Maße am Katalogteil unter `pool`);
   passt nichts genau, gewinnt die flächenmäßig nächste Größe. Ältere Stände führen den Pool noch
   als fünf Platten mit `poolPart` – Import, Export und Stückliste kennen beide Formen.
 - `connectorsForNode` liefert **alle** Kupplungen eines Knotens: an einem `c45`-Knoten
@@ -189,6 +190,8 @@ Koordinaten in **cm**, Three.js-Konvention **y = oben**, Boden bei y = 0.
   und was frei bleibt, sind die Rohrschrauben (nach Rohrfarbe). Rutschen: je Verbindung
   (`model.slideExit` trifft ein weiteres Teil) 2 konische + 2 Gegenstücke + 2 Rutschenschrauben,
   der Kettenkopf zusätzlich 2 konische + 2 Plattenschrauben; die Integralrutsche braucht keine.
+  Am Einstieg sitzen sie an bestimmten Stellen: die Plattenschrauben im **waagerechten** Trägerrohr
+  (je Ende eine), die konischen in den Rohren, die von dessen Kupplungen nach **oben** gehen.
   Die Katalog-Gruppe `screws` in `parts.json` führt den **Packungs**preis plus `pack`; die Liste
   rechnet anteilig (`price = Packpreis / pack`).
 - Verstärkungen: kollineare verstärkte Rohre werden per Union-Find zu **Läufen** verschmolzen.

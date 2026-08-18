@@ -1,7 +1,8 @@
 // Stueckliste (BOM) + Kupplungstyp-Heuristik + Bestands-/Machbarkeitscheck.
 
-import { getTube, getConnector, getPanel, colorName, partName, reinforcementPart, reinforcementRunName, partForFitting, getPartById, accessories, getScrew } from "./catalog.js";
+import { getTube, getConnector, getPanel, colorName, partName, reinforcementPart, reinforcementRunName, partForFitting, getPartById, getScrew, poolLinerFor } from "./catalog.js";
 import { round2, xAxisOf } from "./util.js";
+import { POOL_KINDS } from "./model.js";
 
 // Einheitsvektoren der Nachbarn eines Knotens. Doppelrohr-Verbindungen (link)
 // sind KEIN Arm der Kupplung und zaehlen nicht in die Kupplungstyp-Heuristik
@@ -269,28 +270,6 @@ function reinforcementRuns(model) {
   return [...runs.values()];
 }
 
-// QDF-Arten eines Baellebads: gross und klein.
-const POOL_KINDS = new Set(["pool2", "pool-small2"]);
-
-/**
- * Passende Poolfolie zu einer Baellebad-Grundflaeche. Verglichen wird mit den
- * Katalogmassen (`pool` am Teil): XS gehoert zum kleinen Baellebad, S/L/XXL
- * unterscheiden sich in der Tiefe. Passt nichts genau, gewinnt die
- * flaechenmaessig naechste Groesse -- eine Folie braucht das Becken ohnehin.
- */
-function poolLinerFor(s1, s2) {
-  const liners = accessories().filter((a) => a.pool);
-  if (!liners.length || !s1 || !s2) return null;
-  const short = Math.min(s1, s2), long = Math.max(s1, s2);
-  const exact = liners.find((a) => a.pool.short === short && a.pool.long === long);
-  if (exact) return exact;
-  const area = short * long;
-  return liners.reduce((best, a) => {
-    const diff = Math.abs(a.pool.short * a.pool.long - area);
-    return !best || diff < best.diff ? { def: a, diff } : best;
-  }, null).def;
-}
-
 // --- Schrauben ------------------------------------------------------------
 // Sie werden nur gerechnet: kein Teil im Modell, nichts zu setzen, nichts zu
 // zeichnen. Grundregel des Systems: an einer Kupplung hat ein Rohr genau EIN
@@ -346,6 +325,45 @@ export function computeScrews(model) {
     return best;
   };
 
+  /** Richtung eines Rohrs (normiert) -- null, wenn die Knoten fehlen. */
+  const dirOf = (t) => {
+    const a = model.nodes.get(t.a), b = model.nodes.get(t.b);
+    if (!a || !b) return null;
+    const d = [b.x - a.x, b.y - a.y, b.z - a.z];
+    const len = Math.hypot(d[0], d[1], d[2]);
+    return len < 1e-6 ? null : d.map((v) => v / len);
+  };
+  /** Waagerechtes Rohr, das dem Punkt am naechsten liegt -- der Traeger. */
+  const horizontalTubeNear = (point) => {
+    let best = null, bestDist = SCREW_SLIDE_EPS;
+    for (const t of model.tubes.values()) {
+      if (t.arm || t.link) continue;
+      const d = dirOf(t);
+      if (!d || Math.abs(d[1]) > 0.2) continue;          // nicht waagerecht
+      const a = model.nodes.get(t.a), b = model.nodes.get(t.b);
+      // Abstand des Punktes von der Strecke a..b
+      const ab = [b.x - a.x, b.y - a.y, b.z - a.z];
+      const ap = [point[0] - a.x, point[1] - a.y, point[2] - a.z];
+      const lenSq = ab[0] * ab[0] + ab[1] * ab[1] + ab[2] * ab[2] || 1;
+      const tt = Math.max(0, Math.min(1, (ap[0] * ab[0] + ap[1] * ab[1] + ap[2] * ab[2]) / lenSq));
+      const dist = Math.hypot(ap[0] - ab[0] * tt, ap[1] - ab[1] * tt, ap[2] - ab[2] * tt);
+      if (dist <= bestDist) { best = t; bestDist = dist; }
+    }
+    return best;
+  };
+  /** Rohr, das von diesem Knoten nach OBEN geht -- der Pfosten daneben. */
+  const tubeUpwardFrom = (nodeId) => {
+    for (const t of model.tubes.values()) {
+      if (t.arm || t.link) continue;
+      if (t.a !== nodeId && t.b !== nodeId) continue;
+      const d = dirOf(t);
+      if (!d) continue;
+      const up = t.a === nodeId ? d[1] : -d[1];          // Richtung WEG vom Knoten
+      if (up > 0.9) return t;
+    }
+    return null;
+  };
+
   const count = { panel: 0, conical: 0, counter: 0, slide: 0 };
 
   // 2. Platten: vier Schrauben, je Ecke eine. Sie laufen durch das Tragrohr in
@@ -390,9 +408,18 @@ export function computeScrews(model) {
     if (!model.slideExit(s) || belegt.has(s.id)) continue;
     count.conical += 2;
     count.panel += 2;
+    // Wo genau: die beiden Plattenschrauben sitzen im WAAGERECHTEN Rohr, auf
+    // dem die Rutsche aufliegt (je Ende eine), die beiden konischen in den
+    // Rohren, die von dessen Kupplungen nach OBEN gehen.
     const einstieg = s.hook && s.hook.length === 3 ? s.hook : [s.x, s.y, s.z];
-    const node = nodeNear(einstieg, SCREW_SLIDE_EPS);
-    if (node) for (let i = 0; i < 4; i++) takeAtNode(node.id);
+    const traeger = horizontalTubeNear(einstieg);
+    if (!traeger) continue;
+    takeSlot(traeger.id + "@" + traeger.a);
+    takeSlot(traeger.id + "@" + traeger.b);
+    for (const nodeId of [traeger.a, traeger.b]) {
+      const pfosten = tubeUpwardFrom(nodeId);
+      if (pfosten) takeSlot(pfosten.id + "@" + nodeId);
+    }
   }
 
   // 4. Rohrschrauben: was an Plaetzen uebrig ist, nach Rohrfarbe.

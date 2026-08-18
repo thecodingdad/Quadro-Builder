@@ -169,6 +169,10 @@ export const SLIDE_PARTS = {
   "curved-slide2": { chain: true,  exit: { off: [60, -80, 60], turn: 90 } },
   "slide-end2":    { chain: false, exit: null },
 };
+// QDF-Arten eines Baellebads: grosses und kleines Becken. Es ist EIN Anbauteil
+// (Frontwand-Oberkante als Bezugspunkt, dazu w/h/d) -- keine Platten.
+export const POOL_KINDS = new Set(["pool2", "pool-small2"]);
+
 // Teile, die eine Kette fortsetzen duerfen (der Auslauf beendet sie).
 export const SLIDE_CHAIN_KINDS = ["slide2", "curved-slide2", "slide-end2"];
 

@@ -1,12 +1,12 @@
 // Bau-Interaktion: Auswahl, Anbau ueber Richtungs-Handles, Loeschen.
 
 import { DIRECTIONS, DIAGONAL_DIRECTIONS, DIR_ALIGN_TOL, ARM_ALIGN_TOL, CLAMP_LINK_DIST, C45_SLEEVE_LEN, C45_ARM_LEN } from "./config.js";
-import { geometry, getTube, spacingFor, getPanel, defaultPanel, diagonalTubeId, slideKindLabel, slideKindName, isCurvedTube, gridSpacing, tubeColors, partName, partForFitting, getPartById, getConnector } from "./catalog.js";
+import { geometry, getTube, spacingFor, getPanel, defaultPanel, diagonalTubeId, slideKindLabel, slideKindName, isCurvedTube, gridSpacing, tubeColors, partName, partForFitting, getPartById, getConnector, poolLinerFor } from "./catalog.js";
 import { computeBuildPlan, connectorLabelInfo } from "./buildplan.js";
 import { infeasibleConnectors, inferConnectorType } from "./bom.js";
 import { t } from "./i18n.js";
 import { round2, panelNormal, modelMiddle } from "./util.js";
-import { TUBE_FITTINGS } from "./model.js";
+import { TUBE_FITTINGS, POOL_KINDS } from "./model.js";
 
 // Kupplungen, die auf einem Rohr sitzen statt im Raster: QDF-Art -> Katalogteil.
 // Teile, die sich um ein Rohr klemmen lassen. Die Lochzapfenkupplung gehört
@@ -702,7 +702,14 @@ export class Builder {
     }
     if (kind === "fitting") {
       const f = m.fittings.get(id);
-      const def = f && partForFitting(f.kind, f.mask);
+      if (!f) return null;
+      // Das Baellebad hat keine eigene QDF-Zuordnung im Katalog: gekauft wird
+      // die Poolfolie, und die haengt an der Groesse des Beckens.
+      if (POOL_KINDS.has(f.kind)) {
+        const folie = poolLinerFor(Math.abs(f.w || 0), Math.abs(f.d || 0));
+        return folie ? partName(folie) : null;
+      }
+      const def = partForFitting(f.kind, f.mask);
       return def ? partName(def) : null;
     }
     if (kind === "slide") {

@@ -88,6 +88,8 @@ const SLIDE_END_FLAT = 47.5 - SLIDE_END_LIP_R;
 const FLAT_FITTINGS = new Set(["lattice2", "textil-round2", "roof-large2"]);
 // Staerke der Baellebad-Folie: nur so dick, dass sie sichtbar ist.
 const POOL_SKIN = 2;
+// Sie haengt innen im Rahmen -- eine halbe Rohrbreite von den Rohrachsen weg.
+const POOL_INSET = 2.5;
 // Anbauteile, die auf einem Stutzen der Kupplung sitzen: die Kupplung bekommt
 // dort denselben Stutzen wie fuer ein Rohr.
 const ARM_FITTINGS = new Set(["adapter2", "bearing2", "steering-lock2"]);
@@ -932,26 +934,35 @@ export class SceneManager {
         const tief = Math.abs(pd);
         const dz = pd < 0 ? -1 : 1;
         const dick = POOL_SKIN;
-        const wand = (breite, hoehe, tiefe, x, y, z) => this._cachedGeo(
-          `pool${breite}x${hoehe}x${tiefe}@${x},${y},${z}`,
+        // Die Folie haengt INNEN im Rahmen: an den vier Seiten und oben eine
+        // halbe Rohrbreite eingerueckt, sonst liefe sie mitten durch die Rohre.
+        // Unten bleibt sie, wo sie ist -- dort liegt sie auf.
+        const ein = POOL_INSET;
+        const breite = pw - 2 * ein;
+        const laenge = tief - 2 * ein;
+        const hoehe = ph - ein;                       // Oberkante liegt tiefer
+        const wand = (bx, by, bz, x, y, z) => this._cachedGeo(
+          `pool${bx}x${by}x${bz}@${x},${y},${z}`,
           () => {
-            const g = new THREE.BoxGeometry(breite, hoehe, tiefe);
+            const g = new THREE.BoxGeometry(bx, by, bz);
             g.translate(x, y, z);
             return g;
           });
+        const mittelY = -ein - hoehe / 2;
         const mitte = dz * tief / 2;
         const teile = [
-          wand(pw, ph, dick, 0, -ph / 2, 0),                        // Frontwand
-          wand(pw, ph, dick, 0, -ph / 2, dz * tief),                // Rueckwand
-          wand(dick, ph, tief, -pw / 2, -ph / 2, mitte),            // linke Wand
-          wand(dick, ph, tief, pw / 2, -ph / 2, mitte),             // rechte Wand
-          wand(pw, dick, tief, 0, -ph + dick / 2, mitte),           // Boden
+          wand(breite, hoehe, dick, 0, mittelY, dz * ein),               // Frontwand
+          wand(breite, hoehe, dick, 0, mittelY, dz * (tief - ein)),      // Rueckwand
+          wand(dick, hoehe, laenge, -breite / 2, mittelY, mitte),        // linke Wand
+          wand(dick, hoehe, laenge, breite / 2, mittelY, mitte),         // rechte Wand
+          wand(breite, dick, laenge, 0, -ph + dick / 2, mitte),          // Boden
         ].map((g) => this._placeFitting(
           new THREE.Mesh(g, this._fittingMaterial(hex, false)), f, q));
         // Wasser: 75 % Fuellhoehe, knapp innerhalb der Folie.
-        const wasserH = ph * 0.75;
+        const wasserH = hoehe * 0.75;
         const wasser = this._placeFitting(new THREE.Mesh(
-          wand(pw - 2 * dick, wasserH, tief - 2 * dick, 0, -ph + dick + wasserH / 2, mitte),
+          wand(breite - 2 * dick, wasserH, laenge - 2 * dick,
+            0, -ph + dick + wasserH / 2, mitte),
           this._waterMaterial()), f, q);
         return [...teile, wasser];
       }
