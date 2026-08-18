@@ -11,6 +11,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ## [Unreleased]
 
 ### Behoben · Fixed
+- **Während eine Kopie am Zeiger hängt, lässt sich die Ansicht wieder drehen** – das Ziehen führte bisher nur die Kopie nach, die Kamera stand still · **The view can be turned again while a copy hangs on the pointer** – dragging only moved the copy
 - **Eine eingefügte Kopie bleibt in der Teilung ihrer Vorlage** – gerastert wurde bisher gegen den Nullpunkt der Welt, sodass die Kopie um bis zu einen halben Schritt verrutschte, wenn das Original nicht selbst auf dem Raster lag (importierte oder gedrehte Aufbauten) · **A pasted copy keeps the grid of its original** – snapping went against the world origin, which shifted the copy by up to half a step
 - **Alle Tabs zu und neu geladen: der neue Entwurf ist jetzt leer** – bisher kam dort ein längst vergessenes Modell zum Vorschein, der Autosave aus der Zeit vor den Entwurf-Dateien · **Closing every tab and reloading now gives an empty design** – it used to resurrect the autosave from before designs became files
 - **„Bauen" bleibt markiert, egal welches Teil in der Hand liegt** – beim Doppelrohrverbinder, der Rohrklammer und beim Verstärken fiel die Markierung weg, als hätte man das Bauen verlassen · **„Build" stays highlighted whatever part is selected** – the double-tube connector, the tube clamp and reinforcing used to clear it

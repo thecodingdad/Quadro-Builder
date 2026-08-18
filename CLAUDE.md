@@ -290,7 +290,8 @@ Koordinaten in **cm**, Three.js-Konvention **y = oben**, Boden bei y = 0.
   `ui.captureActiveTab()` sichert `builder.pasteSnapshot()` statt des laufenden Modells (sonst
   landete die Vorschau in Sitzung und Datei), und Tab-Wechsel, Moduswechsel, Escape sowie
   abgebrochene Zeigergesten rufen `cancelPaste()`. Abgesetzt wird nur bei einem **echten Klick**
-  (Bewegung unter `CLICK_TOLERANCE`) und nur an gültiger Stelle; sonst zeichnet `scene.js` die
+  (Bewegung unter `CLICK_TOLERANCE`) und nur an gültiger Stelle; mit gedrückter Taste dreht der
+  Zug wie sonst die Ansicht – die Kopie folgt dem Zeiger nur mit loser Taste; sonst zeichnet `scene.js` die
   Kopie über `opts.invalid` rot. Die Kopie bleibt auf der **Höhe ihres Ursprungs**
   und wandert nur waagerecht (`scene.pointOnPlane` mit Normale Y) – in drei Achsen zugleich trifft
   man die Stelle nicht; die Höhe stellt man danach mit den Pfeiltasten ein, denn das Eingefügte

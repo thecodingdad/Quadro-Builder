@@ -1453,8 +1453,20 @@ export class Builder {
       this.scene.setViewCubeHover(cell);
       if (cell) { this.scene.setHover(null); this.scene.setCursor("pointer"); return; }
     }
-    // Kopie am Zeiger: sie folgt ihm, solange keine Taste gedrueckt ist.
-    if (this._paste) { this._updatePaste(e); return; }
+    // Kopie am Zeiger: sie folgt ihm -- aber nur mit LOSER Taste. Wer zieht,
+    // will die Ansicht drehen (abgesetzt wird ohnehin nur bei einem echten
+    // Klick, siehe _onUp); nachgefuehrt sprang die Kopie dabei mit und die
+    // Kamera stand still.
+    if (this._paste) {
+      if ((e.buttons & 1) && this.scene.orbiting) {
+        const dx = e.clientX - this._last.x, dy = e.clientY - this._last.y;
+        this._last = { x: e.clientX, y: e.clientY };
+        if (dx || dy) this.scene.orbitBy(dx, dy);
+        return;
+      }
+      this._updatePaste(e);
+      return;
+    }
     // Cursor-Modus: mit gedrueckter linker Taste ziehen zieht ein Auswahl-
     // Rechteck auf, statt zu drehen (das liegt dort auf der rechten Taste).
     // Auswahl wird gerade geschoben.
