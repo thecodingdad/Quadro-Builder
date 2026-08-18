@@ -1151,7 +1151,7 @@ export function initUI({ scene, model, builder }) {
   $("btn-undo").addEventListener("click", () => builder.undo());
   $("btn-redo").addEventListener("click", () => builder.redo());
   const camBtn = $("btn-camera");
-  if (camBtn) camBtn.addEventListener("click", () => scene.resetCamera());
+  if (camBtn) camBtn.addEventListener("click", () => scene.resetCamera(model));
   /** Ein Modell als QDF anbieten. `daten` ist ein Modell-JSON. */
   function exportiereModell(name, daten) {
     const m2 = new (model.constructor)();
@@ -1265,7 +1265,7 @@ export function initUI({ scene, model, builder }) {
       }
     }
     if (geladen) {
-      scene.resetCamera();
+      scene.resetCamera(model);
       flash(geladen === 1 ? letzteInfo : t("flash_imported_n", geladen));
     }
     if (fehler.length) showMessage(fehler.join("\n"));
@@ -1877,7 +1877,7 @@ export function initUI({ scene, model, builder }) {
     // Die Sammlung bleibt, wie sie ist: geöffnet wird eine KOPIE in einem
     // eigenen Tab, die noch zu keiner Datei gehört.
     openTab({ name: entry.name, data, dirty: true, preview });
-    scene.resetCamera();
+    scene.resetCamera(model);
     flash(t("lib_loaded", entry.name));
   }
 
@@ -2373,7 +2373,7 @@ export function initUI({ scene, model, builder }) {
       case "k": setMode("clamp"); break;
       case "d": toggleDiagonal(); break;
       case "h": toggleHints(); break;
-      case "c": scene.resetCamera(); break;
+      case "c": scene.resetCamera(model); break;
       // Die Liste der Tasten selbst: F1 wie ueberall, "?" fuer die Tastatur
       // ohne F-Reihe.
       case "f1":
@@ -3000,7 +3000,7 @@ export function initUI({ scene, model, builder }) {
     }
     applySlice();
     syncPartHighlights();
-    if (v.camera) scene.restoreCameraState(v.camera); else scene.resetCamera();
+    if (v.camera) scene.restoreCameraState(v.camera); else scene.resetCamera(model);
     $("btn-hints").classList.toggle("active", builder.showHints);
     $("btn-diagonal").classList.toggle("active", builder.mode === "add" && builder.diagonal);
     renderColorButtons();

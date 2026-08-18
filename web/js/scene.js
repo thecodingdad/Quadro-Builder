@@ -112,6 +112,8 @@ const CONNECTOR_ROUNDNESS = 3;
 // rund ein Drittel der Bildhoehe. Der Mindestwert gilt fuer kleine und leere
 // Modelle, damit man das Raster (800 cm) noch ganz sieht.
 const ZOOM_OUT_FACTOR = 3;
+// Luft am Bildrand, wenn die Ansicht auf ein Modell eingepasst wird.
+const FIT_MARGIN = 1.15;
 const MIN_ZOOM_OUT_DISTANCE = 600;   // cm
 
 // Wie nah darf der Blick an Drauf- und Untersicht heran? OrbitControls rechnet
@@ -267,16 +269,69 @@ export class SceneManager {
     this._animate();
   }
 
-  resetCamera() {
+  /**
+   * Ansicht zuruecksetzen. Der BLICKWINKEL bleibt immer der der Vorgabe -- man
+   * soll wissen, wo vorne ist. Abstand und Bildmitte richten sich dagegen nach
+   * dem Modell, sofern eines mitkommt: die Kiste um alle Teile soll ganz im
+   * Bild stehen, statt bei kleinen Modellen zu verschwinden und bei grossen
+   * ueber den Rand zu ragen. Ohne Modell (oder bei leerem) gelten die alten
+   * festen Werte.
+   */
+  resetCamera(model = null) {
     this._needsRender = true;
-    this.camera.position.set(...this._defaultCam.pos);
-    this.camera.lookAt(...this._defaultCam.target);
+    const start = new THREE.Vector3(...this._defaultCam.pos);
+    const heim = new THREE.Vector3(...this._defaultCam.target);
+    const dir = start.clone().sub(heim).normalize();
+
+    const b = model && model.bounds ? model.bounds(geometry().connectorSize / 2) : null;
+    const leer = !b || (!b.size[0] && !b.size[1] && !b.size[2]);
+    let target, dist;
+    if (leer) {
+      target = heim;
+      dist = start.distanceTo(heim);
+    } else {
+      target = new THREE.Vector3(
+        (b.min[0] + b.max[0]) / 2, (b.min[1] + b.max[1]) / 2, (b.min[2] + b.max[2]) / 2);
+      const w = this.container.clientWidth || 1, h = this.container.clientHeight || 1;
+      const fovV = (this._perspCam.fov * Math.PI) / 180;
+      const fovH = 2 * Math.atan(Math.tan(fovV / 2) * (w / h));
+      // Gerechnet wird mit den acht ECKEN, nicht mit einer Kugel um die Kiste:
+      // ein flaches Modell fuellt das Bild sonst nur zur Haelfte. Je Ecke sagt
+      // ihr Abstand zur Bildmitte (quer) und ihre Tiefe (laengs), wie weit die
+      // Kamera zurueck muss, damit sie gerade noch im Bild liegt.
+      const blick = dir.clone().negate();
+      let quer = new THREE.Vector3().crossVectors(blick, new THREE.Vector3(0, 1, 0));
+      if (quer.lengthSq() < 1e-6) quer = new THREE.Vector3(1, 0, 0);   // Blick senkrecht
+      quer.normalize();
+      const hoch = new THREE.Vector3().crossVectors(quer, blick).normalize();
+      const tanH = Math.tan(fovH / 2), tanV = Math.tan(fovV / 2);
+      let noetig = 1;
+      for (const cx of [b.min[0], b.max[0]]) {
+        for (const cy of [b.min[1], b.max[1]]) {
+          for (const cz of [b.min[2], b.max[2]]) {
+            const v = new THREE.Vector3(cx, cy, cz).sub(target);
+            const tiefe = v.dot(blick);
+            noetig = Math.max(noetig,
+              Math.abs(v.dot(quer)) / tanH + tiefe,
+              Math.abs(v.dot(hoch)) / tanV + tiefe);
+          }
+        }
+      }
+      dist = FIT_MARGIN * noetig;
+      // Die Grenze fuers Herauszoomen darf das Einpassen nicht zurueckziehen.
+      this._maxDistance = Math.max(this._maxDistance || 0, dist);
+    }
+
+    this.camera.position.copy(target).addScaledVector(dir, dist);
+    this.camera.lookAt(target);
     this.camera.zoom = 1;
     this.camera.updateProjectionMatrix();
     if (this.controls) {
-      this.controls.target.set(...this._defaultCam.target);
+      this.controls.target.copy(target);
       this.controls.update();
     }
+    // Der orthografische Ausschnitt kommt aus Abstand und Oeffnungswinkel --
+    // damit passt auch dort das ganze Modell ins Bild.
     this._updateOrthoFrustum();
   }
 

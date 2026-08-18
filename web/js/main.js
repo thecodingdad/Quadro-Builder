@@ -59,7 +59,7 @@ async function boot() {
         model.loadJSON(data);
         builder.selectedNodeId = null;
         builder.refresh();
-        scene.resetCamera();
+        scene.resetCamera(model);
         return data.stats;
       },
     };

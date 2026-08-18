@@ -11,6 +11,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ## [Unreleased]
 
 ### Geändert · Changed
+- **Die Ansicht passt sich beim Öffnen an das Modell an** – der Blickwinkel bleibt der gewohnte, aber Abstand und Bildmitte richten sich nach dem Modell, sodass es vollständig im Bild steht. Dasselbe tut „Ansicht zurücksetzen" (Knopf und Taste C); ein leerer Entwurf startet unverändert · **The view now fits the model when opening** – same angle as before, but distance and centre follow the model
 - **Leere Abschnitte der Stückliste fallen weg** – wo nichts gebraucht wird, steht jetzt nichts, statt einer Überschrift mit „–". Im Bestands-Modus bleiben alle Abschnitte stehen, dort trägt man ja auch Teile ein, die das Modell (noch) nicht braucht · **Empty parts-list sections are hidden** instead of showing a dash
 - **„Gitter" heißt jetzt „Netz"** (englisch „Net") – so steht es auch beim Hersteller · **„Lattice" is now „Net"**
 - **„Kupplungsnamen anzeigen" entfernt** – alle Namen auf einmal machten das Bild unleserlich. Der Name eines Teils erscheint weiterhin, sobald man genau eines auswählt · **Removed the „show connector labels" switch** – the name of a part still appears when exactly one is selected

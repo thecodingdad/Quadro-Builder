@@ -230,6 +230,14 @@ Koordinaten in **cm**, Three.js-Konvention **y = oben**, Boden bei y = 0.
 ## Fallstricke
 
 - `catalog.js` lädt `../data/parts.json` relativ – die App muss unter `/web/` ausgeliefert werden.
+- **Ansicht zurücksetzen passt ein:** `scene.resetCamera(model)` behält immer den Blickwinkel der
+  Vorgabe (`_defaultCam`), rückt aber Bildmitte und Abstand so, dass die Kiste um alle Teile ins
+  Bild passt. Gerechnet wird mit den **acht Ecken** (eine Kugel um die Kiste ließe flache Modelle
+  nur halb so groß erscheinen): je Ecke sagen Querabstand und Tiefe, wie weit die Kamera zurück
+  muss. Ohne Modell oder bei leerem Modell gelten die alten festen Werte. Der orthografische
+  Ausschnitt folgt automatisch, weil `_updateOrthoFrustum()` ihn aus Abstand und Öffnungswinkel
+  ableitet. Aufrufer geben das Modell mit – ein **gespeicherter** Kamerastand (Tab-Wechsel) wird
+  weiterhin über `restoreCameraState` gesetzt und nicht überschrieben.
 - **Layout ohne feste Breakpoints:** `ui.js` setzt Klassen auf `<body>`, das CSS liest nur diese –
   `compact-colors`/`compact-view` (Bauteil-Zeile eng), `compact-head` (Kopfzeile eng),
   `sidebar-overlay`, `mobile-portrait`, `asm-sheet-on`. Die beiden Kollaps-Stufen misst ein
