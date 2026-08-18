@@ -559,9 +559,12 @@ export function initUI({ scene, model, builder }) {
 
   function setMode(m) {
     builder.setMode(m);
-    // Der Cursor-Modus gehoert zum Bauen (nicht zum Aufbau-Modus), deshalb
-    // bleibt "Bauen" oben mit markiert.
-    $("mode-add").classList.toggle("active", m === "add" || m === "panel" || m === "slide" || m === "fitting" || m === "select");
+    // "Bauen" steht fuer ALLES, was am Modell arbeitet -- Rohre, Platten,
+    // Rutschen, Anbauteile, Klemmen, Verstaerken und den Cursor. Nur der
+    // Aufbau-Modus faellt heraus, der hat seinen eigenen Knopf. Vorher fiel die
+    // Markierung bei Doppelrohrverbinder/Rohrklammer und beim Verstaerken weg,
+    // als waere man aus dem Bauen heraus.
+    $("mode-add").classList.toggle("active", m !== "assembly");
     $("mode-select").classList.toggle("active", m === "select");
     $("mode-clamp").classList.toggle("active", m === "clamp");
     $("mode-reinforce").classList.toggle("active", m === "reinforce");
