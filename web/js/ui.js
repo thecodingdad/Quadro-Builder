@@ -1,6 +1,6 @@
 // Verkabelt die Bedienoberflaeche (Toolbar, Tastatur, Stueckliste, Bestand).
 
-import { buildableTubes, buildableCurvedTubes, buildablePanels, tubeColors, geometry, allTubes, allConnectors, panels, reinforcements, screws, slideKindName, partName, partForFitting, accessories, getPartById, poolLinerFor } from "./catalog.js";
+import { buildableTubes, buildableCurvedTubes, buildablePanels, tubeColors, geometry, allTubes, allConnectors, panels, reinforcements, screws, slideKindName, partName, partForFitting, accessories, getPartById, poolLinerFor, getTube, getPanel } from "./catalog.js";
 import { PLACEABLE_FITTINGS, POOL_KINDS } from "./model.js";
 import { computeBOM, compareInventory, connectorsForNode } from "./bom.js";
 import { computeBuildPlan, BUILD_ORDERS } from "./buildplan.js";
@@ -1005,23 +1005,26 @@ export function initUI({ scene, model, builder }) {
   // Vier Teile: Integralrutsche (steht fuer sich), Modular- und Bogenrutschen-
   // Koerper (lassen sich aneinanderhaengen) und der Auslauf, der eine Kette
   // abschliesst.
+  // Je Teil ein eigenes Sinnbild: durchgehende Rutsche, gewellter Modulkoerper,
+  // Viertelbogen, Auslauf mit Schnabel. Steht ausserhalb des Knopf-Blocks, weil
+  // die Stueckliste dieselben Sinnbilder zeigt.
+  const SLIDE_ICONS = {
+    "slide-new2": `<path d="M3 13 C7 13 5 4 13 3" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/>`,
+    "slide2": `<path d="M3 12 C6 12 6 6 9 6 C11 6 11 4 13 4" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/>`,
+    "curved-slide2": `<path d="M13 3 C13 9 9 13 3 13" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/>`,
+    "slide-end2": `<path d="M2 11 C6 11 8 6 13 6" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/>` +
+      `<path d="M2 11 L2 14" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/>`,
+    "roof2": `<path d="M2.5 12 L8 4 L13.5 12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>`,
+  };
+
   {
     const SLIDE_KINDS = ["slide-new2", "slide2", "curved-slide2", "slide-end2"];
     const items = SLIDE_KINDS.map((k) => {
       const def = partForFitting(k);
       return def ? { ...def, id: k, qdf: k } : null;
     }).filter(Boolean);
-    // Je Teil ein eigenes Sinnbild: durchgehende Rutsche, gewellter Modul-
-    // koerper, Viertelbogen, Auslauf mit Schnabel.
-    const FORMEN = {
-      "slide-new2": `<path d="M3 13 C7 13 5 4 13 3" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/>`,
-      "slide2": `<path d="M3 12 C6 12 6 6 9 6 C11 6 11 4 13 4" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/>`,
-      "curved-slide2": `<path d="M13 3 C13 9 9 13 3 13" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/>`,
-      "slide-end2": `<path d="M2 11 C6 11 8 6 13 6" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/>` +
-        `<path d="M2 11 L2 14" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/>`,
-    };
     const icon = (item) => `<svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true">` +
-      `${FORMEN[(item && item.qdf) || builder.slideKind] || FORMEN["slide-new2"]}</svg>`;
+      `${SLIDE_ICONS[(item && item.qdf) || builder.slideKind] || SLIDE_ICONS["slide-new2"]}</svg>`;
     const btn = el("button", "btn part");
     btn.addEventListener("click", (e) => {
       e.stopPropagation();
@@ -1094,6 +1097,8 @@ export function initUI({ scene, model, builder }) {
       `<path d="M5.4 12.5 A3.1 3.1 0 1 1 10.6 12.5" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>`,
     "open-connector2": `<line x1="1.5" y1="8" x2="9.5" y2="8" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/>` +
       `<ellipse cx="11.4" cy="8" rx="2.2" ry="3.4" fill="currentColor"/>`,
+    "adapter2": `<path d="M2.4 6.4 L8.6 6.4 L8.6 9.6 L2.4 9.6" fill="none" stroke="currentColor" stroke-width="1.4"/>` +
+      `<rect x="8.6" y="4.8" width="5" height="6.4" rx="1.4" fill="none" stroke="currentColor" stroke-width="1.4"/>`,
     // Sonstiges
     "bag2": `<path d="M3 4 L13 4 L11.6 13 L4.4 13 Z" fill="none" stroke="currentColor" stroke-width="1.4"/>` +
       `<line x1="3" y1="4" x2="13" y2="4" stroke="currentColor" stroke-width="1.8"/>`,
@@ -1101,10 +1106,87 @@ export function initUI({ scene, model, builder }) {
       `<path d="M6 4 L6 12 M9.5 4 L9.5 12 M2.5 6.7 L13.5 6.7 M2.5 9.3 L13.5 9.3" stroke="currentColor" stroke-width="0.8"/>`,
     "textil-round2": `<path d="M3 13 L3 8 A8 8 0 0 1 11 13 Z" fill="none" stroke="currentColor" stroke-width="1.4"/>` +
       `<path d="M3 8 A8 8 0 0 1 11 13" fill="none" stroke="currentColor" stroke-width="1.6"/>`,
+    "roof-large2": `<path d="M2 12 L8 4 L14 12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>` +
+      `<line x1="4.4" y1="12" x2="11.6" y2="12" stroke="currentColor" stroke-width="1.2"/>`,
     "textil2": `<path d="M2.5 4 L13.5 4 L13.5 12 L2.5 12 Z" fill="none" stroke="currentColor" stroke-width="1.4"/>` +
       `<path d="M2.5 6.5 C5 5.4 6.5 7.6 8 6.5 C9.5 5.4 11 7.6 13.5 6.5" fill="none" stroke="currentColor" stroke-width="1"/>` +
       `<path d="M2.5 9.5 C5 8.4 6.5 10.6 8 9.5 C9.5 8.4 11 10.6 13.5 9.5" fill="none" stroke="currentColor" stroke-width="1"/>`,
   };
+  // --- Sinnbilder der Stueckliste ----------------------------------------
+  // Kupplungen: ein Wuerfel in der Mitte, dazu je Arm ein Strich. Waagerecht
+  // und senkrecht liegen die Arme in der Bildebene, schraeg gezeichnete zeigen
+  // nach vorn/hinten -- so unterscheiden sich Flaechen- und Raumkupplung.
+  const connArm = (x, y) =>
+    `<line x1="8" y1="8" x2="${x}" y2="${y}" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>`;
+  const connBody = `<rect x="5.6" y="5.6" width="4.8" height="4.8" rx="1.1" fill="currentColor"/>`;
+  const connIcon = (...arme) => connBody + arme.join("");
+  const CONNECTOR_ICONS = {
+    straight: connIcon(connArm(1.5, 8), connArm(14.5, 8)),
+    elbow: connIcon(connArm(1.5, 8), connArm(8, 14.5)),
+    t: connIcon(connArm(1.5, 8), connArm(14.5, 8), connArm(8, 14.5)),
+    cross: connIcon(connArm(1.5, 8), connArm(14.5, 8), connArm(8, 1.5), connArm(8, 14.5)),
+    "3way": connIcon(connArm(1.5, 8), connArm(8, 14.5), connArm(13, 3)),
+    "4way": connIcon(connArm(1.5, 8), connArm(14.5, 8), connArm(8, 14.5), connArm(13, 3)),
+    "5way": connIcon(connArm(1.5, 8), connArm(14.5, 8), connArm(8, 1.5), connArm(8, 14.5), connArm(13, 3)),
+    "6way": connIcon(connArm(1.5, 8), connArm(14.5, 8), connArm(8, 1.5), connArm(8, 14.5),
+      connArm(13, 3), connArm(3, 13)),
+    diagonal: connIcon(connArm(1.5, 8), connArm(13.5, 2.5)),
+    // Flexikupplung: zwei Arme um einen Bolzen, frei einstellbar.
+    flexi: `<circle cx="8" cy="8" r="2.2" fill="none" stroke="currentColor" stroke-width="1.5"/>` +
+      `<line x1="8" y1="8" x2="1.8" y2="10.5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>` +
+      `<line x1="8" y1="8" x2="13.5" y2="3.5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>`,
+    flexi_hinge: `<circle cx="8" cy="8" r="2.2" fill="none" stroke="currentColor" stroke-width="1.5"/>` +
+      `<path d="M5.8 8 L2 8 M10.2 8 L14 8" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>`,
+    flexi_bolt: `<circle cx="4.4" cy="8" r="2.6" fill="none" stroke="currentColor" stroke-width="1.5"/>` +
+      `<line x1="7" y1="8" x2="14" y2="8" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/>`,
+  };
+  // Verstaerkungsprofil: Rohr im Schnitt mit dem Alu-Profil darin -- dasselbe
+  // Sinnbild wie am Knopf "Verstärken".
+  const REINFORCE_ICON = `<rect x="1.6" y="4.8" width="12.8" height="6.4" rx="2.4" fill="none" stroke="currentColor" stroke-width="1.3"/>` +
+    `<line x1="4" y1="8" x2="12" y2="8" stroke="currentColor" stroke-width="2.1" stroke-linecap="round"/>`;
+  // Schraube: Kopf mit Schlitz und Gewinde.
+  const SCREW_ICON = `<circle cx="4.2" cy="8" r="2.8" fill="none" stroke="currentColor" stroke-width="1.4"/>` +
+    `<line x1="4.2" y1="6" x2="4.2" y2="10" stroke="currentColor" stroke-width="1.2"/>` +
+    `<path d="M7 8 L14 8 M8.4 6.2 L8.4 9.8 M10.4 6.2 L10.4 9.8 M12.4 6.2 L12.4 9.8" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>`;
+  // Sicherungsklammer: Haken, der das Rohr am Boden haelt.
+  const CLAMP_ANCHOR_ICON = `<path d="M4.4 3 L4.4 9.6 A3.6 3.6 0 0 0 11.6 9.6 L11.6 6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>` +
+    `<line x1="1.6" y1="13.4" x2="14.4" y2="13.4" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>`;
+  // Poolfolie: die Wanne im Schnitt, mit Wasserlinie.
+  const POOL_ICON = `<path d="M2.5 4 L2.5 12.5 L13.5 12.5 L13.5 4" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/>` +
+    `<path d="M3.5 8.5 C5.2 7.4 6.6 9.6 8.2 8.5 C9.8 7.4 11.2 9.6 12.8 8.5" fill="none" stroke="currentColor" stroke-width="1"/>`;
+  const svg16 = (inner) =>
+    `<svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true">${inner}</svg>`;
+
+  /** Sinnbild für eine Zeile der Stückliste -- dasselbe wie an den Knöpfen. */
+  function bomIcon(gruppe, id, kind) {
+    if (gruppe === "tubes") { const d = getTube(id); return d ? tubeIcon(d) : null; }
+    if (gruppe === "panels") { const d = getPanel(id); return d ? panelIcon(d) : null; }
+    if (gruppe === "connectors") return svg16(teileIcon(id, null)) ;
+    if (gruppe === "slides") return svg16(SLIDE_ICONS[kind || id] || SLIDE_ICONS["slide-new2"]);
+    if (gruppe === "textiles") return svg16(FITTING_ICONS["textil2"]);
+    if (gruppe === "reinforcements") return svg16(REINFORCE_ICON);
+    if (gruppe === "screws") return svg16(SCREW_ICON);
+    if (gruppe === "fittings") {
+      // Die Poolfolie hat keine eigene QDF-Art -- sie haengt am Bällebad und
+      // steht im Katalog mit ihren Maßen (`pool`).
+      const def = id ? getPartById(id) : null;
+      if ((kind && POOL_KINDS.has(kind)) || (def && def.pool)) return svg16(POOL_ICON);
+      if (id === "safety_clamp") return svg16(CLAMP_ANCHOR_ICON);
+      const inner = teileIcon(id, kind);
+      return inner ? svg16(inner) : null;
+    }
+    return null;
+  }
+
+  // Manche Teile führen ihr Sinnbild unter der QDF-Art, andere unter der
+  // Teile-Kennung; die Klemm-Kupplungen teilen sich eins mit den Anbauteilen.
+  const ICON_ALIAS = { hole_1: "hole-connector4", hole_t: "hole-connector4",
+    bearing: "bearing-clamp", tube_cap: "open-connector2" };
+  function teileIcon(id, kind) {
+    return FITTING_ICONS[kind] || SLIDE_ICONS[kind] || CONNECTOR_ICONS[id]
+      || FITTING_ICONS[id] || FITTING_ICONS[ICON_ALIAS[id]] || null;
+  }
+
   const fittingGroupBtns = [];
   for (const [key, kinds, path] of FITTING_GROUPS) {
     const items = kinds.map((k) => {
@@ -2444,13 +2526,18 @@ export function initUI({ scene, model, builder }) {
    * Zeile rot hinterlegt. Im Bearbeiten-Modus wird daraus ein Eingabefeld.
    * `hl` beschreibt, welche Teile ein Klick im Modell hervorhebt.
    */
-  function bomRow(container, name, colorId, count, subtotal, invKey = null, hl = null) {
+  function bomRow(container, name, colorId, count, subtotal, invKey = null, hl = null, icon = null) {
     const inv = invKey ? invIndex.get(invKey) : null;
     const bedarf = inv ? inv.need : count;
     const marke = hl ? hlKey(hl) : null;
     const row = el("div", "bom-row" + (inv && !inv.ok && !bomEditMode ? " bad" : "")
       + (marke && marke === bomHighlightKey ? " marked" : ""));
     const label = el("span", "bom-name");
+    // Sinnbild wie am zugehörigen Knopf -- ohne eines bleibt die Spalte leer,
+    // damit die Namen trotzdem auf einer Linie stehen.
+    const sinnbild = el("span", "bom-icon");
+    if (icon) sinnbild.innerHTML = icon;
+    label.appendChild(sinnbild);
     if (colorId) {
       const dot = el("span", "dot"); dot.style.background = colorHex(colorId);
       label.appendChild(dot);
@@ -2725,20 +2812,23 @@ export function initUI({ scene, model, builder }) {
     for (const r of rohre) {
       bomRow(tb, r.color ? `${r.name} · ${r.colorName}` : r.name, r.color, r.count, r.subtotal,
         "tubes:" + r.tubeId + (r.color ? "|" + r.color : ""),
-        { kind: "tubes", id: r.tubeId, color: r.color });
+        { kind: "tubes", id: r.tubeId, color: r.color }, bomIcon("tubes", r.tubeId));
     }
 
     const cb = $("bom-connectors"); cb.innerHTML = "";
     bomAbschnitt("bom-connectors", bom.connectors.length === 0 && !bom.openEnds);
     for (const r of bom.connectors) {
       bomRow(cb, r.name, null, r.count, r.subtotal, "connectors:" + r.type,
-        { kind: "connectors", id: r.type });
+        { kind: "connectors", id: r.type }, bomIcon("connectors", r.type));
     }
     if (bom.openEnds > 0) {
       // Hinweiszeile, kein Teil: die Zahl steht in derselben Spalte wie die
       // Mengen der übrigen Zeilen, nur ohne "x".
       const row = el("div", "bom-row muted");
-      row.appendChild(el("span", "bom-name", t("bom_open_ends")));
+      const hinweis = el("span", "bom-name");
+      hinweis.appendChild(el("span", "bom-icon"));
+      hinweis.appendChild(document.createTextNode(t("bom_open_ends")));
+      row.appendChild(hinweis);
       row.appendChild(el("span", "bom-count", String(bom.openEnds)));
       if (bomShowPrice) row.appendChild(el("span", "bom-sub", ""));
       cb.appendChild(row);
@@ -2750,7 +2840,7 @@ export function initUI({ scene, model, builder }) {
     for (const r of platten) {
       bomRow(pb, r.color ? `${r.name} · ${r.colorName}` : r.name, r.color, r.count, r.subtotal,
         "panels:" + r.panelId + (r.color ? "|" + r.color : ""),
-        { kind: "panels", id: r.panelId, color: r.color });
+        { kind: "panels", id: r.panelId, color: r.color }, bomIcon("panels", r.panelId));
     }
 
     const xb = $("bom-textiles"); xb.innerHTML = "";
@@ -2758,7 +2848,8 @@ export function initUI({ scene, model, builder }) {
     for (const r of textiles) {
       const name = `${t("bom_textile")} ${r.w}×${r.h} cm` + (nachFarbe ? ` · ${r.colorName}` : "");
       bomRow(xb, name, nachFarbe ? r.color : null, r.count, null, null,
-        { kind: "textiles", id: `${r.w}x${r.h}`, color: nachFarbe ? r.color : null });
+        { kind: "textiles", id: `${r.w}x${r.h}`, color: nachFarbe ? r.color : null },
+        bomIcon("textiles"));
     }
 
     const slb = $("bom-slides"); slb.innerHTML = "";
@@ -2766,7 +2857,8 @@ export function initUI({ scene, model, builder }) {
     bomAbschnitt("bom-slides", slides.length === 0);
     for (const r of slides) {
       bomRow(slb, r.name || slideKindName(r.kind), null, r.count, r.subtotal || null,
-        r.id ? "fittings:" + r.id : null, { kind: "slides", id: r.kind });
+        r.id ? "fittings:" + r.id : null, { kind: "slides", id: r.kind },
+        bomIcon("slides", r.kind, r.kind));
     }
 
     // Zubehör auf Textilien, Räder und Anbauteile verteilen.
@@ -2779,7 +2871,7 @@ export function initUI({ scene, model, builder }) {
       const gruppe = zubehoerGruppe(r.kind);
       zaehler[gruppe]++;
       bomRow(ziele[gruppe], r.name, null, r.count, r.subtotal || null, "fittings:" + r.id,
-        { kind: "fittings", id: r.id });
+        { kind: "fittings", id: r.id }, bomIcon("fittings", r.id, r.kind));
     }
     const boxIds = { textiles: "bom-textiles", wheels: "bom-wheels", fittings: "bom-fittings" };
     for (const gruppe of Object.keys(ziele)) bomAbschnitt(boxIds[gruppe], !zaehler[gruppe]);
@@ -2787,7 +2879,8 @@ export function initUI({ scene, model, builder }) {
     const rb = $("bom-reinforcements"); rb.innerHTML = "";
     const reinf = bom.reinforcements || [];
     bomAbschnitt("bom-reinforcements", reinf.length === 0);
-    for (const r of reinf) bomRow(rb, r.name, null, r.count, r.subtotal, "reinforcements:" + r.id, { kind: "reinforcements", id: r.id });
+    for (const r of reinf) bomRow(rb, r.name, null, r.count, r.subtotal, "reinforcements:" + r.id,
+      { kind: "reinforcements", id: r.id }, bomIcon("reinforcements", r.id));
 
     // Schrauben: nur gerechnet -- kein Bestand (kein invKey) und nichts zum
     // Hervorheben (kein hl), im Modell gibt es sie ja nicht.
@@ -2803,7 +2896,7 @@ export function initUI({ scene, model, builder }) {
       // wenn es nicht reicht. Hervorheben lässt sich nichts -- im Modell gibt
       // es die Schrauben nicht.
       bomRow(sb, name, r.color || null, r.count, r.subtotal,
-        "screws:" + r.id + (r.color ? "|" + r.color : ""));
+        "screws:" + r.id + (r.color ? "|" + r.color : ""), null, bomIcon("screws", r.id));
     }
 
     $("sum-tubes").textContent = bom.totals.tubes;
@@ -2911,13 +3004,16 @@ export function initUI({ scene, model, builder }) {
         const farben = bomByColor && (bucket !== "screws" || it.colored)
           ? farbigeToepfe[bucket] : null;
         const name = partName(it) + (it.code ? ` (${it.code})` : "");
+        // Dasselbe Sinnbild wie in der Stückliste; Zubehör wird über seine
+        // QDF-Art nachgeschlagen, alles andere über die Teile-Kennung.
+        const icon = bomIcon(bucket, it.id, it.qdf);
         if (farben) {
           for (const f of farben) {
             const farbName = (getLang() === "en" && f.name_en) ? f.name_en : f.name;
-            bomRow(box, `${name} · ${farbName}`, f.id, 0, null, `${bucket}:${it.id}|${f.id}`);
+            bomRow(box, `${name} · ${farbName}`, f.id, 0, null, `${bucket}:${it.id}|${f.id}`, null, icon);
           }
         } else {
-          bomRow(box, name, null, 0, null, `${bucket}:${it.id}`);
+          bomRow(box, name, null, 0, null, `${bucket}:${it.id}`, null, icon);
         }
       }
     }

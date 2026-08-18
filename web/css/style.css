@@ -459,6 +459,14 @@ body.sidebar-hidden #sidebar, body.sidebar-hidden #sidebar-resizer { display: no
 .bom-row:nth-child(odd) { background: #f7f9fc; }
 .bom-row.muted { color: var(--muted); }
 .bom-name { display: flex; align-items: center; gap: 7px; }
+/* Sinnbild je Zeile: feste Spur, damit die Namen untereinander stehen -- auch
+   in Zeilen ohne eigenes Sinnbild (offene Enden, Poolfolie älterer Stände). */
+.bom-icon {
+  flex: 0 0 20px; width: 20px; height: 16px;
+  display: flex; align-items: center; justify-content: center;
+  color: var(--muted);
+}
+.bom-icon svg { display: block; }
 .bom-count { font-variant-numeric: tabular-nums; color: var(--muted); }
 .bom-sub { font-variant-numeric: tabular-nums; min-width: 56px; text-align: right; }
 .dot { width: 11px; height: 11px; border-radius: 50%; outline: 1px solid rgba(0,0,0,0.12); flex-shrink: 0; }
