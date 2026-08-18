@@ -183,10 +183,11 @@ Koordinaten in **cm**, Three.js-Konvention **y = oben**, Boden bei y = 0.
   Kupplung stand, `fromFile`), damit Anzeige und Liste „Flexikupplung" sagen statt eine
   Raumkupplung zu raten – gezählt werden die Arme als Anbauteile, der Knoten selbst liefert
   nichts (`connectorsForNode`).
-- **Lochzapfenkupplung** (`hole_1`, QDF `hole-connector4`): ihr Zapfen steckt in einem **Arm der
-  Kupplung**, quer dazu läuft das Rohr durch ihr Loch – sie klemmt also nichts. Der Knoten liegt
-  an der Mündung, eine Kupplungslänge neben dem Würfel; `stub` ist die Rohrrichtung, die
-  Zapfenrichtung die lokale **−X**-Achse von `partQuat`. Der Import hängt das Rohr an sie um
+- **Lochzapfenkupplung** (`hole_1`, QDF `hole-connector4`): sie sieht aus wie **„O--"** – ein Ring
+  greift über den **Stutzen einer Kupplung**, quer dazu steht ihr eigener Stutzen, in dem das Rohr
+  steckt; sie klemmt also nichts. Der Knoten liegt am Fuß dieses Stutzens, eine Kupplungslänge
+  neben dem Würfel; `stub` ist die Rohrrichtung, die Ringachse die lokale **−X**-Achse von
+  `partQuat`. Der Import hängt das Rohr an sie um
   (beim Einlesen der Rohre gab es sie noch nicht, ihr Ende war auf die Kupplung daneben
   geschnappt), und `neighborDirs` zählt sie als belegten Arm der tragenden Kupplung.
 - **Bällebad = EIN Teil:** Es ist ein **Anbauteil** (`kind: "pool2"`/`"pool-small2"`), kein

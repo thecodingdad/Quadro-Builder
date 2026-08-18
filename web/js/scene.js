@@ -1833,18 +1833,19 @@ export class SceneManager {
   }
 
   /**
-   * Lochzapfenkupplung zeichnen. Sie klemmt NICHT um ein Rohr: ihr Zapfen
-   * steckt in einem Arm der Kupplung, und quer dazu laeuft das Rohr durch ihr
-   * Loch. Der Knoten liegt an der Muendung dieses Lochs -- dort faengt das Rohr
-   * an, eine Kupplungslaenge neben dem Wuerfel der tragenden Kupplung.
+   * Lochzapfenkupplung zeichnen. Sie klemmt NICHT um ein Rohr, sie sieht aus
+   * wie "O--": ein Ring greift ueber den Stutzen einer Kupplung, quer dazu
+   * steht ihr eigener Stutzen, in dem das Rohr steckt. Der Knoten liegt an
+   * dessen Fuss -- eine Kupplungslaenge neben dem Wuerfel der Kupplung.
    */
   _addPinConnector(model, n, mat, st) {
     const g = geometry();
     const cs = g.connectorSize;
     const stub = new THREE.Vector3(...(n.stub || [0, 1, 0])).normalize();
-    // Richtung des Zapfens: die lokale -X-Achse der Teile-Quaternion (so steht
-    // es in allen Dateien des Bestands). Fehlt sie, zeigt der Zapfen zur
-    // naechsten Kupplung; ohne die bleibt nur irgendeine Querrichtung.
+    // Achse des Rings, also die Richtung zur tragenden Kupplung: die lokale
+    // -X-Achse der Teile-Quaternion (so steht es in allen Dateien des
+    // Bestands). Fehlt sie, zeigt sie zur naechsten Kupplung; ohne die bleibt
+    // nur irgendeine Querrichtung.
     let peg = null;
     if (n.partQuat && n.partQuat.length === 4) {
       const q = new THREE.Quaternion(n.partQuat[0], n.partQuat[1], n.partQuat[2], n.partQuat[3]).normalize();
@@ -1861,28 +1862,39 @@ export class SceneManager {
     }
     const seg = Math.max(10, this._q().tube);
     const at = new THREE.Vector3(n.x, n.y, n.z);
-    // Sie sieht aus wie die Lagerkupplung: zwei Rohrstuecke im rechten Winkel.
-    // Das laengere nimmt das Rohr auf (und traegt die Loecher, daher der Name),
-    // das kuerzere greift ueber den Stutzen der Kupplung.
-    const sleeveR = g.tubeRadius * 1.3;
-    const sleeveLen = cs * 1.6;
-    const sleeve = new THREE.Mesh(
-      this._cachedGeo(`pinSleeve${seg}`, () => new THREE.CylinderGeometry(sleeveR, sleeveR, sleeveLen, seg)), mat);
-    sleeve.quaternion.setFromUnitVectors(UP, stub);
-    sleeve.position.copy(at).addScaledVector(stub, sleeveLen / 2);
-    sleeve.userData = { kind: "node", id: n.id };
-    this.buildGroup.add(sleeve);
-    if (st !== "future") this.pickNodes.push(sleeve);
-    // Der Ring zum Stutzen hin: von der Muendung bis in die Kupplung, also eine
-    // Kupplungslaenge weit.
-    const ringR = g.tubeRadius * 1.18;
-    const pin = new THREE.Mesh(
-      this._cachedGeo(`pinRing${seg}`, () => new THREE.CylinderGeometry(ringR, ringR, cs, seg)), mat);
-    pin.quaternion.setFromUnitVectors(UP, peg);
-    pin.position.copy(at).addScaledVector(peg, cs / 2);
-    pin.userData = { kind: "node", id: n.id };
-    this.buildGroup.add(pin);
-    if (st !== "future") this.pickNodes.push(pin);
+    const armR = g.armRadius;
+    // "O--": ein Ring, der ueber den Stutzen der tragenden Kupplung greift, und
+    // quer dazu ein eigener Stutzen, in dem das Rohr steckt.
+    const ringLen = cs * 0.9;
+    const ring = new THREE.Mesh(this._cachedGeo(`pinRing${seg}`, () => {
+      const s = new THREE.Shape();
+      s.absarc(0, 0, armR + 0.75, 0, Math.PI * 2, false);
+      const loch = new THREE.Path();
+      loch.absarc(0, 0, armR + 0.05, 0, Math.PI * 2, true);
+      s.holes.push(loch);
+      const geo = new THREE.ExtrudeGeometry(s, { depth: ringLen, bevelEnabled: false, curveSegments: seg });
+      geo.rotateX(Math.PI / 2);            // Achse von +Z auf +Y, wie die Rohre
+      geo.translate(0, ringLen / 2, 0);    // um die Mitte
+      return geo;
+    }), mat);
+    ring.quaternion.setFromUnitVectors(UP, peg);
+    // Der Stutzen der Kupplung reicht von ihrer Wuerfelflaeche (2,5 cm neben
+    // der Muendung) bis gut einen Zentimeter darueber hinaus -- dort sitzt der
+    // Ring, also knapp um die Muendung herum.
+    ring.position.copy(at).addScaledVector(peg, 0.5);
+    ring.userData = { kind: "node", id: n.id };
+    this.buildGroup.add(ring);
+    if (st !== "future") this.pickNodes.push(ring);
+    // Der eigene Stutzen ist so duenn wie ein Kupplungs-Arm -- er steckt IM
+    // Rohr und ist deshalb nur an der Muendung zu sehen.
+    const stubLen = cs * 0.85;
+    const arm = new THREE.Mesh(
+      this._cachedGeo(`pinStub${seg}`, () => this._tubeGeometry(armR, stubLen, Math.max(6, seg - 4))), mat);
+    arm.quaternion.setFromUnitVectors(UP, stub);
+    arm.position.copy(at).addScaledVector(stub, stubLen / 2);
+    arm.userData = { kind: "node", id: n.id };
+    this.buildGroup.add(arm);
+    if (st !== "future") this.pickNodes.push(arm);
   }
 
   /**
