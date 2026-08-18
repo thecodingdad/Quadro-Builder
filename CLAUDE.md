@@ -2,8 +2,7 @@
 
 QUADRO 3D – Planungstool für QUADRO-Klettergerüste. Reine Vanilla-JS-Web-App,
 **kein Build-Step, kein npm, keine Frameworks**, läuft offline aus dem Dateisystem eines
-statischen Servers. Nutzerdoku: `README.md`, Beitragsregeln: `CONTRIBUTING.md`,
-Historie: `CHANGELOG.md`.
+statischen Servers. Nutzerdoku: `README.md`, Historie: `CHANGELOG.md`.
 
 ## Starten & Verifizieren
 
@@ -332,4 +331,5 @@ Koordinaten in **cm**, Three.js-Konvention **y = oben**, Boden bei y = 0.
   programmatisch (für Tests aus der Konsole).
 - `scene.js` cached Materialien/Geometrien bewusst (GPU-Leaks); neue Materialien nach diesem
   Muster anlegen und in `_disposeGroup`/`_disposeLabels` mit aufräumen.
-- Bilder in `docs/screenshots/` werden vom README referenziert – Dateinamen nicht umbenennen.
+- `docs/screenshots/` hält die Bilder für das README; die alten zeigen noch den Namen
+  „Quadro Builder" und sind deshalb gerade nicht eingebunden.
