@@ -4063,9 +4063,15 @@ export class SceneManager {
     if (v.lengthSq() < 1e-9) return false;
     v.normalize();
     // Genau senkrecht waere fuer OrbitControls entartet -- minimal kippen, wie
-    // beim Drehen von Hand (siehe POLE_GAP).
+    // beim Drehen von Hand (siehe POLE_GAP). Gekippt wird in die Richtung, aus
+    // der man GERADE schaut: sonst landet die Draufsicht immer in derselben
+    // Lage und das Modell springt einmal um die Hochachse.
     if (Math.abs(v.y) > Math.cos(POLE_GAP)) {
-      v.set(0, Math.sign(v.y) * Math.cos(POLE_GAP), -Math.sin(POLE_GAP));
+      const quer = this.camera.position.clone().sub(target);
+      quer.y = 0;
+      if (quer.lengthSq() < 1e-9) quer.set(0, 0, -1); else quer.normalize();
+      const kipp = Math.sin(POLE_GAP);
+      v.set(quer.x * kipp, Math.sign(v.y) * Math.cos(POLE_GAP), quer.z * kipp);
     }
     this._camAnim = {
       from: this.camera.position.clone().sub(target).normalize(),
