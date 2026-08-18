@@ -369,13 +369,17 @@ export class Builder {
     this.scene.setCursor("default");
     const merged = this.model._mergeMovedNodes(new Set(d.ids.nodes));
     // Die Kopie ist die neue Auswahl -- so laesst sie sich gleich weiterschieben.
+    // Und zwar VOLLSTAENDIG: Kupplungen ohne Rohr und Klemmen standen sonst
+    // beim naechsten Verschieben stehen, weil `moveTargets` nur mitnimmt, was
+    // wirklich markiert ist (Rohre bringen nur ihre eigenen Enden mit).
     this.selection.clear();
+    for (const id of d.ids.nodes) this.selection.set(id, "node");
     for (const id of d.ids.tubes) this.selection.set(id, "tube");
     for (const id of d.ids.panels) this.selection.set(id, "panel");
     for (const id of d.ids.textiles) this.selection.set(id, "textile");
+    for (const id of d.ids.clamps) this.selection.set(id, "clamp");
     for (const id of d.ids.slides) this.selection.set(id, "slide");
     for (const id of d.ids.fittings) this.selection.set(id, "fitting");
-    if (!this.selection.size) for (const id of d.ids.nodes) this.selection.set(id, "node");
     this._pruneSelection();
     this._pushHistory(d.before);
     this.onNotice(merged ? t("notice_paste_merged", merged) : t("notice_pasted"));
@@ -646,9 +650,12 @@ export class Builder {
 
   /** Nach Undo/Redo/Import: Auswahl auf noch existierende Teile eindampfen. */
   _pruneSelection() {
+    // Jede Art, die in der Auswahl vorkommen kann -- fehlt eine, faellt sie hier
+    // stillschweigend heraus (die Anbauteile taten das jahrelang).
     const maps = {
       tube: this.model.tubes, panel: this.model.panels, node: this.model.nodes,
       textile: this.model.textiles, slide: this.model.slides, clamp: this.model.clamps,
+      fitting: this.model.fittings,
     };
     for (const [id, kind] of [...this.selection]) {
       const map = maps[kind];
