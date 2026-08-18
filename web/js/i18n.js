@@ -209,7 +209,8 @@ const de = {
   total_tubes: 'Rohre',
   total_connectors: 'Kupplungen',
   total_panels: 'Platten',
-  total_reinforcements: 'Verstärkungen',
+  total_screws: 'Schrauben',
+  total_other: 'Sonstiges',
   total_price: 'Materialpreis ca.',
 
   // Seitenleiste – Bestand
@@ -622,7 +623,8 @@ const en = {
   total_tubes: 'Tubes',
   total_connectors: 'Connectors',
   total_panels: 'Panels',
-  total_reinforcements: 'Reinforcements',
+  total_screws: 'Screws',
+  total_other: 'Other',
   total_price: 'Material price est.',
 
   // Sidebar – Inventory

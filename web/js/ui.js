@@ -2893,7 +2893,8 @@ export function initUI({ scene, model, builder }) {
     $("sum-tubes").textContent = bom.totals.tubes;
     $("sum-conn").textContent = bom.totals.connectors;
     $("sum-panels").textContent = bom.totals.panels;
-    $("sum-reinf").textContent = bom.totals.reinforcements || 0;
+    $("sum-screws").textContent = bom.totals.screws || 0;
+    $("sum-other").textContent = bom.totals.other || 0;
     $("sum-price").textContent = eur(bom.totals.price);
 
     renderInventory(bom);

@@ -699,6 +699,11 @@ export function computeBOM(model) {
       tubes: tubeCount, connectors: connCount, panels: panelCount,
       reinforcements: reinfCount, textiles: textileCount, slides: slideCount,
       fittings: fittingCount, price,
+      screws: screwRows.reduce((s, r) => s + r.count, 0),
+      // Alles, was weder Rohr, Kupplung, Platte noch Schraube ist: Rutschen,
+      // Raeder, Textilien, Anbauteile und die Verstaerkungslaeufe -- gezaehlt
+      // wie in den Zeilen darueber.
+      other: fittingCount + slideCount + textileCount + reinfCount,
     },
   };
 }
