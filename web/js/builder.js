@@ -334,21 +334,56 @@ export class Builder {
       ? [raster(point.x, a[0]), a[1], raster(point.z, a[2])]
       : (d.offset || [a[0], a[1], a[2]]);
     if (d.offset && offset[0] === d.offset[0] && offset[1] === d.offset[1] && offset[2] === d.offset[2]) return;
-    this.model.loadJSON(JSON.parse(d.before));
+    if (!d.ids) {
+      // Erster Schritt: die Kopie kommt ins Modell.
+      d.ids = this.model.insertFragment(d.frag, offset);
+      d.sel = this._fragmentSelection(d.ids);
+    } else {
+      // Danach wird sie nur noch verschoben. Modell neu laden und erneut
+      // einsetzen kostete bei jedem Rasterschritt den ganzen Bestand.
+      const o = d.offset;
+      this.model.translateSelection(d.sel, offset[0] - o[0], offset[1] - o[1], offset[2] - o[2]);
+    }
     d.offset = offset;
-    d.ids = this.model.insertFragment(d.frag, offset);
     // Ungueltig ist die Lage, wenn sie neue Kollisionen bringt oder unter den
     // Boden reicht -- gezeichnet wird sie trotzdem, nur eben rot.
-    let schlecht = false;
-    for (const id of this.model.collisions()) if (!d.collidedBefore.has(id)) { schlecht = true; break; }
-    if (!schlecht) {
-      for (const id of d.ids.nodes) {
-        const n = this.model.nodes.get(id);
-        if (n && this.model.isBelowGround(n.y)) { schlecht = true; break; }
-      }
-    }
-    d.valid = !schlecht;
+    d.valid = !this._troubleWith(d.sel, d.collidedBefore);
     this.refresh();
+  }
+
+  /** Auswahl-Karte ueber alles, was ein eingesetztes Fragment mitgebracht hat. */
+  _fragmentSelection(ids) {
+    const sel = new Map();
+    for (const id of ids.nodes) sel.set(id, "node");
+    for (const id of ids.tubes) sel.set(id, "tube");
+    for (const id of ids.panels) sel.set(id, "panel");
+    for (const id of ids.textiles) sel.set(id, "textile");
+    for (const id of ids.clamps) sel.set(id, "clamp");
+    for (const id of ids.slides) sel.set(id, "slide");
+    for (const id of ids.fittings) sel.set(id, "fitting");
+    return sel;
+  }
+
+  /**
+   * Steht die bewegte Auswahl gerade schlecht? Liefert die Teile, die rot
+   * gezeichnet werden sollen -- oder null, wenn alles passt. Gezaehlt werden
+   * nur NEUE Ueberlagerungen: was vorher schon uebereinander lag, blockiert
+   * nicht. Geprueft wird ausschliesslich gegen die bewegten Rohre.
+   */
+  _troubleWith(sel, collidedBefore) {
+    const tg = this.model.moveTargets(sel);
+    const schlecht = new Set();
+    for (const id of this.model.collisions({ only: this.model.tubesAt(tg.nodes) }))
+      if (!collidedBefore.has(id)) schlecht.add(id);
+    for (const id of tg.nodes) {
+      const n = this.model.nodes.get(id);
+      if (n && this.model.isBelowGround(n.y)) schlecht.add(id);
+    }
+    for (const id of tg.clamps) {
+      const c = this.model.clamps.get(id);
+      if (c && this.model.isBelowGround(c.y)) schlecht.add(id);
+    }
+    return schlecht.size ? schlecht : null;
   }
 
   _updatePaste(e) {
@@ -372,14 +407,7 @@ export class Builder {
     // Und zwar VOLLSTAENDIG: Kupplungen ohne Rohr und Klemmen standen sonst
     // beim naechsten Verschieben stehen, weil `moveTargets` nur mitnimmt, was
     // wirklich markiert ist (Rohre bringen nur ihre eigenen Enden mit).
-    this.selection.clear();
-    for (const id of d.ids.nodes) this.selection.set(id, "node");
-    for (const id of d.ids.tubes) this.selection.set(id, "tube");
-    for (const id of d.ids.panels) this.selection.set(id, "panel");
-    for (const id of d.ids.textiles) this.selection.set(id, "textile");
-    for (const id of d.ids.clamps) this.selection.set(id, "clamp");
-    for (const id of d.ids.slides) this.selection.set(id, "slide");
-    for (const id of d.ids.fittings) this.selection.set(id, "fitting");
+    this.selection = new Map(d.sel || this._fragmentSelection(d.ids));
     this._pruneSelection();
     this._pushHistory(d.before);
     this.onNotice(merged ? t("notice_paste_merged", merged) : t("notice_pasted"));
@@ -474,6 +502,12 @@ export class Builder {
       // Zustand vor dem Ziehen: der ganze Zug wird EIN Undo-Schritt.
       before: JSON.stringify(this.model.toJSON()),
       applied: [0, 0, 0],
+      // Letzte Lage, an der die Auswahl wirklich passt -- dorthin faellt sie
+      // zurueck, wenn losgelassen wird, waehrend es rot ist.
+      lastValid: [0, 0, 0],
+      // Was vorher schon uebereinander lag, zaehlt nicht als neue Kollision.
+      collidedBefore: this.model.collisions(),
+      invalid: null,
       result: null,
       axes: this.scene.dragAxes(),
     };
@@ -507,22 +541,23 @@ export class Builder {
         d.applied = want;
         d.result = { merged: 0, detached: 0 };
       }
+      // Die Klemme gleitet auf ihrem Rohr statt im Raster zu wandern -- beim
+      // Loslassen steht das Modell deshalb schon richtig und darf nicht noch
+      // einmal ueber _move() geschoben werden.
+      d.slid = true;
       this.refresh();
       return;
     }
-    // Jeder Schritt setzt auf der AUSGANGSLAGE auf, nicht auf dem vorigen
-    // Schritt. Nur so bleibt das Ziehen umkehrbar: Trennen und Zusammenlegen
-    // veraendern die Topologie und liessen sich sonst nicht zuruecknehmen.
-    this.model.loadJSON(JSON.parse(d.before));
-    const res = this._move(want[0], want[1], want[2]);
-    if (res.ok) {
-      d.applied = want;
-      d.result = res;
-    } else {
-      // Ungueltiges Ziel: bei der letzten gueltigen Lage bleiben.
-      this.model.loadJSON(JSON.parse(d.before));
-      if (a[0] || a[1] || a[2]) this._move(a[0], a[1], a[2]);
-    }
+    // Die Vorschau VERSCHIEBT nur -- sie trennt nichts, legt nichts zusammen
+    // und prueft keine Kupplungen. Das faellt einmal beim Loslassen an. Frueher
+    // wurde je Rasterschritt das ganze Modell neu geladen und ein vollstaendiger
+    // Zug gerechnet; bei grossen Modellen ruckelte das Ziehen dadurch.
+    this.model.translateSelection(this.selection, want[0] - a[0], want[1] - a[1], want[2] - a[2]);
+    d.applied = want;
+    // Passt es hier nicht, wird die Auswahl rot gezeichnet statt stehen zu
+    // bleiben -- wie bei einer Kopie am Zeiger.
+    d.invalid = this._troubleWith(this.selection, d.collidedBefore);
+    if (!d.invalid) d.lastValid = want.slice();
     this.refresh();
   }
 
@@ -540,9 +575,25 @@ export class Builder {
     this._drag = null;
     this.scene.setCursor("default");
     if (!d) return;
-    const a = d.applied;
-    if (!a[0] && !a[1] && !a[2]) return;
-    this._afterMove(d.before, d.result || { merged: 0, detached: 0 });
+    // Die gleitende Klemm-Kupplung ist schon an ihrem Platz.
+    if (d.slid) { this._afterMove(d.before, d.result || { merged: 0, detached: 0 }); return; }
+    // Beim Loslassen zaehlt die letzte Lage, an der es passt: ueber einer
+    // belegten Stelle rutscht die Auswahl dorthin zurueck.
+    const ziel = d.invalid ? d.lastValid : d.applied;
+    if (d.invalid) this.onNotice(t("notice_move_collision"));
+    // Die Vorschau hat nur verschoben -- jetzt der echte Zug von der
+    // Ausgangslage aus, mit Trennen, Zusammenlegen und Kupplungs-Pruefung.
+    this.model.loadJSON(JSON.parse(d.before));
+    if (!ziel[0] && !ziel[1] && !ziel[2]) { this.refresh(); return; }
+    const res = this._move(ziel[0], ziel[1], ziel[2]);
+    if (!res.ok) {
+      // Das faellt nur auf, was die Vorschau nicht sehen kann (etwa eine
+      // Kupplung, die es beim Zusammenlegen nicht gibt).
+      this.onNotice(t("notice_move_" + res.reason));
+      this.refresh();
+      return;
+    }
+    this._afterMove(d.before, res);
   }
 
   // Anbauteil loeschen -- Laufrolle und ihr Adapter gehoeren zusammen und gehen
@@ -909,19 +960,22 @@ export class Builder {
     // erkennt und die uebrigen Rohre grau zeichnet.
     const selected = (this.mode === "select" || this.mode === "assembly") && this.selection.size
       ? this.selection : null;
-    // Kopie an einer belegten Stelle: ihre Teile gehen als "geht nicht" mit.
-    const invalid = this._paste && !this._paste.valid && this._paste.ids
-      ? new Set([...this._paste.ids.nodes, ...this._paste.ids.tubes, ...this._paste.ids.panels,
-        ...this._paste.ids.textiles, ...this._paste.ids.clamps, ...this._paste.ids.slides,
-        ...this._paste.ids.fittings])
-      : null;
+    // An einer belegten Stelle werden die betroffenen Teile rot gezeichnet --
+    // beim Einfuegen die ganze Kopie, beim Ziehen die gezogene Auswahl.
+    const invalid = this._paste && !this._paste.valid && this._paste.sel
+      ? new Set(this._paste.sel.keys())
+      : (this._drag && this._drag.invalid ? new Set(this.selection.keys()) : null);
     this.scene.renderModel(this.model, this.selectedNodeId,
       { labelFor, slideNameFor, labelIds, soloId, soloLabel, assembly, suggest, reinforce,
         hintDim: this.showHints,
         selected, highlight: this.highlight, invalid });
     this._buildHandles();
     this.scene.requestRender();
-    this.onChange();
+    // Waehrend einer Vorschau (Ziehen, Kopie am Zeiger) bleibt die Oberflaeche
+    // aussen vor: Stueckliste und Sitzung rechnen sonst bei jedem Rasterschritt
+    // mit, obwohl der Stand noch gar nicht gilt. Beim Absetzen wird ohnehin neu
+    // gezeichnet -- dann laeuft es einmal.
+    if (!this._paste && !this._drag) this.onChange();
   }
 
   // --- Handles ------------------------------------------------------------

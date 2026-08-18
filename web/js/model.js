@@ -2,6 +2,11 @@
 // Bewusst ohne Three.js-Abhaengigkeit, damit es testbar und Backend-tauglich bleibt.
 
 import { MERGE_EPS, FORMAT_VERSION, DIAGONAL_SNAP_TOL } from "./config.js";
+
+// Zellweite des Rasters, mit dem die Kollisionspruefung Nachbarn sucht. Etwas
+// groesser als das laengste Rohr (75 cm + Kupplung): ein Rohr liegt damit in
+// hoechstens zwei Zellen je Achse.
+const COLL_CELL = 100;
 import { round2 as round, quatFromXAxis, quatFromBasis, xAxisOf } from "./util.js";
 
 // Wohin ein Anbauteil gehoert, gemessen an den 799 Vorkommen in den Dateien des
@@ -1960,7 +1965,11 @@ export class BuildModel {
     }
 
     const snapshot = this.toJSON();
-    const collidedBefore = this.collisions();
+    // Geprueft wird nur, was sich bewegt: stehende Rohre koennen untereinander
+    // keine NEUE Ueberlagerung bilden. Das spart bei grossen Modellen den
+    // Loewenanteil der Rechnung (siehe collisions()).
+    const movedTubes = this.tubesAt(tg.nodes);
+    const collidedBefore = this.collisions({ only: movedTubes });
     const badBefore = validate ? validate(this) : null;
 
     const fail = (reason) => { this.loadJSON(snapshot); return { ok: false, reason }; };
@@ -1969,7 +1978,7 @@ export class BuildModel {
     // Ueberlagerung VOR dem Zusammenlegen pruefen: das raeumt deckungsgleiche
     // Rohre weg und wuerde einen Zug, der ein Teil genau auf ein anderes
     // schiebt, sonst durchgehen lassen.
-    for (const id of this.collisions()) if (!collidedBefore.has(id)) return fail("collision");
+    for (const id of this.collisions({ only: movedTubes })) if (!collidedBefore.has(id)) return fail("collision");
 
     const merged = merge ? this._mergeMovedNodes(tg.nodes) : 0;
     if (badBefore) {
@@ -2037,24 +2046,95 @@ export class BuildModel {
     }
   }
 
-  collisions() {
+  /**
+   * Rohre, die sich mit einem anderen ueberlagern oder es kreuzen.
+   *
+   * Verglichen wird nicht jedes Rohr mit jedem -- bei 425 Rohren waeren das
+   * 90.000 Paare und rund 9 ms je Aufruf, und beim Ziehen faellt der Aufruf bei
+   * JEDEM Rasterschritt an. Stattdessen kommen die Rohre in ein grobes Raster
+   * (Zellweite COLL_CELL); geprueft wird nur gegen die Rohre derselben Zellen.
+   * Zwei Rohre, deren Kisten sich nicht beruehren, koennen sich nicht treffen.
+   *
+   * `only` schraenkt auf bestimmte Rohre ein: beim Ziehen und Einfuegen bewegt
+   * sich nur ein Teil, alles Uebrige steht und bildet keine NEUE Ueberlagerung.
+   */
+  collisions({ only = null } = {}) {
     const out = new Set();
     const list = [];
     for (const t of this.tubes.values()) {
       if (t.arm || t.link || t.bow) continue;
       const a = this.nodes.get(t.a), b = this.nodes.get(t.b);
-      if (a && b) list.push({ id: t.id, a, b });
+      if (!a || !b) continue;
+      list.push({
+        id: t.id, a, b,
+        lo: [Math.min(a.x, b.x), Math.min(a.y, b.y), Math.min(a.z, b.z)],
+        hi: [Math.max(a.x, b.x), Math.max(a.y, b.y), Math.max(a.z, b.z)],
+      });
     }
+    // Raster aufbauen: jedes Rohr liegt in allen Zellen, die seine Kiste beruehrt.
+    const grid = new Map();
+    const zellen = (e) => {
+      const keys = [];
+      const vx = Math.floor((e.lo[0] - MERGE_EPS) / COLL_CELL), bx = Math.floor((e.hi[0] + MERGE_EPS) / COLL_CELL);
+      const vy = Math.floor((e.lo[1] - MERGE_EPS) / COLL_CELL), by = Math.floor((e.hi[1] + MERGE_EPS) / COLL_CELL);
+      const vz = Math.floor((e.lo[2] - MERGE_EPS) / COLL_CELL), bz = Math.floor((e.hi[2] + MERGE_EPS) / COLL_CELL);
+      for (let ix = vx; ix <= bx; ix++)
+        for (let iy = vy; iy <= by; iy++)
+          for (let iz = vz; iz <= bz; iz++) keys.push(ix + "," + iy + "," + iz);
+      return keys;
+    };
+    list.forEach((e, i) => {
+      for (const key of zellen(e)) {
+        const bucket = grid.get(key);
+        if (bucket) bucket.push(i); else grid.set(key, [i]);
+      }
+    });
+    const beruehrt = (p, q) => p.lo[0] - MERGE_EPS <= q.hi[0] && q.lo[0] - MERGE_EPS <= p.hi[0]
+      && p.lo[1] - MERGE_EPS <= q.hi[1] && q.lo[1] - MERGE_EPS <= p.hi[1]
+      && p.lo[2] - MERGE_EPS <= q.hi[2] && q.lo[2] - MERGE_EPS <= p.hi[2];
+    const gesehen = new Set();
     for (let i = 0; i < list.length; i++) {
-      for (let j = i + 1; j < list.length; j++) {
-        const p = list[i], q = list[j];
-        if (segmentsOverlap(p.a, p.b, q.a, q.b) || segmentsCross(p.a, p.b, q.a, q.b)) {
-          out.add(p.id);
-          out.add(q.id);
+      const p = list[i];
+      if (only && !only.has(p.id)) continue;
+      for (const key of zellen(p)) {
+        for (const j of grid.get(key) || []) {
+          if (j === i) continue;
+          // Jedes Paar nur einmal ansehen -- ueber mehrere Zellen begegnen sich
+          // zwei Rohre sonst mehrfach.
+          const paar = i < j ? i * list.length + j : j * list.length + i;
+          if (gesehen.has(paar)) continue;
+          gesehen.add(paar);
+          const q = list[j];
+          if (!beruehrt(p, q)) continue;
+          if (segmentsOverlap(p.a, p.b, q.a, q.b) || segmentsCross(p.a, p.b, q.a, q.b)) {
+            out.add(p.id);
+            out.add(q.id);
+          }
         }
       }
     }
     return out;
+  }
+
+  /** Rohre, die an einem dieser Knoten haengen -- sie bewegen sich mit ihnen. */
+  tubesAt(nodeIds) {
+    const out = new Set();
+    for (const t of this.tubes.values()) {
+      if (t.arm || t.link || t.bow) continue;
+      if (nodeIds.has(t.a) || nodeIds.has(t.b)) out.add(t.id);
+    }
+    return out;
+  }
+
+  /**
+   * Auswahl nur verschieben: ohne Trennen, ohne Zusammenlegen, ohne Pruefung.
+   * Das ist der Schritt fuer eine Vorschau (Ziehen, Einfuegen) -- alles Weitere
+   * faellt erst beim Absetzen an.
+   */
+  translateSelection(sel, dx, dy, dz) {
+    const tg = this.moveTargets(sel);
+    if (dx || dy || dz) this._applyOffset(tg, dx, dy, dz);
+    return tg;
   }
 
   // Hat der Knoten eine senkrechte Stuetze nach unten (Rohr zu einem Knoten direkt darunter)?

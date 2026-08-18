@@ -282,6 +282,20 @@ Koordinaten in **cm**, Three.js-Konvention **y = oben**, Boden bei y = 0.
   und bricht ihn ab, sobald ein zweiter Finger dazukommt (`_abortGesture`).
 - Undo/Redo in `builder.js` arbeiten mit vollständigen JSON-Snapshots (`recordHistory`,
   max. 60 Schritte). Modelländerungen deshalb immer durch `recordHistory(...)` kapseln.
+- **Vorschau vs. Vollzug (Ziehen und Einfügen):** Während des Zugs wird nur **verschoben**
+  (`model.translateSelection`) – nicht getrennt, nicht zusammengelegt, keine Kupplungen geprüft.
+  Der echte Zug läuft **einmal** beim Loslassen bzw. Absetzen (`moveSelection` mit `merge`/
+  `validate`, `commitPaste`). Früher wurde je Rasterschritt das ganze Modell neu geladen und ein
+  vollständiger Zug gerechnet: bei 340 Kupplungen kostete eine Zeigerbewegung ~50 ms, jetzt ~10 ms.
+  Passt die Lage nicht, wird die Auswahl **rot** gezeichnet (`opts.invalid` der Szene, gleiche
+  Darstellung wie bei der Kopie am Zeiger) statt stehen zu bleiben; beim Loslassen fällt sie auf
+  die letzte gültige Lage zurück (`_drag.lastValid`). Die Pfeiltasten bleiben beim alten
+  Verhalten – ein Schritt, der nicht geht, wird abgelehnt und gemeldet.
+- **`model.collisions({ only })`** prüft über ein grobes Raster (`COLL_CELL = 100` cm) statt jedes
+  Rohr mit jedem: nur Rohre in denselben Zellen werden verglichen (425 Rohre: 9,9 ms → 2,1 ms).
+  `only` schränkt zusätzlich auf die **bewegten** Rohre ein (`model.tubesAt(knotenIds)`) – stehende
+  Rohre können untereinander keine neue Überlagerung bilden (→ 0,3 ms). Ergebnis identisch zum
+  Paarvergleich (gegen 200 Zufallsmodelle geprüft).
 - **Kopieren/Einfügen** läuft wie das Ziehen einer Auswahl: `model.extractSelection(sel)` schneidet
   ein Fragment heraus (Koordinaten relativ zum `anchor`, `geom`/`pool` fallen weg – sie zeigten
   sonst auf die alte Stelle), `startPaste` setzt es über `model.insertFragment` ins Modell und
