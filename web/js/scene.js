@@ -463,7 +463,7 @@ export class SceneManager {
   /**
    * Weltpunkt unter dem Zeiger auf einer frei gewaehlten Ebene. Anders als
    * dragPlanePoint legt der Aufrufer die Normale fest -- das Einfuegen haelt
-   * damit die Tiefe (Z) fest und schiebt nur in X und Y. Steht die Ebene fast
+   * damit die Hoehe fest und schiebt nur in der Ebene. Steht die Ebene fast
    * parallel zum Blick, gibt es keinen brauchbaren Schnittpunkt: dann null.
    */
   pointOnPlane(clientX, clientY, origin, normal) {

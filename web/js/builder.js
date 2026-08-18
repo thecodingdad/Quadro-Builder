@@ -306,23 +306,28 @@ export class Builder {
   }
 
   /**
-   * Zeigerpunkt fuer das Einfuegen. Die Kopie bleibt in der Ebene ihres
-   * Ursprungs: die Tiefe (Z) steht fest, geschoben wird in X und Y. Alles
-   * andere macht das Treffen der richtigen Stelle unnoetig schwer -- fuer die
-   * dritte Achse gibt es die Pfeiltasten, sobald die Kopie liegt.
+   * Zeigerpunkt fuer das Einfuegen. Die Kopie bleibt auf der HOEHE ihres
+   * Ursprungs und wandert nur in der Ebene (vor/zurueck, links/rechts) -- in
+   * drei Achsen zugleich trifft man die Stelle nicht. Die Hoehe stellt man
+   * danach mit den Pfeiltasten ein, denn das Eingefuegte bleibt ausgewaehlt.
    */
   _pastePoint(clientX, clientY) {
-    return this.scene.pointOnPlane(clientX, clientY, this._pasteOrigin(), [0, 0, 1]);
+    return this.scene.pointOnPlane(clientX, clientY, this._pasteOrigin(), [0, 1, 0]);
   }
 
-  /** Kopie an einen Weltpunkt setzen (auf das Raster gerundet, Z bleibt). */
+  /**
+   * Kopie an einen Weltpunkt setzen. Die Koordinaten im Fragment liegen relativ
+   * zu seiner Ecke -- der Versatz IST also die Stelle, an der diese Ecke landen
+   * soll: waagerecht auf das Raster gerundet dem Zeiger nach, in der Hoehe
+   * unveraendert.
+   */
   _placePaste(point) {
     const d = this._paste;
     const a = d.frag.anchor;
     const raster = (v) => Math.round(v / MOVE_STEP) * MOVE_STEP;
     const offset = point
-      ? [raster(point.x - a[0]), raster(point.y - a[1]), 0]
-      : (d.offset || [0, 0, 0]);
+      ? [raster(point.x), a[1], raster(point.z)]
+      : (d.offset || [a[0], a[1], a[2]]);
     if (d.offset && offset[0] === d.offset[0] && offset[1] === d.offset[1] && offset[2] === d.offset[2]) return;
     this.model.loadJSON(JSON.parse(d.before));
     d.offset = offset;
