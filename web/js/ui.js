@@ -2298,6 +2298,13 @@ export function initUI({ scene, model, builder }) {
       $("btn-doc-new").click();
       return;
     }
+    // Tab schliessen. Strg/Cmd+W geht NICHT: das fangen die Browser selbst ab
+    // (Tab zu), noch bevor die Seite das Ereignis sieht. Alt+W kommt an.
+    if (e.altKey && !e.ctrlKey && !e.metaKey && e.key.toLowerCase() === "w") {
+      e.preventDefault();
+      if (activeTabId) closeTab(activeTabId);
+      return;
+    }
     // Datei-Tasten: was der Browser damit vorhat (Seite speichern, Datei
     // oeffnen), ist hier fehl am Platz -- der Editor ist die Anwendung.
     if (e.metaKey || e.ctrlKey) {
@@ -3152,6 +3159,12 @@ export function initUI({ scene, model, builder }) {
         activateTab(tab.tabId);
       });
       item.addEventListener("dblclick", () => pinTab(tab));
+      // Mittelklick schliesst -- die gewohnte Geste aus Browsern und Editoren.
+      item.addEventListener("auxclick", (e) => {
+        if (e.button !== 1) return;
+        e.preventDefault();
+        closeTab(tab.tabId);
+      });
       item.addEventListener("pointerdown", (e) => {
         if (e.button !== 0 || e.target.closest(".tab-close")) return;
         beginneZiehen(tab.tabId, e.clientX);

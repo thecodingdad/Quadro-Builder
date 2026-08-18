@@ -242,7 +242,9 @@ Koordinaten in **cm**, Three.js-Konvention **y = oben**, Boden bei y = 0.
   `#dlg-overlay` (Enter = erster Knopf, Escape/Klick daneben = Abbruch).
 - **Neue Bau-Richtung/Logik:** `config.js` + `builder.js` (+ ggf. `scene.js`).
 - **Tastatur:** zentral in `ui.js` (`keydown`). Pfeiltasten sind kamera-relativ über
-  `scene.getHorizontalAxes()`.
+  `scene.getHorizontalAxes()`. **Strg/Cmd+W ist nicht abfangbar** – Browser schließen damit ihren
+  eigenen Tab, bevor die Seite das Ereignis sieht (auch als installierte PWA); ein Entwurf-Tab geht
+  deshalb mit **Alt+W** oder Mittelklick zu.
 - **Code-Stil:** ES2022+, Kommentare auf Deutsch **mit Umlauten** („Änderung", „Löschen", „Körper"),
   Bezeichner auf Englisch. Das gilt auch für Namen und Notizen in `data/parts.json`.
   Keine neuen externen Abhängigkeiten.
