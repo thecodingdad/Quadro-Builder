@@ -857,10 +857,9 @@ export function initUI({ scene, model, builder }) {
   tubeBtn.dataset.tube = "";
   tubeBtn.addEventListener("click", (e) => {
     e.stopPropagation();
-    // Klick auf den Rohr-Button heisst "ich will gerade Rohre bauen" ->
-    // Modus mitschalten und von einem aktiven Bogen zurueckwechseln.
-    if (builder.mode !== "add") setMode("add");
-    if (isCurved(builder.tubeId)) { builder.setTube(lastStraightTubeId); syncPartHighlights(); }
+    // Der Gruppen-Knopf klappt nur die Liste auf -- in der Hand liegt erst,
+    // was man darin anklickt. Sonst schnappte schon das Nachsehen das zuletzt
+    // benutzte Rohr, wie es die uebrigen Gruppen auch nicht tun.
     showPartPopup(tubeBtn, tubes, builder.tubeId, tubeIcon, (tube) => {
       builder.setTube(tube.id);
       if (builder.mode !== "add") setMode("add");
@@ -876,15 +875,16 @@ export function initUI({ scene, model, builder }) {
     bowBtn.dataset.tube = "";
     bowBtn.addEventListener("click", (e) => {
       e.stopPropagation();
-      if (builder.mode !== "add") setMode("add");
+      // Gibt es nur eine Bogen-Variante, ist der Klick auf den Knopf die Wahl
+      // -- eine Liste mit einer Zeile waere nur ein Klick mehr.
       if (curvedTubes.length < 2) {
         builder.setTube(curvedTubes[0].id);
-        syncPartHighlights();
+        if (builder.mode !== "add") setMode("add"); else syncPartHighlights();
         return;
       }
       showPartPopup(bowBtn, curvedTubes, builder.tubeId, tubeIcon, (tube) => {
         builder.setTube(tube.id);
-        syncPartHighlights();
+        if (builder.mode !== "add") setMode("add"); else syncPartHighlights();
       });
     });
     tubeWrap.appendChild(bowBtn);
@@ -968,7 +968,6 @@ export function initUI({ scene, model, builder }) {
   panelBtn.dataset.panel = "";
   panelBtn.addEventListener("click", (e) => {
     e.stopPropagation();
-    if (builder.mode !== "panel") setMode("panel");
     showPartPopup(panelBtn, panelList, builder.panelId, panelIcon, (p) => {
       builder.setPanel(p.id);
       setMode("panel");
