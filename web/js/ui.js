@@ -1,6 +1,6 @@
 // Verkabelt die Bedienoberflaeche (Toolbar, Tastatur, Stueckliste, Bestand).
 
-import { buildableTubes, buildableCurvedTubes, buildablePanels, tubeColors, geometry, allTubes, allConnectors, panels, reinforcements, slideKindName, partName, partForFitting, accessories, getPartById } from "./catalog.js";
+import { buildableTubes, buildableCurvedTubes, buildablePanels, tubeColors, geometry, allTubes, allConnectors, panels, reinforcements, screws, slideKindName, partName, partForFitting, accessories, getPartById } from "./catalog.js";
 import { PLACEABLE_FITTINGS } from "./model.js";
 import { computeBOM, compareInventory, connectorsForNode } from "./bom.js";
 import { computeBuildPlan, BUILD_ORDERS } from "./buildplan.js";
@@ -139,6 +139,7 @@ function loadInv() {
   inv.panels = inv.panels || {};
   inv.reinforcements = inv.reinforcements || {};
   inv.fittings = inv.fittings || {};
+  inv.screws = inv.screws || {};
   return inv;
 }
 function saveInv(inv) { storage.saveInventory(inv); }
@@ -2624,6 +2625,7 @@ export function initUI({ scene, model, builder }) {
       };
       farbig("tubes", bom.tubes, "tubeId");
       farbig("panels", bom.panels, "panelId");
+      farbig("screws", bom.screws || [], "id");   // farbig ist nur die Rohrschraube
     }
 
     // Nach Farben getrennt oder zusammengefasst? Der Preis hängt nicht an der
@@ -2641,11 +2643,6 @@ export function initUI({ scene, model, builder }) {
       }
       return [...map.values()];
     };
-
-    // Schrauben stehen nicht im Bestand -- beim Bearbeiten fällt der Abschnitt
-    // weg, sonst blieben dort Zeilen ohne Eingabefeld stehen.
-    $("bom-screws-head").hidden = bomEditMode;
-    $("bom-screws").hidden = bomEditMode;
 
     // Bearbeiten: jede Kategorie zeigt den ganzen Katalog, damit sich auch
     // Bestand für Teile eintragen lässt, die im Modell (noch) nicht vorkommen.
@@ -2732,7 +2729,11 @@ export function initUI({ scene, model, builder }) {
     const schraubenZeilen = fasseZusammen(schrauben, "id");
     for (const r of schraubenZeilen) {
       const name = r.colorName ? `${r.name} · ${r.colorName}` : r.name;
-      bomRow(sb, name, r.color || null, r.count, r.subtotal);
+      // Mit Bestandsbezug: die Zeile zeigt "vorhanden/benötigt" und wird rot,
+      // wenn es nicht reicht. Hervorheben lässt sich nichts -- im Modell gibt
+      // es die Schrauben nicht.
+      bomRow(sb, name, r.color || null, r.count, r.subtotal,
+        "screws:" + r.id + (r.color ? "|" + r.color : ""));
     }
 
     $("sum-tubes").textContent = bom.totals.tubes;
@@ -2788,6 +2789,7 @@ export function initUI({ scene, model, builder }) {
     } else if (r.group === "reinforcements") {
       for (const t of model.tubes.values()) if (t.reinforced) ids.add(t.id);
     }
+    // "screws" bleibt leer: Schrauben werden gerechnet, nicht gebaut.
     return ids;
   }
 
@@ -2817,17 +2819,23 @@ export function initUI({ scene, model, builder }) {
       ["bom-wheels", "fittings", ausGruppe("wheels")],
       ["bom-fittings", "fittings", ausGruppe("fittings")],
       ["bom-reinforcements", "reinforcements", reinforcements()],
+      ["bom-screws", "screws", screws()],
     ];
     // Farbige Teile bekommen je Farbe eine eigene Zeile, sobald die Liste nach
     // Farben getrennt ist -- sonst ließe sich der Bestand nicht farbgenau
     // eintragen. Farbig sind Rohre und Platten (Platten zusätzlich schwarz).
-    const farbigeToepfe = { tubes: tubeColors(), panels: [...tubeColors(), ...PANEL_EXTRA_COLORS] };
+    const farbigeToepfe = { tubes: tubeColors(), panels: [...tubeColors(), ...PANEL_EXTRA_COLORS],
+      screws: tubeColors() };
     for (const [boxId, bucket, teile] of abschnitte) {
       const box = $(boxId);
       box.innerHTML = "";
       if (!teile.length) { box.appendChild(el("div", "muted", "–")); continue; }
-      const farben = bomByColor ? farbigeToepfe[bucket] : null;
       for (const it of teile) {
+        // Bei den Schrauben ist nur die Rohrschraube farbig -- die uebrigen
+        // gibt es nur schwarz. Deshalb entscheidet hier das TEIL, nicht der
+        // Abschnitt.
+        const farben = bomByColor && (bucket !== "screws" || it.colored)
+          ? farbigeToepfe[bucket] : null;
         const name = partName(it) + (it.code ? ` (${it.code})` : "");
         if (farben) {
           for (const f of farben) {
@@ -2869,7 +2877,8 @@ export function initUI({ scene, model, builder }) {
     storage.exportFile(
       { format: "quadro-inventory", version: 1,
         tubes: inventory.tubes, connectors: inventory.connectors,
-        panels: inventory.panels, reinforcements: inventory.reinforcements },
+        panels: inventory.panels, reinforcements: inventory.reinforcements,
+        screws: inventory.screws },
       "quadro-bestand.json",
     );
     flash(t("flash_inv_exported"));
@@ -2877,8 +2886,8 @@ export function initUI({ scene, model, builder }) {
 
   function sanitizeInventory(data) {
     if (!data || typeof data !== "object") throw new Error(t("inv_invalid"));
-    const out = { tubes: {}, connectors: {}, panels: {}, reinforcements: {} };
-    for (const bucket of ["tubes", "connectors", "panels", "reinforcements"]) {
+    const out = { tubes: {}, connectors: {}, panels: {}, reinforcements: {}, screws: {} };
+    for (const bucket of ["tubes", "connectors", "panels", "reinforcements", "screws"]) {
       const src = data[bucket];
       if (src && typeof src === "object") {
         for (const [k, raw] of Object.entries(src)) {
@@ -2898,6 +2907,7 @@ export function initUI({ scene, model, builder }) {
       inventory.connectors = next.connectors;
       inventory.panels = next.panels;
       inventory.reinforcements = next.reinforcements;
+      inventory.screws = next.screws;
       saveInv(inventory);
       sync.nudge();
       update();

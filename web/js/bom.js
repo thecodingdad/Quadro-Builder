@@ -697,7 +697,11 @@ export function neededParts(bom) {
   const reinforcements = new Map(); // id -> physische Stueckzahl (40-cm-Profile)
   for (const r of bom.reinforcements || [])
     reinforcements.set(r.id, (reinforcements.get(r.id) || 0) + (r.pieces ?? r.count));
-  return { tubes, connectors, panels, reinforcements, fittings };
+  // Schrauben: die Rohrschraube steht je Rohrfarbe in einer eigenen Zeile, im
+  // Bestand zaehlt die Summe je Teil.
+  const screws = new Map();
+  for (const r of bom.screws || []) screws.set(r.id, (screws.get(r.id) || 0) + r.count);
+  return { tubes, connectors, panels, reinforcements, fittings, screws };
 }
 
 // Vergleicht Bedarf mit Bestand. inv = { tubes:{id:n}, connectors:{type:n}, panels:{id:n} }.
@@ -740,6 +744,17 @@ export function compareInventory(bom, inv) {
     const ok = owned >= count;
     if (!ok) feasible = false;
     rows.push({ group: "reinforcements", key: id, name: partName(def), need: count, owned, ok });
+  }
+  for (const [id, count] of need.screws || []) {
+    const def = getScrew(id) || { name: id };
+    const owned = (inv.screws && inv.screws[id]) || 0;
+    const ok = owned >= count;
+    // Sonderregel: Eine 0 heisst "noch nicht gezaehlt", nicht "fehlt". Die
+    // Zeile faerbt sich trotzdem rot -- sie ist ein Hinweis, kein Ausschluss.
+    // Ab dem ersten eingetragenen Stueck zaehlt der Bestand normal mit.
+    const soft = owned === 0;
+    if (!ok && !soft) feasible = false;
+    rows.push({ group: "screws", key: id, name: partName(def), need: count, owned, ok, soft });
   }
   return { rows, feasible };
 }

@@ -194,6 +194,13 @@ Koordinaten in **cm**, Three.js-Konvention **y = oben**, Boden bei y = 0.
   (je Ende eine), die konischen in den Rohren, die von dessen Kupplungen nach **oben** gehen.
   Die Katalog-Gruppe `screws` in `parts.json` führt den **Packungs**preis plus `pack`; die Liste
   rechnet anteilig (`price = Packpreis / pack`).
+- **Schrauben im Bestand:** sie stehen im Bestandseditor wie alle anderen Teile (Topf
+  `inventory.screws`, die Rohrschraube farbgenau). Für die Machbarkeit gilt eine Sonderregel in
+  `compareInventory`: ein Bestand von **0** heißt „noch nicht gezählt", nicht „fehlt" – die Zeile
+  wird trotzdem rot, das Machbarkeits-Banner bleibt aber grün (`soft: true` an der Zeile). Ab dem
+  ersten eingetragenen Stück zählt der Bestand normal mit. Die Bibliothek lässt Schrauben ganz
+  außen vor: ihre gespeicherten Kennzahlen (`meta.parts`) führen nur Rohre, Kupplungen, Platten
+  und Verstärkungen.
 - Verstärkungen: kollineare verstärkte Rohre werden per Union-Find zu **Läufen** verschmolzen.
   In den BOM-Zeilen ist `count` = Anzahl Läufe (Anzeige), `pieces` = physische 40-cm-Profile
   (maßgeblich für Bestellung/Bestandscheck in `neededParts`).
