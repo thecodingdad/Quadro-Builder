@@ -421,9 +421,10 @@ export function buildQDF(model) {
   };
 
   for (const p of model.panels.values()) {
-    // Baellebad: die Datei fuehrt EINE Zeile, wir zeigen vier Waende und einen
-    // Boden. Also die Original-Zeile zurueckschreiben und die abgeleiteten
-    // Flaechen auslassen -- sonst stuenden fuenf Platten statt eines Pools da.
+    // Aeltere Staende fuehren das Baellebad noch als fuenf Platten mit der
+    // Original-Zeile an der Frontwand. Die Zeile zurueckschreiben, die
+    // abgeleiteten Flaechen auslassen -- sonst stuenden fuenf Platten statt
+    // eines Pools da. Frisch eingelesene Pools sind Anbauteile (siehe unten).
     if (p.poolPart) {
       if (p.pool && p.pool.p) {
         const q = p.pool.quat && p.pool.quat.length === 4
@@ -460,15 +461,16 @@ export function buildQDF(model) {
     lines.push(`${kind}{${TUBE_MAT.red}, ${tuple(q, c.x, c.y, c.z)}, 1, 0, 0}`);
     stats.clamps++;
   }
-  // Anbauteile: Punkt + Ausrichtung, beim Gitter zusaetzlich die Masse. Die
+  // Anbauteile: Punkt + Ausrichtung, beim Netz zusaetzlich die Masse. Die
   // Feldzahl je Art richtet sich nach dem, was die Herstellerdateien fuehren.
   for (const f of (model.fittings ? model.fittings.values() : [])) {
     const q = f.quat && f.quat.length === 4
       ? encodeQuat([f.quat[3], f.quat[0], f.quat[1], f.quat[2]])
       : IDENTITY;
-    // Tuchteile tragen die Platten-Materialien (Spielsack, Gitter, Rundwand);
+    // Tuchteile tragen die Platten-Materialien (Spielsack, Netz, Rundwand);
     // alles andere die der Rohre.
-    const stoff = f.kind === "bag2" || f.kind === "lattice2" || f.kind === "textil-round2";
+    const stoff = f.kind === "bag2" || f.kind === "lattice2" || f.kind === "textil-round2"
+      || f.kind === "pool2" || f.kind === "pool-small2";
     // Ohne Farbe: Material 0 wie in der Datei (so stehen alle 50 Dach-Zeilen
     // des Bestands dort). CONNECTOR_MAT waere schwarz und faerbte das Teil beim
     // naechsten Laden ein.

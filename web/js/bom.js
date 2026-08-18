@@ -269,21 +269,18 @@ function reinforcementRuns(model) {
   return [...runs.values()];
 }
 
+// QDF-Arten eines Baellebads: gross und klein.
+const POOL_KINDS = new Set(["pool2", "pool-small2"]);
+
 /**
- * Passende Poolfolie zu einem Baellebad-Boden. Gemessen wird die Grundflaeche
- * der Bodenplatte und mit den Katalogmassen verglichen (`pool` am Teil):
- * XS gehoert zum kleinen Baellebad, S/L/XXL unterscheiden sich in der Tiefe.
- * Passt nichts genau, gewinnt die flaechenmaessig naechste Groesse -- eine
- * Folie braucht das Baellebad in jedem Fall.
+ * Passende Poolfolie zu einer Baellebad-Grundflaeche. Verglichen wird mit den
+ * Katalogmassen (`pool` am Teil): XS gehoert zum kleinen Baellebad, S/L/XXL
+ * unterscheiden sich in der Tiefe. Passt nichts genau, gewinnt die
+ * flaechenmaessig naechste Groesse -- eine Folie braucht das Becken ohnehin.
  */
-function poolLinerFor(model, floor) {
+function poolLinerFor(s1, s2) {
   const liners = accessories().filter((a) => a.pool);
-  if (!liners.length) return null;
-  const corners = model.panelCorners(floor);
-  if (!corners) return null;
-  const span = (a, b) => Math.round(Math.hypot(
-    corners[a][0] - corners[b][0], corners[a][1] - corners[b][1], corners[a][2] - corners[b][2]));
-  const s1 = span(0, 1), s2 = span(0, 3);
+  if (!liners.length || !s1 || !s2) return null;
   const short = Math.min(s1, s2), long = Math.max(s1, s2);
   const exact = liners.find((a) => a.pool.short === short && a.pool.long === long);
   if (exact) return exact;
@@ -389,25 +386,36 @@ export function computeBOM(model) {
   // einzige Plane -- die "Poolfolie" in vier Groessen. Gezaehlt wird ueber den
   // Boden: den gibt es genau einmal je Baellebad.
   const poolLiners = new Map();      // Teile-id -> Anzahl
+  for (const f of (model.fittings ? model.fittings.values() : [])) {
+    if (!POOL_KINDS.has(f.kind)) continue;
+    const def = poolLinerFor(Math.abs(f.w || 0), Math.abs(f.d || 0));
+    if (def) poolLiners.set(def.id, (poolLiners.get(def.id) || 0) + 1);
+  }
+  // Aeltere Staende fuehren das Baellebad noch als fuenf Platten: dort zaehlt
+  // der Boden, seine Grundflaeche gibt die Groesse.
   for (const p of model.panels.values()) {
     if (p.panelId !== "pool_floor") continue;
-    const def = poolLinerFor(model, p);
-    if (!def) continue;
-    poolLiners.set(def.id, (poolLiners.get(def.id) || 0) + 1);
+    const corners = model.panelCorners(p);
+    if (!corners) continue;
+    const span = (a, b) => Math.round(Math.hypot(
+      corners[a][0] - corners[b][0], corners[a][1] - corners[b][1], corners[a][2] - corners[b][2]));
+    const def = poolLinerFor(span(0, 1), span(0, 3));
+    if (def) poolLiners.set(def.id, (poolLiners.get(def.id) || 0) + 1);
   }
 
-  // --- Anbauteile (Raeder, Rollen, Gitter, Sonderkupplungen) --------------
+  // --- Anbauteile (Raeder, Rollen, Netze, Sonderkupplungen) --------------
   // Gezaehlt wird nach Katalogteil, nicht nach QDF-Art: ein- und dreiarmige
   // Lochzapfenkupplung sind dieselbe Elementart, aber zwei Teile.
   const fitMap = new Map();
   for (const f of (model.fittings ? model.fittings.values() : [])) {
+    if (POOL_KINDS.has(f.kind)) continue;   // zaehlt oben als Poolfolie
     const def = partForFitting(f.kind, f.mask);
     const key = def ? def.id : f.kind;
     if (!fitMap.has(key)) fitMap.set(key, { def, kind: f.kind, count: 0 });
     fitMap.get(key).count++;
   }
   // Die Poolfolien reihen sich bei den Anbauteilen ein -- sie sind Zubehoer
-  // mit Katalogpreis wie Sack, Gitter oder Dachtextil.
+  // mit Katalogpreis wie Sack, Netz oder Dachtextil.
   for (const [id, count] of poolLiners) {
     fitMap.set(id, { def: getPartById(id), kind: "pool2", count });
   }

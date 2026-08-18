@@ -65,7 +65,7 @@ const FITTING_KINDS = {
   "adapter2":        { renderBase: 4 },
   "textil-round2":   { renderBase: 5 },   // gebogene Wand (Viertelzylinder)
   "roof-large2":     { renderBase: 4 },   // grosses Dach
-  "lattice2":        { renderBase: 8, sized: true },  // Gitter
+  "lattice2":        { renderBase: 8, sized: true },  // Netz
   "bag2":            { renderBase: 4 },   // Spielsack
   "open-connector2": { renderBase: 4 },   // offener Anschluss
 };
@@ -374,7 +374,7 @@ export function parseQDF(text, opts = {}) {
           const armWorld = CONNECTOR_ARM_BITS
             .filter(([b]) => mask & b)
             .map(([, v]) => rotateByQuat(q, v).map(ar4));
-          // Bei verschmolzenen Kupplungen (dichtes Gitter) Arme vereinigen statt ueberschreiben.
+          // Bei verschmolzenen Kupplungen (dichtes Netz) Arme vereinigen statt ueberschreiben.
           nd.arms = nd.arms ? unionDirs(nd.arms, armWorld) : armWorld;
         }
       }
@@ -478,7 +478,7 @@ export function parseQDF(text, opts = {}) {
       });
     } else if (FITTING_KINDS[p.name]) {
       // Anbauteile: Raeder, Radkappen, Laufrollen, Lager, Lochzapfen- und
-      // offene Kupplungen, Rundwaende, grosse Daecher, Gitter, Saecke. Alle
+      // offene Kupplungen, Rundwaende, grosse Daecher, Netze, Saecke. Alle
       // tragen Punkt + Ausrichtung; einige zusaetzlich Masse oder eine
       // Arm-Maske. Sie haengen am Geruest, greifen aber nicht in Knoten und
       // Rohre ein -- deshalb eine eigene Sammlung.
@@ -505,7 +505,7 @@ export function parseQDF(text, opts = {}) {
         f.y = round(f.y + ez[1] * BAG_OFFSET);
         f.z = round(f.z + ez[2] * BAG_OFFSET);
       }
-      // Das Gitter bringt seine Masse mit. Anders als bei Rohren und Platten
+      // Das Netz bringt seine Masse mit. Anders als bei Rohren und Platten
       // ist es das ECHTE Mass der Flaeche, nicht das Teilemass ohne Kupplung:
       // 1550 x 775 spannt gemessen genau von -775 bis +775 um den Mittelpunkt.
       // Erstes Feld = lokales Y, zweites = lokales X (wie bei den Platten).
@@ -548,7 +548,7 @@ export function parseQDF(text, opts = {}) {
   // c45body-Knoten vorhanden sind).
   //
   // Hilfsfunktion: sucht 4 Eck-Kupplungen eines rechteckigen Panels. cx/cy/cz ist die
-  // wahre Mitte (symmetrisch zu allen vier Ecken). h1/h2 = halbe Gitter-Spannweiten.
+  // wahre Mitte (symmetrisch zu allen vier Ecken). h1/h2 = halbe Netz-Spannweiten.
   // Probiert alle drei Achsenpaare (XY, XZ, YZ) plus gespiegelte h1/h2-Zuweisung.
   // Gibt [4 node-Refs] zurück, oder null wenn keine passenden Kupplungen gefunden.
   function findPanelCorners(q, cx, cy, cz, h1, h2) {
@@ -610,7 +610,7 @@ export function parseQDF(text, opts = {}) {
 
     } else if (p.name === "textil2") {
       // Netz/Stoff: gleiche Struktur wie panel2 (Zentrum + Maße + Quat). Maße z.B.
-      // 35x75 cm -> Gitter 40x80 cm (nicht im Platten-Katalog -> eigene Textil-Sammlung).
+      // 35x75 cm -> Netz 40x80 cm (nicht im Platten-Katalog -> eigene Textil-Sammlung).
       if (!p.tuple || p.tuple.length < 7) { skipped[p.name] = (skipped[p.name] || 0) + 1; continue; }
       if (hasRenderRange(p.rest, 8)) continue;
       const q = decodeQuat([p.tuple[0], p.tuple[1], p.tuple[2], p.tuple[3]]);
@@ -618,7 +618,7 @@ export function parseQDF(text, opts = {}) {
       const dimW = (typeof p.rest[3] === "number" ? p.rest[3] : 0) / 10;
       const dimH = (typeof p.rest[5] === "number" ? p.rest[5] : 0) / 10;
       if (!(dimW > 0) || !(dimH > 0)) { skipped[p.name] = (skipped[p.name] || 0) + 1; continue; }
-      const wGrid = dimW + conn, hGrid = dimH + conn; // Gitter-Spannweite (z.B. 40 x 80)
+      const wGrid = dimW + conn, hGrid = dimH + conn; // Netz-Spannweite (z.B. 40 x 80)
       const nodesFound = findPanelCorners(q, cx, cy, cz, wGrid / 2, hGrid / 2);
       if (!nodesFound) { skipped[p.name] = (skipped[p.name] || 0) + 1; continue; }
       const mat = typeof p.rest[0] === "number" ? p.rest[0] : null;
@@ -629,16 +629,15 @@ export function parseQDF(text, opts = {}) {
       });
 
     } else if (p.name === "pool2" || p.name === "pool-small2") {
-      // Bällebad-Wände: feste Geometrie (keine Maße im QDF -- im Original-Binary hardcoded).
+      // Bällebad: feste Geometrie (keine Maße im QDF -- im Original-Binary hardcoded).
       // Entity-Ursprung = OBERKANTE der Front-Wand -> wahre Mitte = Ursprung - lokaleY*(span1/2).
-      //   pool2:       120 x 40 cm (3 x 1 Felder) -> panelId "pool_wall"
-      //   pool-small2:  40 x 20 cm (1 x 0.5 Felder) -> panelId "panel_40x20"
-      // Das QDF enthält nur EINE Entity pro Bällebad (die Front-Wand). Rückwand + 2 Seitenwände
-      // werden aus dem Kupplungsnetz hergeleitet (Tiefenrichtung = cross(A→B, A→D) der Front-Wand).
+      //   pool2:       Frontwand 120 x 40 cm (3 x 1 Felder)
+      //   pool-small2: Frontwand  40 x 20 cm (1 x 0,5 Felder)
+      // Die Datei enthält nur EINE Entity je Bällebad (die Front-Wand); die Tiefe
+      // steht nicht darin und wird aus dem Kupplungsnetz hergeleitet
+      // (Tiefenrichtung = cross(A→B, A→D) der Front-Wand).
       if (!p.tuple || p.tuple.length < 7) { skipped[p.name] = (skipped[p.name] || 0) + 1; continue; }
       const [span0, span1] = p.name === "pool2" ? [120, 40] : [40, 20];
-      const panelId = panelIdForDims(span0, span1);
-      if (!panelId) { skipped[p.name] = (skipped[p.name] || 0) + 1; continue; }
       const q = decodeQuat([p.tuple[0], p.tuple[1], p.tuple[2], p.tuple[3]]);
       const ay = rotateByQuat(q, [0, 1, 0]); // lokale Y-Achse (Wandhöhe)
       const cx = p.tuple[4] / 10 + ay[0] * (-span1 / 2);
@@ -648,14 +647,10 @@ export function parseQDF(text, opts = {}) {
       if (!nodesFound) { skipped[p.name] = (skipped[p.name] || 0) + 1; continue; }
       const mat = typeof p.rest[0] === "number" ? p.rest[0] : null;
       const color = materials.get(mat) || FALLBACK_COLOR;
-      // Front-Wand. Sie traegt die Original-Zeile des Baellebads: die Datei
-      // fuehrt EIN pool2-Element, wir zeigen vier Waende und einen Boden --
-      // beim Export wird daraus wieder die eine Zeile.
-      const poolLine = { kind: p.name, quat: [q[1], q[2], q[3], q[0]],
-        p: [round(p.tuple[4] / 10), round(p.tuple[5] / 10), round(p.tuple[6] / 10)] };
-      panels.push({ id: "p" + seq++, nodes: nodesFound.map((n) => n.id), panelId, color,
-        pool: poolLine, poolPart: true });
-      // Restliche 3 Wände aus Kupplungsnetz ableiten
+      // Das Baellebad ist EIN Teil -- die Datei fuehrt eine Zeile, im Laden gibt
+      // es dafuer eine Poolfolie. Gespeichert wird deshalb ein Anbauteil an der
+      // Original-Stelle (Oberkante der Frontwand) mit Breite, Hoehe und Tiefe;
+      // Waende, Boden und Wasser zeichnet scene.js daraus.
       const [nA, nB, nC, nD] = nodesFound;
       const e1 = [nB.x - nA.x, nB.y - nA.y, nB.z - nA.z]; // horizontal
       const e2 = [nD.x - nA.x, nD.y - nA.y, nD.z - nA.z]; // vertikal
@@ -697,16 +692,19 @@ export function parseQDF(text, opts = {}) {
           bestBack = [bA, bB, bC, bD];
         }
       }
-      if (bestBack) {
-        const [bA, bB, bC, bD] = bestBack;
-        const sideId = panelIdForDims(bestDepth, span1) || panelId;
-        panels.push({ id: "p" + seq++, nodes: [bA.id, bB.id, bC.id, bD.id], panelId, color, poolPart: true }); // Rückwand
-        panels.push({ id: "p" + seq++, nodes: [nA.id, bA.id, bD.id, nD.id], panelId: sideId, color, poolPart: true }); // linke Seitenwand
-        panels.push({ id: "p" + seq++, nodes: [nB.id, bB.id, bC.id, nC.id], panelId: sideId, color, poolPart: true }); // rechte Seitenwand
-        // Boden: 4 untere Ecken (alle y=0); scene.js rendert darüber das Wasser-Volumen.
-        // Node-Reihenfolge: nA→nB (Breite), nA→bA (Tiefe) -> scene.js BoxGeometry passt.
-        panels.push({ id: "p" + seq++, nodes: [nA.id, nB.id, bB.id, bA.id], panelId: "pool_floor", color, poolPart: true });
-      }
+      // Ohne Rueckwand fehlt die Tiefe -- dann bleibt das Becken so flach wie
+      // die Frontwand breit ist, statt gar nicht zu erscheinen.
+      const depth = bestDepth || span0;
+      // Vorzeichen: dv zeigt in den Pool, die lokale Z-Achse kann anders herum
+      // stehen. In `d` steckt beides -- Tiefe UND Richtung.
+      const localZ = rotateByQuat(q, [0, 0, 1]);
+      const sign = (dv[0] * localZ[0] + dv[1] * localZ[1] + dv[2] * localZ[2]) < 0 ? -1 : 1;
+      fittings.push({
+        id: "f" + seq++, kind: p.name,
+        x: round(p.tuple[4] / 10), y: round(p.tuple[5] / 10), z: round(p.tuple[6] / 10),
+        quat: [q[1], q[2], q[3], q[0]], color,
+        w: span0, h: span1, d: round(depth * sign),
+      });
     }
   }
 

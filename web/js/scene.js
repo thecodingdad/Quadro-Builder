@@ -86,6 +86,8 @@ const SLIDE_END_FLAT = 47.5 - SLIDE_END_LIP_R;
 // Flaechige Anbauteile verschwinden im Verstaerken- und Kollisions-Modus, wie
 // Platten und Netze auch.
 const FLAT_FITTINGS = new Set(["lattice2", "textil-round2", "roof-large2"]);
+// Staerke der Baellebad-Folie: nur so dick, dass sie sichtbar ist.
+const POOL_SKIN = 2;
 // Anbauteile, die auf einem Stutzen der Kupplung sitzen: die Kupplung bekommt
 // dort denselben Stutzen wie fuer ein Rohr.
 const ARM_FITTINGS = new Set(["adapter2", "bearing2", "steering-lock2"]);
@@ -858,11 +860,11 @@ export class SceneManager {
         mat = this._fittingMaterial(0x2b2b2b, false);
         break;
       }
-      case "lattice2": {                // Gitter: Rechteck in der lokalen XY-Ebene
+      case "lattice2": {                // Netz: Rechteck in der lokalen XY-Ebene
         // Gemessen an den Ball-Cage-Entwuerfen: das erste Mass (f.w) liegt auf
         // der lokalen Y-, das zweite (f.h) auf der lokalen X-Achse, die Flaeche
         // steht senkrecht auf der lokalen Z-Achse -- dieselbe Regel wie bei den
-        // Platten. Ein 1550 x 775 grosses Gitter spannt damit genau zwischen den
+        // Platten. Ein 1550 x 775 grosses Netz spannt damit genau zwischen den
         // beiden Rohrebenen, statt flach in der Gegend zu liegen.
         const w = f.w || 40, h = f.h || 40;
         geo = this._cachedGeo(`lattice${w}x${h}`, () => this._latticeGeometry(h, w));
@@ -921,6 +923,38 @@ export class SceneManager {
           return mesh;
         });
       }
+      case "pool2":
+      case "pool-small2": {              // Baellebad: EIN Teil (Folie im Rahmen)
+        // Bezugspunkt ist die OBERKANTE der Frontwand -- so steht es in der
+        // Datei. Von dort geht es `h` nach unten (lokales -Y), `w` breit
+        // (lokales X) und `d` tief (lokales Z, Vorzeichen inklusive).
+        const pw = f.w || 120, ph = f.h || 40, pd = f.d || 120;
+        const tief = Math.abs(pd);
+        const dz = pd < 0 ? -1 : 1;
+        const dick = POOL_SKIN;
+        const wand = (breite, hoehe, tiefe, x, y, z) => this._cachedGeo(
+          `pool${breite}x${hoehe}x${tiefe}@${x},${y},${z}`,
+          () => {
+            const g = new THREE.BoxGeometry(breite, hoehe, tiefe);
+            g.translate(x, y, z);
+            return g;
+          });
+        const mitte = dz * tief / 2;
+        const teile = [
+          wand(pw, ph, dick, 0, -ph / 2, 0),                        // Frontwand
+          wand(pw, ph, dick, 0, -ph / 2, dz * tief),                // Rueckwand
+          wand(dick, ph, tief, -pw / 2, -ph / 2, mitte),            // linke Wand
+          wand(dick, ph, tief, pw / 2, -ph / 2, mitte),             // rechte Wand
+          wand(pw, dick, tief, 0, -ph + dick / 2, mitte),           // Boden
+        ].map((g) => this._placeFitting(
+          new THREE.Mesh(g, this._fittingMaterial(hex, false)), f, q));
+        // Wasser: 75 % Fuellhoehe, knapp innerhalb der Folie.
+        const wasserH = ph * 0.75;
+        const wasser = this._placeFitting(new THREE.Mesh(
+          wand(pw - 2 * dick, wasserH, tief - 2 * dick, 0, -ph + dick + wasserH / 2, mitte),
+          this._waterMaterial()), f, q);
+        return [...teile, wasser];
+      }
       case "bag2": {                    // Spielsack: offener Kasten aus Tuch
         // Er haengt zwischen zwei Rohren: oben offen, an allen vier Seiten rund
         // 17 cm tief, mit Boden. Er haengt IMMER nach unten -- die Drehung um die
@@ -958,7 +992,7 @@ export class SceneManager {
   }
 
   /**
-   * Gitter als echtes Netz: schmale Baender in der lokalen XY-Ebene, aussen ein
+   * Netz als echtes Geflecht: schmale Baender in der lokalen XY-Ebene, aussen ein
    * Rahmen, innen ein Raster von rund 2,5 cm. Alles in EINER Geometrie (eine
    * Zeichnung), weil mergeGeometries nicht mitgeliefert ist. sx laeuft auf der
    * lokalen X-, sy auf der lokalen Y-Achse.
@@ -2317,7 +2351,7 @@ export class SceneManager {
       if (st !== "future") this.pickTextiles.push(mesh);
     }
 
-    // Anbauteile: Raeder, Rollen, Kappen, Gitter, Rundwand, Dach, Sonderkupplungen.
+    // Anbauteile: Raeder, Rollen, Kappen, Netze, Rundwand, Dach, Sonderkupplungen.
     for (const f of (model.fittings ? model.fittings.values() : [])) {
       if (hideFlat && FLAT_FITTINGS.has(f.kind)) continue;
       const st = stateOf(f.id);

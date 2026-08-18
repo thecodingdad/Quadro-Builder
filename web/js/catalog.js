@@ -66,7 +66,7 @@ export function getPanel(id) {
   return panels().find((p) => p.id === id) || null;
 }
 
-// Zubehoer (Raeder, Rollen, Kappen, Gitter ...) -- alles, was als Anbauteil
+// Zubehoer (Raeder, Rollen, Kappen, Netze ...) -- alles, was als Anbauteil
 // am Geruest haengt und keine Kupplung, kein Rohr und keine Platte ist.
 /** Teil nach id ueber alle Rubriken -- fuer Stueckliste und Bestand. */
 export function getPartById(id) {

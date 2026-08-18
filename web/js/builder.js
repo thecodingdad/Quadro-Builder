@@ -171,7 +171,7 @@ export class Builder {
 
   setFitting(kind) {
     this.fittingKind = kind;
-    this._clearPanelRail();          // Rohr-Auswahl gilt nur fuer das Gitter
+    this._clearPanelRail();          // Rohr-Auswahl gilt nur fuer das Netz
     if (this.mode === "fitting") this.refresh();
   }
 
@@ -296,7 +296,7 @@ export class Builder {
   }
 
   /**
-   * Taugt dieses Rohr als Tragrohr fuer die gewaehlte Platte bzw. das Gitter?
+   * Taugt dieses Rohr als Tragrohr fuer die gewaehlte Platte bzw. das Netz?
    * Ist schon eines gewaehlt, zaehlen nur noch die hervorgehobenen Gegenrohre --
    * die stecken in this.highlight und kommen hier gar nicht erst an.
    */
@@ -973,7 +973,7 @@ export class Builder {
     // Merkt sich, an welchen Kupplungen das gewaehlte Teil sitzen darf -- der
     // Zeiger zeigt dort eine Hand, auch wenn er den Ankerpunkt knapp verfehlt.
     this._fittingMountNodes = new Set();
-    if (RAIL_FITTINGS.has(this.fittingKind)) return;  // Gitter/Sack laufen ueber zwei Rohre
+    if (RAIL_FITTINGS.has(this.fittingKind)) return;  // Netz/Sack laufen ueber zwei Rohre
     // Ist eine Kupplung gewaehlt, gelten nur ihre Stellen -- bei Teilen auf einem
     // Rohr nur die Rohre, die an ihr haengen. Ohne Auswahl sind alle zu sehen.
     const sel = this.selectedNodeId;
@@ -1336,11 +1336,11 @@ export class Builder {
     } else if (this.mode === "slide") {
       obj = handle();                            // nur die Feld-Handles
     } else if (this.mode === "fitting" && RAIL_FITTINGS.has(this.fittingKind)) {
-      // Gitter: Rohre waehlen wie im Platten-Modus, gesetzte Gitter entfernen.
+      // Netz: Rohre waehlen wie im Platten-Modus, gesetzte Netze entfernen.
       const p = (this.panelRail && this.highlight && this.scene.pickAmong(x, y, this.highlight))
         || this.scene.pickForDelete(x, y);
       const kind = p && p.data.kind;
-      if (kind === "fitting") obj = null;   // Gitter und Sack lassen sich nicht drehen
+      if (kind === "fitting") obj = null;   // Netz und Sack lassen sich nicht drehen
       else if (kind === "tube") obj = this._railUsable(p.data.id, true) ? p.object : null;
     } else if (this.mode === "fitting"
         && (TUBE_CLAMP_PARTS[this.fittingKind] || TUBE_FITTINGS[this.fittingKind])) {
@@ -1677,11 +1677,11 @@ export class Builder {
     return best;
   }
 
-  /** Gegenrohre fuer das gewaehlte Rohr-Teil: Gitter frei, Sack im 40er-Feld. */
+  /** Gegenrohre fuer das gewaehlte Rohr-Teil: Netz frei, Sack im 40er-Feld. */
   _railPartners(railId) {
     return this.fittingKind === "bag2"
       ? this.model.bagPartners(railId)
-      : this.model.latticePartners(railId);   // Gitter und Textil: gleiche Regel
+      : this.model.latticePartners(railId);   // Netz und Textil: gleiche Regel
   }
 
   /**
@@ -1729,9 +1729,9 @@ export class Builder {
   }
 
   /**
-   * Gitter: haengt wie eine Platte an ZWEI parallelen Rohren und wird genauso
+   * Netz: haengt wie eine Platte an ZWEI parallelen Rohren und wird genauso
    * gesetzt -- erst ein Tragrohr anklicken, dann eines der hervorgehobenen
-   * Gegenrohre. Ein Klick auf ein gesetztes Gitter nimmt es weg.
+   * Gegenrohre. Ein Klick auf ein gesetztes Netz nimmt es weg.
    */
   _clickLattice(e) {
     const pick = (this.panelRail && this.highlight
@@ -1740,7 +1740,7 @@ export class Builder {
     if (!pick) { this._clearPanelRail(); return; }
     if (pick.data.kind === "fitting" && !this.panelRail) {
       const f = this.model.fittings.get(pick.data.id);
-      // Gitter und Sack lassen sich nicht drehen -- sie haengen an ihren Rohren.
+      // Netz und Sack lassen sich nicht drehen -- sie haengen an ihren Rohren.
       if (f && RAIL_FITTINGS.has(f.kind)) { this.onNotice(t("notice_fitting_fixed")); return; }
     }
     if (pick.data.kind !== "tube") { this._clearPanelRail(); return; }

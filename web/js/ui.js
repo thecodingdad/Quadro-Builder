@@ -2430,7 +2430,9 @@ export function initUI({ scene, model, builder }) {
       // Nachschlagen beim Hersteller: was ist das Teil, was kostet es, gibt es
       // das noch? Der Link steht im Katalog (`url` in parts.json); wo es das
       // Teil nicht einzeln gibt, führt er auf die passende Übersichtsseite.
-      const def = getPartById(id);
+      // Nach Farben getrennt heisst die Bestands-Kennung "id|farbe" -- das Teil
+      // ist dasselbe, im Laden gibt es dafuer eine einzige Seite.
+      const def = getPartById(id.split("|")[0]);
       if (def && def.url) {
         const link = document.createElement("a");
         link.className = "part-info";

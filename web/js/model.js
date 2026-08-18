@@ -30,7 +30,7 @@ export const TUBE_FITTINGS = {
 
 // Welche Anbauteile sich setzen lassen: die an einer Kupplung (FITTING_MOUNTS),
 // die auf einem Rohr (TUBE_FITTINGS) und die mit eigenem Ablauf (Radarretierung,
-// Gitter, Rundabdeckung, grosses Dach).
+// Netz, Rundabdeckung, grosses Dach).
 // Doppelte fallen raus: manche Teile stehen in zwei Tabellen, weil sie zwei
 // Wege kennen (Radkappe: Ankerpunkt an der Kupplung UND Klick aufs Rohrende).
 export const PLACEABLE_FITTINGS = [...new Set([
@@ -43,7 +43,7 @@ export const PLACEABLE_FITTINGS = [...new Set([
   // bereit; aus Dateien wird sie weiter gelesen, gezeichnet und gezählt.
   "bearing-clamp",                // Lagerkupplung: klemmt um ein Rohr (kein eigenes QDF-Element)
   "lattice2", "textil-round2",
-  "textil2",                      // Textil: wie das Gitter zwischen zwei Rohre
+  "textil2",                      // Textil: wie das Netz zwischen zwei Rohre
   // Das Dachtextil (roof-large2) steht bewusst NICHT hier: es ist über eine
   // ganz bestimmte Dachkonstruktion gestülpt und lässt sich nicht frei setzen.
   // Aus Dateien wird es weiter gelesen, gezeichnet und gezählt.
@@ -54,7 +54,7 @@ export const PLACEABLE_FITTINGS = [...new Set([
 // in allen 52 Vorkommen 800 mm.
 const ROUND_COVER_SPAN = 80;
 
-// Gitter: im Ball Cage spannt es 160 x 80 cm von Rohrmitte zu Rohrmitte. Da die
+// Netz: im Ball Cage spannt es 160 x 80 cm von Rohrmitte zu Rohrmitte. Da die
 // Datei die Masse mitfuehrt, ist es nicht auf dieses eine Format festgelegt:
 // erlaubt sind alle Rasterabstaende bis 160 cm, die Laenge ergibt sich aus der
 // Ueberdeckung der beiden Rohre.
@@ -205,7 +205,7 @@ export class BuildModel {
     this.slides = new Map();   // id -> { id, x, y, z, dir, kind } (Rutsche, slide*/roof2, dekorativ)
     // Anbauteile: alles, was mit Punkt und Ausrichtung am Geruest haengt --
     // Raeder, Radkappen, Laufrollen, Lager, Lochzapfen- und offene Kupplungen,
-    // Rundwaende, grosse Daecher, Gitter, Saecke.
+    // Rundwaende, grosse Daecher, Netze, Saecke.
     // id -> { id, kind, x, y, z, quat, color, w?, h?, mask? }
     this.fittings = new Map();
     this._seq = 1;
@@ -556,7 +556,7 @@ export class BuildModel {
   /**
    * Anbauteil setzen. `kind` ist die QDF-Elementart (z. B. "multi-wheel2"),
    * damit Import, Darstellung und Export dieselbe Sprache sprechen.
-   * quat in Three-Reihenfolge (x,y,z,w); w/h nur bei Flaechenteilen (Gitter).
+   * quat in Three-Reihenfolge (x,y,z,w); w/h nur bei Flaechenteilen (Netz).
    */
   addFitting(kind, x, y, z, opts = {}) {
     const f = {
@@ -567,6 +567,9 @@ export class BuildModel {
     };
     if (opts.w != null) f.w = round(opts.w);
     if (opts.h != null) f.h = round(opts.h);
+    // Tiefe -- bisher nur das Baellebad: sein Becken reicht `d` weit in die
+    // lokale Z-Richtung, das Vorzeichen sagt, nach welcher Seite.
+    if (opts.d != null) f.d = round(opts.d);
     if (opts.mask != null) f.mask = opts.mask;
     this.fittings.set(f.id, f);
     return f;
@@ -1097,7 +1100,7 @@ export class BuildModel {
   }
 
   /**
-   * Gegenrohre fuer ein Gitter. Anders als eine Platte hat das Gitter keine
+   * Gegenrohre fuer ein Netz. Anders als eine Platte hat das Netz keine
    * feste Groesse -- die Datei speichert seine Masse -- deshalb passt jeder
    * Rohrabstand des Rasters. Die Laenge ist die Ueberdeckung der beiden Rohre,
    * auf volle Felder abgerundet und bei vier Feldern gedeckelt (so gross ist
@@ -1130,14 +1133,14 @@ export class BuildModel {
   }
 
   /**
-   * Gitter auf zwei parallele Rohre setzen -- derselbe Ablauf wie bei einer
+   * Netz auf zwei parallele Rohre setzen -- derselbe Ablauf wie bei einer
    * Platte, nur entsteht ein Anbauteil mit eigenen Massen. Die Masse sind an
    * den Ball-Cage-Entwuerfen gemessen: laengs der Rohre das Rastermass minus
    * eine Kupplung (1600 -> 1550), quer dazu minus eine halbe (800 -> 775), und
    * das Netz schliesst oben buendig mit dem Rohr ab, unten bleiben 25 mm Luft.
    */
   /**
-   * Textil zwischen zwei parallele Rohre spannen -- gesetzt wie das Gitter, nur
+   * Textil zwischen zwei parallele Rohre spannen -- gesetzt wie das Netz, nur
    * dass daraus kein Anbauteil wird, sondern ein Eintrag in `textiles`: dieselbe
    * Sorte Fläche wie eine Platte (zwei Tragrohre, Versatz, Länge) und genau das,
    * was der Export als textil2 schreibt.
@@ -1211,7 +1214,7 @@ export class BuildModel {
   /**
    * Spielsack zwischen zwei parallele Rohre haengen. Das Tuch misst 35 x 35 cm
    * und spannt damit ein Rasterfeld; gehalten wird es von den beiden Rohren.
-   * Gespeichert wird wie beim Gitter: Mitte, Dreibein, Masse.
+   * Gespeichert wird wie beim Netz: Mitte, Dreibein, Masse.
    */
   addBag(aId, bId, t0, len, color) {
     const ra = this._rail(aId), rb = this._rail(bId);
@@ -2272,6 +2275,7 @@ export class BuildModel {
         if (f.color) o.color = f.color;
         if (f.w != null) o.w = f.w;
         if (f.h != null) o.h = f.h;
+        if (f.d != null) o.d = f.d;
         if (f.mask != null) o.mask = f.mask;
         return o;
       }),
@@ -2352,7 +2356,7 @@ export class BuildModel {
       this.fittings.set(f.id, {
         id: f.id, kind: f.kind, x: f.x, y: f.y, z: f.z,
         quat: f.quat || null, color: f.color || null,
-        w: f.w, h: f.h, mask: f.mask,
+        w: f.w, h: f.h, d: f.d, mask: f.mask,
       });
       maxSeq = Math.max(maxSeq, parseSeq(f.id));
     }

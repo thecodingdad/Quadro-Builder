@@ -149,10 +149,10 @@ Koordinaten in **cm**, Three.js-Konvention **y = oben**, Boden bei y = 0.
   also nicht darauf; Bezugsrichtung ist `util.panelNormal()` (waagerecht → oben,
   senkrecht → vom Modellmittelpunkt weg). Beim Setzen entscheidet der Blickwinkel, ein Klick auf
   eine liegende Platte legt sie um.
-- Anbauteil `{id,kind,x,y,z,quat,color,w?,h?,mask?}` = Rad, Rolle, Lager, Gitter, Rundabdeckung …
+- Anbauteil `{id,kind,x,y,z,quat,color,w?,h?,d?,mask?}` = Rad, Rolle, Lager, Netz, Rundabdeckung, Bällebad …
   `kind` ist die QDF-Elementart, `quat` die volle Ausrichtung (Three-Reihenfolge x,y,z,w); die lokale
   +X-Achse ist die Bezugsrichtung (Radachse, Rollenachse). Wo ein Teil sitzen darf, steht in
-  `FITTING_MOUNTS` (Kupplung oder Rohr, Abstand in cm) bzw. in eigenen Abläufen für Gitter
+  `FITTING_MOUNTS` (Kupplung oder Rohr, Abstand in cm) bzw. in eigenen Abläufen für Netz
   (zwei parallele Rohre), Rundabdeckung (zwei Bogenrohre) und großes Dach (First-Rohr).
 - **Auto-Merge:** `addNode` liefert einen vorhandenen Knoten zurück, wenn einer < `MERGE_EPS`
   (0,5 cm) existiert – so entstehen geschlossene Rahmen ohne Doppelteile.
@@ -171,10 +171,14 @@ Koordinaten in **cm**, Three.js-Konvention **y = oben**, Boden bei y = 0.
 
 - `inferConnectorType` klassifiziert nach Anzahl + Lage der Arme (koplanar ⇒ `t`/`cross`,
   sonst `3way`/`4way`, …). Für achsenparallele Bauten exakt.
-- **Bällebad = EIN Teil:** die fünf Platten eines Pools tragen `poolPart` und bleiben aus der
-  Platten-Zeile heraus. Gezählt wird über den Boden (`panelId === "pool_floor"`, genau einer je
-  Pool); `poolLinerFor` misst dessen Grundfläche und wählt daraus die Poolfolie XS/S/L/XXL
-  (Maße am Katalogteil unter `pool`). Passt nichts genau, gewinnt die flächenmäßig nächste Größe.
+- **Bällebad = EIN Teil:** Es ist ein **Anbauteil** (`kind: "pool2"`/`"pool-small2"`), kein
+  Satz Platten – wie der Spielsack: eine Auswahl, ein Löschen, eine QDF-Zeile. Der Bezugspunkt
+  ist die Oberkante der Frontwand (so steht es in der Datei), dazu `w` (Breite), `h` (Wandhöhe)
+  und `d` (Tiefe, **mit Vorzeichen** – die Datei führt die Tiefe nicht, sie wird beim Import aus
+  dem Kupplungsnetz abgeleitet). Wände, Boden und Wasser zeichnet `scene.js` daraus.
+  `poolLinerFor(w, d)` wählt daraus die Poolfolie XS/S/L/XXL (Maße am Katalogteil unter `pool`);
+  passt nichts genau, gewinnt die flächenmäßig nächste Größe. Ältere Stände führen den Pool noch
+  als fünf Platten mit `poolPart` – Import, Export und Stückliste kennen beide Formen.
 - `connectorsForNode` liefert **alle** Kupplungen eines Knotens: an einem `c45`-Knoten
   Basiskupplung **plus** je Diagonale eine `diagonal`-Winkelkupplung.
 - `link`-Kanten sind kein Arm und fließen nicht in die Heuristik ein; `arm`-Kanten schon.
