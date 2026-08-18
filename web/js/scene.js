@@ -883,7 +883,8 @@ export class SceneManager {
           g.translate(-ROUND_WALL_R, ROUND_WALL_R, ROUND_COVER_LEN / 2);
           return g;
         });
-        mat = this._fittingMaterial(hex, true);
+        // Deckend wie die uebrigen Tuecher -- Textil ist blickdicht.
+        mat = this._fittingMaterial(hex, false);
         break;
       }
       case "roof-large2": {             // Dachtextil: Giebel über dem First
@@ -2287,7 +2288,8 @@ export class SceneManager {
       });
     }
 
-    // Netze/Stoffe (textil2): halbtransparente Flaeche ueber 4 Eck-Kupplungen.
+    // Netze/Stoffe (textil2): Flaeche ueber 4 Eck-Kupplungen. Deckend -- ein
+    // Tuch ist auch am echten Geruest blickdicht.
     for (const tx of (model.textiles ? model.textiles.values() : [])) {
       if (hideFlat) continue;
       const cor = model.panelCorners(tx);
@@ -2306,7 +2308,7 @@ export class SceneManager {
       const yAxis = new THREE.Vector3().crossVectors(zAxis, xAxis).normalize();
       const geo = new THREE.BoxGeometry(u.length(), 0.6, w.length());
       const mat = matFor(tx.id,
-        st === "future" ? this._ghostMaterial() : this._panelMaterial(tx.color, st === "current", true));
+        st === "future" ? this._ghostMaterial() : this._panelMaterial(tx.color, st === "current", false));
       const mesh = new THREE.Mesh(geo, mat);
       mesh.quaternion.setFromRotationMatrix(new THREE.Matrix4().makeBasis(xAxis, yAxis, zAxis));
       mesh.position.copy(center);

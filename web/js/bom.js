@@ -1,6 +1,6 @@
 // Stueckliste (BOM) + Kupplungstyp-Heuristik + Bestands-/Machbarkeitscheck.
 
-import { getTube, getConnector, getPanel, colorName, partName, reinforcementPart, reinforcementRunName, partForFitting, getPartById } from "./catalog.js";
+import { getTube, getConnector, getPanel, colorName, partName, reinforcementPart, reinforcementRunName, partForFitting, getPartById, accessories } from "./catalog.js";
 import { round2, xAxisOf } from "./util.js";
 
 // Einheitsvektoren der Nachbarn eines Knotens. Doppelrohr-Verbindungen (link)
@@ -269,6 +269,31 @@ function reinforcementRuns(model) {
   return [...runs.values()];
 }
 
+/**
+ * Passende Poolfolie zu einem Baellebad-Boden. Gemessen wird die Grundflaeche
+ * der Bodenplatte und mit den Katalogmassen verglichen (`pool` am Teil):
+ * XS gehoert zum kleinen Baellebad, S/L/XXL unterscheiden sich in der Tiefe.
+ * Passt nichts genau, gewinnt die flaechenmaessig naechste Groesse -- eine
+ * Folie braucht das Baellebad in jedem Fall.
+ */
+function poolLinerFor(model, floor) {
+  const liners = accessories().filter((a) => a.pool);
+  if (!liners.length) return null;
+  const corners = model.panelCorners(floor);
+  if (!corners) return null;
+  const span = (a, b) => Math.round(Math.hypot(
+    corners[a][0] - corners[b][0], corners[a][1] - corners[b][1], corners[a][2] - corners[b][2]));
+  const s1 = span(0, 1), s2 = span(0, 3);
+  const short = Math.min(s1, s2), long = Math.max(s1, s2);
+  const exact = liners.find((a) => a.pool.short === short && a.pool.long === long);
+  if (exact) return exact;
+  const area = short * long;
+  return liners.reduce((best, a) => {
+    const diff = Math.abs(a.pool.short * a.pool.long - area);
+    return !best || diff < best.diff ? { def: a, diff } : best;
+  }, null).def;
+}
+
 export function computeBOM(model) {
   // --- Rohre nach Typ + Farbe ---
   const tubeMap = new Map();
@@ -323,8 +348,11 @@ export function computeBOM(model) {
   }).sort((a, b) => b.count - a.count);
 
   // --- Platten nach Typ + Farbe ---
+  // Die Teile eines Baellebads bleiben aussen vor: sie sind keine Platten,
+  // sondern EINE Poolfolie (siehe poolLiners weiter unten).
   const panelMap = new Map();
   for (const p of model.panels.values()) {
+    if (p.poolPart) continue;
     const key = p.panelId + "|" + p.color;
     if (!panelMap.has(key)) panelMap.set(key, { panelId: p.panelId, color: p.color, count: 0 });
     panelMap.get(key).count++;
@@ -356,6 +384,18 @@ export function computeBOM(model) {
   })).sort((a, b) => b.count - a.count);
   const textileCount = textiles.reduce((s, r) => s + r.count, 0);
 
+  // --- Baellebaeder: je Pool EIN Teil ------------------------------------
+  // Der Editor zeigt vier Waende und einen Boden, im Laden gibt es dafuer eine
+  // einzige Plane -- die "Poolfolie" in vier Groessen. Gezaehlt wird ueber den
+  // Boden: den gibt es genau einmal je Baellebad.
+  const poolLiners = new Map();      // Teile-id -> Anzahl
+  for (const p of model.panels.values()) {
+    if (p.panelId !== "pool_floor") continue;
+    const def = poolLinerFor(model, p);
+    if (!def) continue;
+    poolLiners.set(def.id, (poolLiners.get(def.id) || 0) + 1);
+  }
+
   // --- Anbauteile (Raeder, Rollen, Gitter, Sonderkupplungen) --------------
   // Gezaehlt wird nach Katalogteil, nicht nach QDF-Art: ein- und dreiarmige
   // Lochzapfenkupplung sind dieselbe Elementart, aber zwei Teile.
@@ -365,6 +405,11 @@ export function computeBOM(model) {
     const key = def ? def.id : f.kind;
     if (!fitMap.has(key)) fitMap.set(key, { def, kind: f.kind, count: 0 });
     fitMap.get(key).count++;
+  }
+  // Die Poolfolien reihen sich bei den Anbauteilen ein -- sie sind Zubehoer
+  // mit Katalogpreis wie Sack, Gitter oder Dachtextil.
+  for (const [id, count] of poolLiners) {
+    fitMap.set(id, { def: getPartById(id), kind: "pool2", count });
   }
   const fittings = [...fitMap.entries()].map(([key, r]) => ({
     key, id: key, kind: r.kind,

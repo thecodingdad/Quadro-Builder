@@ -171,6 +171,10 @@ Koordinaten in **cm**, Three.js-Konvention **y = oben**, Boden bei y = 0.
 
 - `inferConnectorType` klassifiziert nach Anzahl + Lage der Arme (koplanar ⇒ `t`/`cross`,
   sonst `3way`/`4way`, …). Für achsenparallele Bauten exakt.
+- **Bällebad = EIN Teil:** die fünf Platten eines Pools tragen `poolPart` und bleiben aus der
+  Platten-Zeile heraus. Gezählt wird über den Boden (`panelId === "pool_floor"`, genau einer je
+  Pool); `poolLinerFor` misst dessen Grundfläche und wählt daraus die Poolfolie XS/S/L/XXL
+  (Maße am Katalogteil unter `pool`). Passt nichts genau, gewinnt die flächenmäßig nächste Größe.
 - `connectorsForNode` liefert **alle** Kupplungen eines Knotens: an einem `c45`-Knoten
   Basiskupplung **plus** je Diagonale eine `diagonal`-Winkelkupplung.
 - `link`-Kanten sind kein Arm und fließen nicht in die Heuristik ein; `arm`-Kanten schon.
@@ -181,6 +185,8 @@ Koordinaten in **cm**, Three.js-Konvention **y = oben**, Boden bei y = 0.
 ## Konventionen
 
 - **Neues Teil:** nur Eintrag in `data/parts.json` (`connectors`/`tubes`/`panels`/`reinforcements`).
+  Dazu gehört `url` – die Seite des Teils bei quadroshop.com (gibt es das Teil nicht einzeln, die
+  passende Übersichtsseite). Daraus baut die Stückliste im Bestands-Modus den 🛈-Link.
   Gerade Rohre mit `buildable:true` + `length_cm` und Platten mit `buildable:true` + `w`/`h`
   erscheinen automatisch als Button – **keine Code-Änderung**. Geometrie unter `geometry`.
   Preisänderungen bitte mit Quelle im Commit (z. B. quadroshop.com, Stand).
@@ -219,6 +225,10 @@ Koordinaten in **cm**, Three.js-Konvention **y = oben**, Boden bei y = 0.
   und bricht ihn ab, sobald ein zweiter Finger dazukommt (`_abortGesture`).
 - Undo/Redo in `builder.js` arbeiten mit vollständigen JSON-Snapshots (`recordHistory`,
   max. 60 Schritte). Modelländerungen deshalb immer durch `recordHistory(...)` kapseln.
+- **Vorschau-Tabs:** ein Klick in „Meine Modelle"/Bibliothek öffnet mit `preview: true`; ein
+  zweiter Vorschau-Klick wirft den alten Tab weg (`discardPreview`). Angeheftet wird er beim
+  Doppelklick, beim Speichern und sobald sich das Modell gegenüber `tab.baseJson` unterscheidet.
+  Wie `savedJson` bleibt `baseJson` aus der Sitzung heraus und wird beim Start neu gebildet.
 - **Änderungs-Punkt am Tab:** `builder.onChange` feuert bei JEDEM Neuzeichnen, auch bei Auswahl,
   Schnittebene oder Moduswechsel. `ui.touchActiveTab()` setzt deshalb nichts mehr direkt, sondern
   vergleicht entprellt (200 ms) `model.toJSON()` mit `tab.savedJson` – dem Stand, wie er in der

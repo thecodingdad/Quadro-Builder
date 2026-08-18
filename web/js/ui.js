@@ -1344,6 +1344,7 @@ export function initUI({ scene, model, builder }) {
       tab.name = doc.name;
       tab.dirty = false;
       tab.savedJson = JSON.stringify(tab.model);
+      tab.preview = false;
       renderTabs();
       refreshDocList();
       scheduleSessionSave();
@@ -1579,13 +1580,21 @@ export function initUI({ scene, model, builder }) {
     onInventoryUpdated,
   });
 
-  /** Datei in einem Tab öffnen -- ist sie schon offen, wird der Tab gewählt. */
-  async function openDocById(docId) {
+  /**
+   * Datei in einem Tab öffnen -- ist sie schon offen, wird der Tab gewählt.
+   * `preview` öffnet sie nur zum Ansehen: der nächste Vorschau-Klick ersetzt
+   * den Tab wieder (siehe discardPreview).
+   */
+  async function openDocById(docId, { preview = false } = {}) {
     const offen = tabs.find((x) => x.docId === docId);
-    if (offen) { activateTab(offen.tabId); return offen; }
+    if (offen) {
+      activateTab(offen.tabId);
+      if (!preview) pinTab(offen);
+      return offen;
+    }
     const doc = await docs.getDoc(docId);
     if (!doc) { flash(t("load_error_data")); return null; }
-    const tab = openTab({ name: doc.name, data: doc.data, docId: doc.id });
+    const tab = openTab({ name: doc.name, data: doc.data, docId: doc.id, preview });
     flash(t("flash_loaded", doc.name));
     return tab;
   }
@@ -1726,7 +1735,11 @@ export function initUI({ scene, model, builder }) {
       row.appendChild(head);
       row.appendChild(el("span", "lib-meta", t("lib_parts", m.connectors, m.tubes, m.panels)));
       row.appendChild(el("span", "lib-meta", t("lib_size", m.size[0], m.size[1], m.size[2])));
-      row.addEventListener("click", () => openFromLibrary(entry));
+      row.addEventListener("click", () => openFromLibrary(entry, { preview: true }));
+      row.addEventListener("dblclick", () => {
+        const offen = tabs.find((x) => x.name === entry.name && x.preview);
+        if (offen) pinTab(offen); else openFromLibrary(entry);
+      });
       list.appendChild(row);
     }
   }
@@ -1830,12 +1843,13 @@ export function initUI({ scene, model, builder }) {
       }));
       rechts.appendChild(werkzeuge);
       row.appendChild(rechts);
-      row.addEventListener("click", () => openDocById(d.id));
+      row.addEventListener("click", () => openDocById(d.id, { preview: true }));
+      row.addEventListener("dblclick", () => openDocById(d.id));
       box.appendChild(row);
     }
   }
 
-  async function openFromLibrary(entry) {
+  async function openFromLibrary(entry, { preview = false } = {}) {
     // Mit Server liegen zunächst nur die Kennzahlen vor -- der QDF-Text kommt
     // beim Öffnen nach. Ist der Server gerade weg, geht das eben nicht.
     let qdf = entry.qdf;
@@ -1851,7 +1865,7 @@ export function initUI({ scene, model, builder }) {
     if (!data) { flash(t("lib_load_failed")); return; }
     // Die Sammlung bleibt, wie sie ist: geöffnet wird eine KOPIE in einem
     // eigenen Tab, die noch zu keiner Datei gehört.
-    openTab({ name: entry.name, data, dirty: true });
+    openTab({ name: entry.name, data, dirty: true, preview });
     scene.resetCamera();
     flash(t("lib_loaded", entry.name));
   }
@@ -2413,6 +2427,21 @@ export function initUI({ scene, model, builder }) {
         if (v) inventory[bucket][id] = v; else delete inventory[bucket][id];
       });
       row.appendChild(inp);
+      // Nachschlagen beim Hersteller: was ist das Teil, was kostet es, gibt es
+      // das noch? Der Link steht im Katalog (`url` in parts.json); wo es das
+      // Teil nicht einzeln gibt, führt er auf die passende Übersichtsseite.
+      const def = getPartById(id);
+      if (def && def.url) {
+        const link = document.createElement("a");
+        link.className = "part-info";
+        link.href = def.url;
+        link.target = "_blank";
+        link.rel = "noopener noreferrer";
+        link.title = t("inv_shop_link", partName(def));
+        link.textContent = "🛈";
+        link.addEventListener("click", (e) => e.stopPropagation());
+        row.appendChild(link);
+      }
     } else {
       // Anzeigen: entweder "vorhanden/benötigt" oder nur die Anzahl.
       row.appendChild(el("span", "bom-count", inv ? `${inv.owned}/${inv.need}` : `${count}×`));
@@ -2973,6 +3002,7 @@ export function initUI({ scene, model, builder }) {
     list.innerHTML = "";
     for (const tab of tabs) {
       const item = el("div", "tab" + (tab.tabId === activeTabId ? " active" : "")
+        + (tab.preview ? " preview" : "")
         + (zieh && zieh.gestartet && zieh.tabId === tab.tabId ? " dragging" : ""));
       item.dataset.tabId = tab.tabId;
       item.title = tab.name;
@@ -2986,6 +3016,7 @@ export function initUI({ scene, model, builder }) {
         if (zieh && zieh.gezogen) return;    // war ein Umsortieren, kein Klick
         activateTab(tab.tabId);
       });
+      item.addEventListener("dblclick", () => pinTab(tab));
       item.addEventListener("pointerdown", (e) => {
         if (e.button !== 0 || e.target.closest(".tab-close")) return;
         beginneZiehen(tab.tabId, e.clientX);
@@ -3020,17 +3051,23 @@ export function initUI({ scene, model, builder }) {
    * Modell startet im Bau-Modus mit einem 35er Rohr, ein geöffnetes oder
    * importiertes im Auswahl-Modus.
    */
-  function openTab({ name, data, docId = null, view = null, dirty = false }) {
+  function openTab({ name, data, docId = null, view = null, dirty = false, preview = false }) {
     captureActiveTab();
+    // Nur EIN Vorschau-Tab: der vorige war unberührt und macht Platz.
+    if (preview) discardPreview();
     const tab = {
-      tabId: docs.newTabId(), docId, name: name || t("doc_untitled"), dirty,
+      tabId: docs.newTabId(), docId, name: name || t("doc_untitled"), dirty, preview,
       model: data || { format: 1, nodes: [], tubes: [] },
       view: view || defaultView(!data),
     };
+    const json = JSON.stringify(tab.model);
     // Stand "wie auf Datei": daran hängt der Änderungs-Punkt. Ein importiertes
     // oder aus der Bibliothek kopiertes Modell hat keinen -- es gilt so lange
     // als ungespeichert, bis es wirklich gespeichert wird.
-    tab.savedJson = dirty ? null : JSON.stringify(tab.model);
+    tab.savedJson = dirty ? null : json;
+    // Stand beim Öffnen: daran erkennt der Vorschau-Tab, dass jemand wirklich
+    // gebaut hat -- dann bleibt er stehen.
+    tab.baseJson = json;
     tabs.push(tab);
     activeTabId = tab.tabId;
     ladeVorgang = true;
@@ -3043,6 +3080,28 @@ export function initUI({ scene, model, builder }) {
     update();
     scheduleSessionSave();
     return tab;
+  }
+
+  /**
+   * Vorschau-Tabs (wie in VS Code): ein Klick in der Liste öffnet das Modell
+   * nur zum Ansehen -- der nächste Klick ersetzt es. Wer darin baut oder es
+   * doppelt anklickt, behält den Tab.
+   */
+  function discardPreview() {
+    const i = tabs.findIndex((x) => x.preview);
+    if (i < 0) return;
+    const [weg] = tabs.splice(i, 1);
+    if (weg.tabId === activeTabId) activeTabId = null;
+    renderTabs();
+    scheduleSessionSave();
+  }
+
+  /** Vorschau-Tab dauerhaft machen. */
+  function pinTab(tab) {
+    if (!tab || !tab.preview) return;
+    tab.preview = false;
+    renderTabs();
+    scheduleSessionSave();
   }
 
   /** Startzustand: leeres Modell -> bauen mit 35er Rohr und zufälliger Farbe. */
@@ -3147,16 +3206,27 @@ export function initUI({ scene, model, builder }) {
     if (!tab) return;
     // Ohne bekannten Vergleichsstand (importiert, aus der Bibliothek geöffnet)
     // bleibt der Tab ungespeichert, bis er einmal in eine Datei geht.
-    if (tab.savedJson == null) return;
+    if (tab.savedJson == null && !(tab.preview && tab.baseJson != null)) return;
     const current = JSON.stringify(model.toJSON());
-    const changed = current !== tab.savedJson;
-    if (changed === tab.dirty) return;
-    tab.dirty = changed;
+    let neuZeichnen = false;
+    // Wer in einer Vorschau baut, will sie behalten.
+    if (tab.preview && tab.baseJson != null && current !== tab.baseJson) {
+      tab.preview = false;
+      neuZeichnen = true;
+    }
+    if (tab.savedJson != null) {
+      const changed = current !== tab.savedJson;
+      if (changed !== tab.dirty) {
+        tab.dirty = changed;
+        neuZeichnen = true;
+        // Auto-Save schreibt direkt in die Datei; ist er aus, bleibt der Stand
+        // nur in der Sitzung (überlebt einen Reload, gilt aber als ungespeichert).
+        if (changed && tab.docId) scheduleDocSave();
+      }
+    }
+    if (!neuZeichnen) return;
     renderTabs();
     scheduleSessionSave();
-    // Auto-Save schreibt direkt in die Datei; ist er aus, bleibt der Stand
-    // nur in der Sitzung (überlebt einen Reload, gilt aber als ungespeichert).
-    if (changed && tab.docId) scheduleDocSave();
   }
 
   function scheduleSessionSave() {
@@ -3165,7 +3235,7 @@ export function initUI({ scene, model, builder }) {
       captureActiveTab();
       // `savedJson` bleibt draußen: es ist eine Kopie des Modells und würde die
       // Sitzung verdoppeln. Beim Start wird es aus `model`/`dirty` neu gebildet.
-      const lean = tabs.map(({ savedJson, ...rest }) => rest);
+      const lean = tabs.map(({ savedJson, baseJson, ...rest }) => rest);
       docs.saveSession({ tabs: lean, activeTabId }).catch((e) => console.warn("Sitzung:", e));
     }, 600);
   }
@@ -3180,7 +3250,9 @@ export function initUI({ scene, model, builder }) {
       // Ein Tab ohne offene Änderung zeigt genau seinen gespeicherten Stand --
       // daran misst sich ab jetzt der Änderungs-Punkt.
       for (const tab of tabs) {
-        tab.savedJson = tab.dirty ? null : JSON.stringify(tab.model);
+        const json = JSON.stringify(tab.model);
+        tab.savedJson = tab.dirty ? null : json;
+        tab.baseJson = json;
       }
       activeTabId = sitzung.activeTabId && tabs.some((x) => x.tabId === sitzung.activeTabId)
         ? sitzung.activeTabId : tabs[0].tabId;

@@ -386,6 +386,7 @@ const de = {
   qdf_imported: (stats, skipTxt) => `QDF importiert: ${stats}${skipTxt}.`,
 
   // Bestandsdatei
+  inv_shop_link: (name) => `„${name}" beim Hersteller ansehen`,
   inv_invalid: 'Bestand-Datei ist ungültig.',
 
   // Laden/Importieren von Modell-Daten
@@ -786,6 +787,7 @@ const en = {
   qdf_imported: (stats, skipTxt) => `QDF imported: ${stats}${skipTxt}.`,
 
   // Inventory file
+  inv_shop_link: (name) => `Look up “${name}” at the manufacturer`,
   inv_invalid: 'Inventory file is invalid.',
 
   // Loading/importing model data

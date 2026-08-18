@@ -937,6 +937,9 @@ body.mobile-portrait .status { bottom: 16px; max-width: calc(100% - 24px); }
 .tab.active .tab-close:hover { background: rgba(255, 255, 255, 0.25); opacity: 1; }
 .tab.active .tab-dirty { background: #fff; }
 .tab-name { overflow: hidden; text-overflow: ellipsis; }
+/* Vorschau-Tab (ein Klick in der Liste): kursiv wie in VS Code -- er wird vom
+   nächsten Vorschau-Klick ersetzt, solange niemand darin baut. */
+.tab.preview .tab-name { font-style: italic; }
 .tab-dirty {
   width: 7px; height: 7px; border-radius: 50%;
   background: #e08c1a;
@@ -1092,6 +1095,12 @@ body.tab-dragging .tab { cursor: grabbing; }
 .bom-tools { display: flex; gap: 6px; flex-wrap: wrap; margin: 6px 0 4px; }
 .bom-opts { display: flex; gap: 14px; flex-wrap: wrap; margin-bottom: 6px; }
 .bom-row .inv-input { width: 58px; }
+/* Nachschlagen beim Hersteller: unauffällig, bis der Zeiger darauf steht. */
+.part-info {
+  flex: 0 0 auto; margin-left: 6px; font-size: 14px; line-height: 1;
+  text-decoration: none; color: var(--muted); opacity: 0.65;
+}
+.part-info:hover { opacity: 1; color: var(--accent); }
 
 /* Mengen-Spalte: rechtsbündig, damit die Zahlen aller Zeilen untereinander
    stehen (auch die Hinweiszeile "Offene Enden"). */
