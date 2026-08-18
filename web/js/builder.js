@@ -29,10 +29,10 @@ export const RANDOM_COLOR = "random";
 // Trennung wie bei den Farbschaltern der Toolbar.
 const PANEL_RANDOM_EXTRA = ["black"];
 
-// Verschieben im Cursor-Modus laeuft im 20-cm-Raster -- das ist die halbe
-// Rasterweite des 35er-Rohrs und damit das feinste Mass, in dem QUADRO-Teile
-// zueinander passen.
-const MOVE_STEP = 20;
+// Verschieben im Cursor-Modus (und beim Einfuegen) laeuft im 5-cm-Raster --
+// die Kupplungslaenge. Groebere Schritte wie das halbe 35er-Raster (20 cm)
+// gehen an Aufbauten vorbei, die kurze Rohre mischen.
+const MOVE_STEP = 5;
 
 export class Builder {
   constructor(scene, model, { onChange } = {}) {

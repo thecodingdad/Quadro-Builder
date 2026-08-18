@@ -162,7 +162,7 @@ const de = {
   help_close: 'Schließen',
   help_shortcuts: [
     ['Pfeiltasten', 'Rohr verlegen – folgt dem Blickwinkel'],
-    ['Pfeiltasten (Auswahl)', 'Auswahl im 20-cm-Raster verschieben'],
+    ['Pfeiltasten (Auswahl)', 'Auswahl im 5-cm-Raster verschieben'],
     ['Pfeiltasten (Aufbau)', 'einen Schritt vor oder zurück'],
     ['Ziehen (Auswahl)', 'Auswahl mit der Maus verschieben'],
     ['Strg/Cmd + A', 'alles auswählen (im Auswahl-Modus)'],
@@ -570,7 +570,7 @@ const en = {
   help_close: 'Close',
   help_shortcuts: [
     ['Arrow keys', 'Place tube – follows the view angle'],
-    ['Arrow keys (selection)', 'Move selection on the 20 cm grid'],
+    ['Arrow keys (selection)', 'Move selection on the 5 cm grid'],
     ['Arrow keys (assembly)', 'One step forward or back'],
     ['Drag (selection)', 'Move selection with the mouse'],
     ['Ctrl/Cmd + A', 'Select everything (in select mode)'],
