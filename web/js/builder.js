@@ -543,7 +543,14 @@ export class Builder {
       result: null,
       axes: this.scene.dragAxes(),
     };
+    // Die Verbindungen zum stehenden Rest gleich trennen: ein Rohr, von dem nur
+    // ein Ende mitwandert, kann nicht mitwandern (Rohre haben feste Laengen).
+    // Ohne das zogen sich die angrenzenden Rohre waehrend des Ziehens in die
+    // Laenge und sprangen erst beim Loslassen zurueck. Der echte Zug rechnet
+    // beim Loslassen ohnehin vom Ausgangsstand aus neu.
+    this.model.detachSelection(this.selection);
     this.scene.setCursor("grabbing");
+    this.refresh();
   }
 
   _updateMoveDrag(e) {

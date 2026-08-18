@@ -11,6 +11,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ## [Unreleased]
 
 ### Behoben · Fixed
+- **Angrenzende Rohre werden beim Ziehen nicht mehr gedehnt** – sie lösen sich gleich zu Beginn des Zugs vom bewegten Teil, statt bis zum Loslassen mitzuwachsen und dann zurückzuspringen · **Neighbouring tubes no longer stretch while dragging** – they come loose when the drag starts instead of snapping back on release
 - **Nach dem Einfügen ist die Kopie vollständig markiert** – Kupplungen ohne Rohr, Doppelrohrverbinder und Anbauteile fehlten in der Auswahl und blieben beim nächsten Verschieben stehen. Anbauteile fielen dabei überhaupt aus jeder Auswahl heraus, sobald sie nachgeprüft wurde · **A pasted copy is fully selected** – connectors without a tube, clamps and fittings were missing and stayed behind on the next move
 - **Während eine Kopie am Zeiger hängt, lässt sich die Ansicht wieder drehen** – das Ziehen führte bisher nur die Kopie nach, die Kamera stand still · **The view can be turned again while a copy hangs on the pointer** – dragging only moved the copy
 - **Eine eingefügte Kopie bleibt in der Teilung ihrer Vorlage** – gerastert wurde bisher gegen den Nullpunkt der Welt, sodass die Kopie um bis zu einen halben Schritt verrutschte, wenn das Original nicht selbst auf dem Raster lag (importierte oder gedrehte Aufbauten) · **A pasted copy keeps the grid of its original** – snapping went against the world origin, which shifted the copy by up to half a step

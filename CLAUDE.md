@@ -297,6 +297,8 @@ Koordinaten in **cm**, Three.js-Konvention **y = oben**, Boden bei y = 0.
   Einfügen.
 - **Vorschau vs. Vollzug (Ziehen und Einfügen):** Während des Zugs wird nur **verschoben**
   (`model.translateSelection`) – nicht getrennt, nicht zusammengelegt, keine Kupplungen geprüft.
+  Zu Beginn des Zugs trennt `model.detachSelection(sel)` einmal die Verbindungen zum stehenden
+  Rest – sonst zogen sich die angrenzenden Rohre während des Ziehens in die Länge.
   Der echte Zug läuft **einmal** beim Loslassen bzw. Absetzen (`moveSelection` mit `merge`/
   `validate`, `commitPaste`). Früher wurde je Rasterschritt das ganze Modell neu geladen und ein
   vollständiger Zug gerechnet: bei 340 Kupplungen kostete eine Zeigerbewegung ~50 ms, jetzt ~10 ms.

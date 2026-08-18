@@ -1833,6 +1833,15 @@ export class BuildModel {
   }
 
   /**
+   * Verbindungen der Auswahl zum stehenden Rest trennen -- oeffentliche
+   * Kurzform von `_detachBoundary` fuer die Vorschau beim Ziehen.
+   */
+  detachSelection(sel) {
+    const tg = this.moveTargets(sel);
+    return tg.nodes.size ? this._detachBoundary(tg.nodes) : 0;
+  }
+
+  /**
    * Verbindungen zum stehen bleibenden Teil trennen.
    *
    * Ein Rohr, von dem sich nur EIN Ende bewegt, kann nicht mitwandern -- Rohre
