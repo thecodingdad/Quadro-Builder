@@ -11,6 +11,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ## [Unreleased]
 
 ### Behoben · Fixed
+- **Alle Tabs zu und neu geladen: der neue Entwurf ist jetzt leer** – bisher kam dort ein längst vergessenes Modell zum Vorschein, der Autosave aus der Zeit vor den Entwurf-Dateien · **Closing every tab and reloading now gives an empty design** – it used to resurrect the autosave from before designs became files
 - **„Bauen" bleibt markiert, egal welches Teil in der Hand liegt** – beim Doppelrohrverbinder, der Rohrklammer und beim Verstärken fiel die Markierung weg, als hätte man das Bauen verlassen · **„Build" stays highlighted whatever part is selected** – the double-tube connector, the tube clamp and reinforcing used to clear it
 - **Die Gruppen-Knöpfe für Rohre und Platten klappen nur noch die Liste auf** – sie legten vorher schon beim Öffnen das zuletzt benutzte Teil in die Hand und wechselten den Modus, anders als alle übrigen Gruppen. Gewählt wird jetzt einheitlich erst mit der Zeile in der Liste (der Bogen-Knopf bleibt eine direkte Wahl, solange es nur eine Variante gibt) · **The tube and panel group buttons only open their list now** – they used to pick the last used part and switch mode on opening
 - **Rückfragen liegen über der Seitenleiste** – im schmalen Fenster verschwand die Nachfrage „Entwurf löschen?" hinter der überlagernden Leiste, die dadurch auch nicht mehr zu bedienen war · **Dialogs sit above the sidebar** – on narrow screens the delete prompt disappeared behind the overlay sidebar

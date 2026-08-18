@@ -327,6 +327,8 @@ Koordinaten in **cm**, Three.js-Konvention **y = oben**, Boden bei y = 0.
   `quadro.camera.v1`, `quadro.projection.v1`, `quadro.scene.v1`, `quadro.migrated.v2`,
   `quadro.clientId.v1`, `quadro.inventory.meta.v1`, Sprache in `i18n.js`. Die alten Schlüssel `quadro.autosave.v1`/`quadro.design.v1.<name>` werden beim ersten
   Start einmalig nach `docs` übernommen (`docs.migrateOldDrafts()`) und danach nur noch gelesen.
+  `quadro.autosave.v1` dient dabei nur noch als Rückfall, wenn es **gar keine** Sitzung gibt –
+  eine leere Sitzung (alle Tabs zu) startet mit einem leeren Entwurf.
 - Dev-Hook: App mit `?dev` in der URL öffnen ⇒ `window.__qdf.import(text)` importiert QDF
   programmatisch (für Tests aus der Konsole).
 - `scene.js` cached Materialien/Geometrien bewusst (GPU-Leaks); neue Materialien nach diesem

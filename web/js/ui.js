@@ -3482,7 +3482,14 @@ export function initUI({ scene, model, builder }) {
       applyViewState(tab.view || {});
       builder.refresh();
       ladeVorgang = false;
+    } else if (sitzung) {
+      // Die Sitzung steht, sie ist nur leer -- alle Tabs waren zu. Dann faengt
+      // man mit einem leeren Entwurf an: der alte Autosave gehoert zu einer
+      // Sitzung, die es nicht mehr gibt, und kam sonst als "Unbenannt" zurueck.
+      openTab({ name: t("doc_untitled") });
     } else {
+      // Allererster Start (oder Sitzung weggeraeumt): der alte Autosave aus der
+      // Zeit vor den Dateien darf noch einmal auftauchen.
       const alt = storage.loadAutosave();
       openTab({ name: t("doc_untitled"), data: alt && alt.nodes && alt.nodes.length ? alt : null });
     }
