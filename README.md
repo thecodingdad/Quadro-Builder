@@ -58,7 +58,7 @@ dem eigenen Rechner.
 - **Stückliste** – Rohre, Kupplungen, Platten, Anbauteile, Verstärkungen und Schrauben, mit Preis
   je Zeile und Summe; ein Klick auf eine Zeile hebt die Teile im Modell hervor
 - **Bestand & Machbarkeit** – eintragen, was im Keller liegt, und sofort sehen, ob es reicht
-- **Aufbaumodus** – Lage für Lage durch den Bauplan, druckbar
+- **Aufbaumodus** – Lage für Lage durch den Bauplan
 - **Modell-Bibliothek** – die eigene QDF-Sammlung einlesen, durchsuchen und filtern
   („nur mit meinem Bestand baubar")
 
@@ -183,7 +183,7 @@ your own machine.
 - **Parts list** – tubes, connectors, panels, fittings, reinforcements and screws, with a price per
   row and a total; clicking a row highlights those parts in the model
 - **Stock & feasibility** – enter what you own and see at once whether it is enough
-- **Assembly mode** – step through the build layer by layer, printable
+- **Assembly mode** – step through the build layer by layer
 - **Model library** – read in your own QDF collection, search and filter it
   ("buildable with my stock only")
 

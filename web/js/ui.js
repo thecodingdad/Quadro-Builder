@@ -2116,7 +2116,7 @@ export function initUI({ scene, model, builder }) {
     });
   })();
 
-  // --- Aufbaumodus (Stepper + Drucken) -----------------------------------
+  // --- Aufbaumodus (Stepper) ---------------------------------------------
   // Farben in der Aufbauliste zusammenfassen (Zustand ueberlebt den Reload).
   const ASM_COLOR_KEY = "quadro.asmColors.v1";
   let asmIgnoreColors = localStorage.getItem(ASM_COLOR_KEY) === "1";
@@ -2135,7 +2135,6 @@ export function initUI({ scene, model, builder }) {
 
   $("asm-prev").addEventListener("click", () => builder.setAssemblyStep(builder.assemblyStep - 1));
   $("asm-next").addEventListener("click", () => builder.setAssemblyStep(builder.assemblyStep + 1));
-  $("asm-print").addEventListener("click", () => printPlan());
 
   // Aufbaurichtung: je nach Modell und Platz im Raum ist eine andere Reihenfolge
   // praktischer als die Standard-Reihenfolge von unten nach oben.
@@ -2291,29 +2290,6 @@ export function initUI({ scene, model, builder }) {
           p.color, p.count, "", { kind: "panel", panelId: p.panelId, color: p.color });
     }
   }
-
-  function printPlan() {
-    const plan = computeBuildPlan(model);
-    const esc = (s) => String(s).replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
-    let html = `<h1>${esc(t("print_title"))}</h1>`;
-    if (!plan.steps.length) {
-      html += `<p>${esc(t("print_empty"))}</p>`;
-    } else {
-      plan.steps.forEach((step, idx) => {
-        html += `<section class="p-step"><h2>${idx + 1}. ${esc(step.title)}</h2>`;
-        const parts = [];
-        for (const c of step.connectors) parts.push(`${c.count}× ${esc(c.name)}${c.code ? " (" + esc(c.code) + ")" : ""}`);
-        if (step.openEnds) parts.push(`${step.openEnds}× ${esc(t("print_open_end"))}`);
-        for (const tube of step.tubes) parts.push(`${tube.count}× ${esc(tube.name)} · ${esc(tube.colorName)}`);
-        for (const p of step.panels) parts.push(`${p.count}× ${esc(p.name)} · ${esc(p.colorName)}`);
-        html += `<ul>` + parts.map((p) => `<li>${p}</li>`).join("") + `</ul></section>`;
-      });
-    }
-    $("print-area").innerHTML = html;
-    window.print();
-  }
-
-
 
   // --- Tastatur ----------------------------------------------------------
   window.addEventListener("keydown", (e) => {
@@ -3568,7 +3544,7 @@ export function initUI({ scene, model, builder }) {
 
   function measureCollapse() {
     if (measurePaused) return;
-    if (!$("toolbar-ctx").clientWidth) return;  // unsichtbar (Boot, Drucken)
+    if (!$("toolbar-ctx").clientWidth) return;  // unsichtbar (etwa waehrend des Starts)
     const breite = window.innerWidth;
     // Je Durchgang EINE Stufe. Danach gleich noch einmal messen: das Einklappen
     // aendert nur die INNERE Breite der Bauteil-Gruppe, der Beobachter an der

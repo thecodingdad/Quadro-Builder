@@ -228,8 +228,6 @@ const de = {
   // Seitenleiste – Aufbaumodus
   asm_title: 'Aufbau',
   asm_sheet_toggle: 'Teileliste auf- oder zuklappen',
-  btn_asm_print: '⎙ Drucken',
-  btn_asm_print_title: 'Kompletten Bauplan drucken',
   asm_hint: 'Lage für Lage von unten nach oben. Orange = im aktuellen Schritt anbauen, blass = kommt später.',
 
   // Statuszeile
@@ -360,10 +358,6 @@ const de = {
   asm_cat_panels: 'Platten',
   asm_open_ends: 'Offene Enden (Kappe/Kupplung nötig)',
 
-  // Drucken
-  print_title: 'QUADRO Bauplan',
-  print_empty: 'Noch nichts gebaut.',
-  print_open_end: 'offenes Ende',
 
   // Stückliste (dynamisch)
   bom_open_ends: 'Offene Enden (Kappe/Kupplung nötig)',
@@ -642,8 +636,6 @@ const en = {
   // Sidebar – Assembly
   asm_title: 'Assembly',
   asm_sheet_toggle: 'Show or hide the part list',
-  btn_asm_print: '⎙ Print',
-  btn_asm_print_title: 'Print complete build plan',
   asm_hint: 'Layer by layer, bottom to top. Orange = add in this step, pale = comes later.',
 
   // Status bar
@@ -775,9 +767,6 @@ const en = {
   asm_open_ends: 'Open ends (cap / connector needed)',
 
   // Print
-  print_title: 'QUADRO Build Plan',
-  print_empty: 'Nothing built yet.',
-  print_open_end: 'open end',
 
   // BOM (dynamic)
   bom_open_ends: 'Open ends (cap / connector needed)',

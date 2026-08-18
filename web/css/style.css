@@ -890,23 +890,6 @@ body.mobile-portrait .status { bottom: 16px; max-width: calc(100% - 24px); }
   .part-popup.color-popup { max-width: min(80vw, 260px); }
 }
 
-/* Druckbereich (nur beim Drucken sichtbar) */
-#print-area { display: none; }
-@media print {
-  body * { visibility: hidden; }
-  #print-area, #print-area * { visibility: visible; }
-  #print-area {
-    display: block; position: absolute; left: 0; top: 0; width: 100%;
-    padding: 0 8mm; color: #000; font-size: 12pt;
-  }
-  #print-area h1 { font-size: 20pt; margin: 0 0 12px; }
-  #print-area .p-step { break-inside: avoid; margin-bottom: 12px; }
-  #print-area h2 { font-size: 14pt; margin: 10px 0 4px; border-bottom: 1px solid #888; padding-bottom: 3px; }
-  #print-area ul { margin: 4px 0 0; padding-left: 20px; }
-  #print-area li { margin: 2px 0; }
-}
-
-
 /* --- Datei-Tabs -------------------------------------------------------- */
 .tab-bar {
   display: flex;
