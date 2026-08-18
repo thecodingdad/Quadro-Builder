@@ -23,9 +23,14 @@ body {
   -webkit-text-size-adjust: 100%;
   touch-action: manipulation;
 }
-/* Bedienelemente reagieren ohne 300ms-Verzoegerung; keine Textauswahl beim Tippen */
+/* Bedienelemente reagieren ohne 300ms-Verzoegerung */
 .btn, .swatch, .lang-select, select, label { touch-action: manipulation; }
-#toolbar, .group, .seg, .menu-pop { -webkit-user-select: none; user-select: none; }
+/* Nirgends versehentlich Text markieren: beim Ziehen im Bild, beim Doppelklick
+   auf einen Tab oder beim Wischen in einer Liste blieb sonst staendig etwas
+   blau hinterlegt. Eingabefelder sind ausgenommen -- dort gehoert Markieren
+   zum Tippen. */
+body { -webkit-user-select: none; user-select: none; }
+input, textarea, [contenteditable="true"] { -webkit-user-select: text; user-select: text; }
 
 /* Toolbar — zweizeilig */
 #toolbar {
