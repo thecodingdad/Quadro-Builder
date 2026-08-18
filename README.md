@@ -125,6 +125,7 @@ Wissenswertes:
 - **Wo man ihn sieht:** im Seitenleisten-Tab „Meine Modelle" steht eine Zeile mit dem Zustand –
   aber erst, sobald einmal eine Verbindung stand.
 
+> [!NOTE]
 > ⚠️ **Nur im eigenen Netz betreiben.** Der Server hat **keine Anmeldung, keine Rechte und keine
 > Verschlüsselung**: wer ihn erreicht, darf alle Modelle lesen, ändern und löschen. Den Port also
 > **nicht** im Router freigeben und nicht ins Internet stellen. Soll er von unterwegs erreichbar
@@ -132,12 +133,6 @@ Wissenswertes:
 > als WebSocket durchgereicht werden). Ausgeliefert werden bewusst nur die Dateien der App
 > (`/web`, `/data`, `/icons` und die drei Dateien im Wurzelverzeichnis) – das Datenverzeichnis und
 > der Rest des Projekts bleiben außen vor.
-
-### Mitmachen
-
-Fehler und Wünsche gern als [Issue](https://github.com/thecodingdad/quadro-3D/issues).
-Aufbau des Projekts und die Konventionen stehen in [CLAUDE.md](CLAUDE.md), die Änderungen im
-[CHANGELOG.md](CHANGELOG.md).
 
 ### Lizenz
 
@@ -200,27 +195,62 @@ your own machine.
 - **Installable (PWA)** – set it up as its own window and keep building offline
 - **Works on mobile** – in portrait the part row moves to the bottom, tools collapse when space
   runs out, and the assembly plan floats above the scene
-- **Optional server** – share models, stock and collection across machines (see above)
+- **Optional server** – share models, stock and collection across machines (see below)
 - **No build step** – vanilla JS, no dependencies beyond the bundled Three.js
 
 ### Quick start
 
 Open the [link](https://thecodingdad.github.io/quadro-3D/) – done. To host it yourself, put the
-repository on any static web server. Locally:
+repository on any static web server.
+
+Locally, to try it out or to develop:
 
 ```bash
 python serve.py            # http://127.0.0.1:8000/web/index.html
 ```
 
-For the optional server (shared storage across machines) see the German section above – the same
-commands apply, and the same warning: **run it inside your own network only**, it has no
-authentication, no permissions and no encryption.
+> To make your own changes: fork it → enable Pages (Settings → Pages → branch `main`, folder `/`)
+> → done.
 
-### Contributing
+### Optional: shared storage (server)
 
-Bugs and ideas are welcome as an [issue](https://github.com/thecodingdad/quadro-3D/issues).
-[CLAUDE.md](CLAUDE.md) explains the layout and the conventions,
-[CHANGELOG.md](CHANGELOG.md) tracks the changes.
+If you plan on more than one machine, the saved models, your own stock and the QDF collection can
+live on a small server. Easiest with Docker:
+
+```bash
+docker compose up --build      # app: http://localhost:8000/web/index.html
+```
+
+Or straight with Python (`pip install -r requirements.txt`):
+
+```bash
+python server.py 8000          # app + API from one origin
+QUADRO_DATA=/path/to/data python server.py
+```
+
+The server keeps everything as plain files (`data-store/docs/*.json`,
+`data-store/inventory.json`, `data-store/library/*.qdf`) – a backup is a plain copy.
+
+Worth knowing:
+
+- **The browser stays the workplace.** It still holds the whole set; the server is the shared
+  storage it reconciles with. Open tabs, unsaved work and settings stay local.
+- **Live:** when one machine saves, the others load the model right away – unless they hold
+  unsaved work in it. Then they ask.
+- **Without a server** (GitHub Pages, `serve.py`, or the server just being off) everything keeps
+  working; changes go up on the next connection. Only an entry of the collection whose QDF text is
+  not in the browser yet cannot be opened then – and the app says so.
+- **Where you see it:** the sidebar tab "My models" carries a line with the state – but only once
+  a connection has been up.
+
+> [!NOTE]
+> ⚠️ **Run it inside your own network only.** The server has **no authentication, no permissions
+> and no encryption**: whoever reaches it may read, change and delete every model. So do **not**
+> forward the port in your router and do not put it on the internet. To reach it from outside, put
+> a VPN in front of it, or a reverse proxy that brings HTTPS and a login (`/api/ws` has to be
+> passed through as a WebSocket). Only the files of the app are served on purpose (`/web`,
+> `/data`, `/icons` and the three files in the root) – the data directory and the rest of the
+> project stay out of reach.
 
 ### License
 
