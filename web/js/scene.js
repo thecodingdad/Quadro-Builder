@@ -1809,6 +1809,56 @@ export class SceneManager {
   }
 
   /**
+   * Lochzapfenkupplung zeichnen. Sie klemmt NICHT um ein Rohr: ihr Zapfen
+   * steckt in einem Arm der Kupplung, und quer dazu laeuft das Rohr durch ihr
+   * Loch. Der Knoten liegt an der Muendung dieses Lochs -- dort faengt das Rohr
+   * an, eine Kupplungslaenge neben dem Wuerfel der tragenden Kupplung.
+   */
+  _addPinConnector(model, n, mat, st) {
+    const g = geometry();
+    const cs = g.connectorSize;
+    const stub = new THREE.Vector3(...(n.stub || [0, 1, 0])).normalize();
+    // Richtung des Zapfens: die lokale -X-Achse der Teile-Quaternion (so steht
+    // es in allen Dateien des Bestands). Fehlt sie, zeigt der Zapfen zur
+    // naechsten Kupplung; ohne die bleibt nur irgendeine Querrichtung.
+    let peg = null;
+    if (n.partQuat && n.partQuat.length === 4) {
+      const q = new THREE.Quaternion(n.partQuat[0], n.partQuat[1], n.partQuat[2], n.partQuat[3]).normalize();
+      peg = new THREE.Vector3(-1, 0, 0).applyQuaternion(q);
+    } else {
+      for (const o of model.nodes.values()) {
+        if (o.id === n.id || o.part) continue;
+        const v = new THREE.Vector3(o.x - n.x, o.y - n.y, o.z - n.z);
+        if (v.length() > cs * 1.2) continue;
+        peg = v.normalize();
+        break;
+      }
+      if (!peg) peg = new THREE.Vector3(-stub.z, stub.x, stub.y).normalize();
+    }
+    const seg = Math.max(10, this._q().tube);
+    const at = new THREE.Vector3(n.x, n.y, n.z);
+    // Huelse um das Rohr: sie sitzt an der Muendung und laeuft mit dem Rohr.
+    const sleeveR = g.tubeRadius * 1.35;
+    const sleeve = new THREE.Mesh(
+      this._cachedGeo(`pinSleeve${seg}`, () => new THREE.CylinderGeometry(sleeveR, sleeveR, cs, seg)), mat);
+    sleeve.quaternion.setFromUnitVectors(UP, stub);
+    sleeve.position.copy(at).addScaledVector(stub, cs / 2);
+    sleeve.userData = { kind: "node", id: n.id };
+    this.buildGroup.add(sleeve);
+    if (st !== "future") this.pickNodes.push(sleeve);
+    // Zapfen: er greift von der Muendung bis in die Kupplung, also genau eine
+    // Kupplungslaenge weit. Duenner als ein Rohr -- er steckt ja in einem Arm.
+    const pegR = g.tubeRadius * 0.8;
+    const pin = new THREE.Mesh(
+      this._cachedGeo(`pinStub${seg}`, () => new THREE.CylinderGeometry(pegR, pegR, cs, seg)), mat);
+    pin.quaternion.setFromUnitVectors(UP, peg);
+    pin.position.copy(at).addScaledVector(peg, cs / 2);
+    pin.userData = { kind: "node", id: n.id };
+    this.buildGroup.add(pin);
+    if (st !== "future") this.pickNodes.push(pin);
+  }
+
+  /**
    * Wo haengt die Beschriftung eines gewaehlten Teils, das von sich aus keine
    * bekommt? Kupplungen, Rohre und Rutschen beschriften sich selbst -- fuer die
    * liefert das hier nichts.
@@ -2126,7 +2176,8 @@ export class SceneManager {
       // Anschluss. Die Lochzapfenkupplung nimmt dort direkt ein Rohr auf und
       // braucht keinen Wuerfel; die Lagerkupplung traegt eine ganze Kupplung --
       // die wird unten zusaetzlich gezeichnet.
-      if (n.stub && n.part) this._addTubeClamp(model, n, matFor(n.id, mat), st);
+      if (n.stub && n.part === "hole_1") this._addPinConnector(model, n, matFor(n.id, mat), st);
+      else if (n.stub && n.part) this._addTubeClamp(model, n, matFor(n.id, mat), st);
       // Wo eine Radkappe sitzt, gibt es keine Kupplung mehr -- die Kappe
       // schliesst das Rohrende selbst ab.
       if (!n.c45body && n.part !== "hole_1" && !(model.hasWheelCap && model.hasWheelCap(n))) {

@@ -881,10 +881,48 @@ export function parseQDF(text, opts = {}) {
     // verschwindet beim Export die Kupplung, an deren Stelle sie geschnappt ist.
     const nd = { id: "n" + seq++, x: h.x, y: h.y, z: h.z };
     nodes.push(nd);
+    clampNodes.set(nd.id, nd);
     nd.part = "hole_1";
     nd.stub = h.stub;
     if (h.quat) nd.partQuat = h.quat;
     if (onTube) nd.clampOn = onTube;
+
+    // Das Rohr steckt IM Zapfen, nicht in der Kupplung daneben: es laeuft an
+    // der Muendung los, in Stutzenrichtung. Beim Einlesen der Rohre gab es den
+    // Zapfen noch nicht, also ist sein Ende auf die naechstgelegene Kupplung
+    // (5 cm daneben) geschnappt -- das wird hier umgehaengt. Sonst zaehlte die
+    // Kupplung einen Arm zu viel und das Rohr saesse schief.
+    const HOLE_SNAP = 8;   // cm: die Muendung liegt eine Kupplungslaenge daneben
+    for (const t of tubes) {
+      if (t.arm || t.link || t.bow) continue;
+      for (const end of ["a", "b"]) {
+        const e = clampNodes.get(t[end]);
+        const o = clampNodes.get(t[end === "a" ? "b" : "a"]);
+        if (!e || !o || e === nd) continue;
+        if (Math.hypot(e.x - nd.x, e.y - nd.y, e.z - nd.z) > HOLE_SNAP) continue;
+        const dx = o.x - nd.x, dy = o.y - nd.y, dz = o.z - nd.z;
+        const L = Math.hypot(dx, dy, dz) || 1;
+        const dot = (dx / L) * h.stub[0] + (dy / L) * h.stub[1] + (dz / L) * h.stub[2];
+        if (dot < 0.9) continue;               // laeuft woanders hin
+        t[end] = nd.id;
+      }
+    }
+  }
+
+  // Durch das Umhaengen koennen Hilfsknoten am Rohrende leer zurueckbleiben --
+  // die Kupplungen aus der Datei bleiben stehen (sie stehen ja darin), alles
+  // andere faellt weg.
+  if (holeClamps.length) {
+    const used = new Set();
+    for (const t of tubes) { used.add(t.a); used.add(t.b); }
+    for (const pa of panels) for (const id of pa.nodes) used.add(id);
+    for (const tx of textiles) for (const id of tx.nodes) used.add(id);
+    for (let i = nodes.length - 1; i >= 0; i--) {
+      const n = nodes[i];
+      if (used.has(n.id) || n.part) continue;
+      if (n.fromFile) n.unused = true;
+      else nodes.splice(i, 1);
+    }
   }
 
   return {

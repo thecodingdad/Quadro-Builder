@@ -10,6 +10,10 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Behoben · Fixed
+- **Lochzapfenkupplung sitzt richtig** – sie klemmt nicht um ein Rohr, sondern steckt mit ihrem Zapfen in einem Arm der Kupplung, während das Rohr quer durch ihr Loch läuft. Gezeichnet wird sie jetzt so, und das Rohr hängt an ihr statt an der Kupplung daneben · **Pin connector placed correctly** – its peg sits in a connector arm and the tube runs through its hole; the tube now hangs on the pin connector instead of the connector next to it
+- **Gedrehte Aufbauten bekommen die richtigen Kupplungen** – ob drei Arme in einer Ebene liegen, wird an der Ebene selbst gemessen und nicht mehr nur an den drei Achsenebenen. Im Ball Cage (45° gekippt) stand deshalb „Raumkupplung 3-armig", wo eine Flächenkupplung 3-armig sitzt · **Rotated builds get the right connectors** – coplanarity is measured on the actual plane instead of the three axis planes
+
 ### Geändert · Changed
 - **Doppelrohrverbinder und Rohrklammer haben einen Körper** – sie waren als offene Mantelfläche gezeichnet und wirkten dadurch papierdünn; jetzt haben sie eine Wand von 7 mm und sichtbare Stirnflächen · **Double-tube connector and tube clamp now have a body** – they were drawn as an open shell and looked paper-thin; now they have a 7 mm wall
 - **Multirad-Arretierung auf Originalmaß** – 7 cm Durchmesser statt 12 · **Multi-wheel lock at its real size** – 7 cm across instead of 12

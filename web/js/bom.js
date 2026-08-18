@@ -1,6 +1,6 @@
 // Stueckliste (BOM) + Kupplungstyp-Heuristik + Bestands-/Machbarkeitscheck.
 
-import { getTube, getConnector, getPanel, colorName, partName, reinforcementPart, reinforcementRunName, partForFitting, getPartById, getScrew, poolLinerFor } from "./catalog.js";
+import { getTube, getConnector, getPanel, colorName, partName, reinforcementPart, reinforcementRunName, partForFitting, getPartById, getScrew, poolLinerFor, geometry } from "./catalog.js";
 import { round2, xAxisOf } from "./util.js";
 import { POOL_KINDS } from "./model.js";
 
@@ -32,15 +32,40 @@ function neighborDirs(model, node) {
     const d = xAxisOf(f.quat);
     if (!dirs.some((e) => e[0] * d[0] + e[1] * d[1] + e[2] * d[2] > 0.9)) dirs.push(d);
   }
+  // Die Lochzapfenkupplung steckt mit ihrem Zapfen in einem Arm der Kupplung --
+  // der ist damit belegt, obwohl dort kein Rohr sitzt. Ohne ihn zaehlte eine
+  // T-Kupplung des Ball Cage nur zwei Arme.
+  const cs = geometry().connectorSize;
+  for (const h of model.nodes.values()) {
+    if (h.part !== "hole_1" || h.id === node.id) continue;
+    const dx = h.x - node.x, dy = h.y - node.y, dz = h.z - node.z;
+    const len = Math.hypot(dx, dy, dz);
+    if (len < 0.5 || len > cs * 1.2) continue;
+    const d = [dx / len, dy / len, dz / len];
+    if (!dirs.some((e) => e[0] * d[0] + e[1] * d[1] + e[2] * d[2] > 0.9)) dirs.push(d);
+  }
   return dirs;
 }
 
-// Liegen alle Richtungen in einer Ebene (teilen sich eine Null-Achse)?
+/**
+ * Liegen alle Richtungen in EINER Ebene? Geprueft wird die Ebene selbst, nicht
+ * nur die drei Achsenebenen: ein gedrehter Aufbau (Ball Cage: 45 Grad um X)
+ * spannt seine Ebene schraeg auf, seine T-Kupplungen sind aber genauso flach
+ * wie die achsenparallelen.
+ */
 function isCoplanar(dirs) {
-  for (let axis = 0; axis < 3; axis++) {
-    if (dirs.every((d) => Math.abs(d[axis]) < 0.05)) return true;
+  // Normale aus dem ersten Paar, das nicht (anti-)parallel liegt.
+  let n = null;
+  for (let i = 0; i < dirs.length && !n; i++) {
+    for (let j = i + 1; j < dirs.length; j++) {
+      const a = dirs[i], b = dirs[j];
+      const c = [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+      const len = Math.hypot(c[0], c[1], c[2]);
+      if (len > 0.1) { n = [c[0] / len, c[1] / len, c[2] / len]; break; }
+    }
   }
-  return false;
+  if (!n) return true;   // alle auf einer Geraden -- das ist erst recht flach
+  return dirs.every((d) => Math.abs(d[0] * n[0] + d[1] * n[1] + d[2] * n[2]) < 0.1);
 }
 
 // Ist die (normierte) Richtung eine ECHTE 45-Grad-Schraege, die eine

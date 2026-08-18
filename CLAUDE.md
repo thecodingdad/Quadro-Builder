@@ -170,7 +170,15 @@ Koordinaten in **cm**, Three.js-Konvention **y = oben**, Boden bei y = 0.
 ## Stückliste (bom.js)
 
 - `inferConnectorType` klassifiziert nach Anzahl + Lage der Arme (koplanar ⇒ `t`/`cross`,
-  sonst `3way`/`4way`, …). Für achsenparallele Bauten exakt.
+  sonst `3way`/`4way`, …). Geprüft wird die **Ebene selbst** (Normale aus dem ersten nicht
+  parallelen Paar), nicht nur die drei Achsenebenen – ein um 45° gedrehter Aufbau wie der
+  Ball Cage hat sonst lauter Raumkupplungen, wo flache sitzen.
+- **Lochzapfenkupplung** (`hole_1`, QDF `hole-connector4`): ihr Zapfen steckt in einem **Arm der
+  Kupplung**, quer dazu läuft das Rohr durch ihr Loch – sie klemmt also nichts. Der Knoten liegt
+  an der Mündung, eine Kupplungslänge neben dem Würfel; `stub` ist die Rohrrichtung, die
+  Zapfenrichtung die lokale **−X**-Achse von `partQuat`. Der Import hängt das Rohr an sie um
+  (beim Einlesen der Rohre gab es sie noch nicht, ihr Ende war auf die Kupplung daneben
+  geschnappt), und `neighborDirs` zählt sie als belegten Arm der tragenden Kupplung.
 - **Bällebad = EIN Teil:** Es ist ein **Anbauteil** (`kind: "pool2"`/`"pool-small2"`), kein
   Satz Platten – wie der Spielsack: eine Auswahl, ein Löschen, eine QDF-Zeile. Der Bezugspunkt
   ist die Oberkante der Frontwand (so steht es in der Datei), dazu `w` (Breite), `h` (Wandhöhe)
