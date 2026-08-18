@@ -3087,7 +3087,9 @@ export function initUI({ scene, model, builder }) {
         + (zieh && zieh.gestartet && zieh.tabId === tab.tabId ? " dragging" : ""));
       item.dataset.tabId = tab.tabId;
       item.title = tab.name;
-      if (tab.dirty) item.appendChild(el("span", "tab-dirty"));
+      // Vorschau-Tabs zeigen keinen Änderungs-Punkt: sobald jemand darin baut,
+      // sind sie keine Vorschau mehr (siehe evaluateDirty).
+      if (tab.dirty && !tab.preview) item.appendChild(el("span", "tab-dirty"));
       item.appendChild(el("span", "tab-name", tab.name));
       const zu = el("button", "tab-close", "×");
       zu.title = t("btn_doc_close");
@@ -3228,7 +3230,8 @@ export function initUI({ scene, model, builder }) {
     const tab = tabs[i];
     // Ungespeicherte Änderungen: nachfragen. Bei eingeschaltetem Auto-Save gilt
     // ein Tab mit Datei als gespeichert -- dort läuft der Stand ohnehin mit.
-    const offen = tab.dirty && !(autosaveOn && tab.docId);
+    // Eine Vorschau hat nichts zu verlieren: sie geht wortlos zu.
+    const offen = tab.dirty && !tab.preview && !(autosaveOn && tab.docId);
     if (offen) {
       if (tabId !== activeTabId) activateTab(tabId);
       const antwort = await askUnsaved(tab.name);

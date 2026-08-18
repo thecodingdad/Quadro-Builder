@@ -274,7 +274,9 @@ Koordinaten in **cm**, Three.js-Konvention **y = oben**, Boden bei y = 0.
   `scheduleSessionSave` und `evaluateDirty` steigen bei `builder.pasting` aus): sonst schrieb das
   automatische Speichern die schwebende Kopie mit, und eine Server-Übernahme ließ sie verschwinden.
 - **Vorschau-Tabs:** ein Klick in „Meine Modelle"/Bibliothek öffnet mit `preview: true`; ein
-  zweiter Vorschau-Klick wirft den alten Tab weg (`discardPreview`). Angeheftet wird er beim
+  zweiter Vorschau-Klick wirft den alten Tab weg (`discardPreview`). Solange ein Tab Vorschau ist,
+  zeigt er **keinen** Änderungs-Punkt und fragt beim Schließen nicht nach – er kann nichts
+  Ungespeichertes enthalten, denn die erste Änderung heftet ihn an. Angeheftet wird er beim
   Doppelklick, beim Speichern und sobald sich das Modell gegenüber `tab.baseJson` unterscheidet.
   Wie `savedJson` bleibt `baseJson` aus der Sitzung heraus und wird beim Start neu gebildet.
 - **Änderungs-Punkt am Tab:** `builder.onChange` feuert bei JEDEM Neuzeichnen, auch bei Auswahl,
