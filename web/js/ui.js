@@ -2542,6 +2542,21 @@ export function initUI({ scene, model, builder }) {
     return "fittings";
   }
 
+  /**
+   * Abschnitt der Stückliste ein- oder ausblenden -- samt seiner Überschrift.
+   * Was das Modell nicht braucht, steht auch nicht in der Liste; ein „–" unter
+   * einer Überschrift ist nur Platz ohne Aussage. Die Überschrift steht im
+   * HTML direkt vor ihrer Liste.
+   */
+  function bomAbschnitt(boxId, leer) {
+    const box = $(boxId);
+    if (!box) return null;
+    const kopf = box.previousElementSibling;
+    box.hidden = leer;
+    if (kopf && kopf.tagName === "H3") kopf.hidden = leer;
+    return box;
+  }
+
   // Bestand je Katalogteil, aufgeschlüsselt für die Stücklisten-Zeilen.
   let invIndex = new Map();
 
@@ -2650,7 +2665,7 @@ export function initUI({ scene, model, builder }) {
 
     const tb = $("bom-tubes"); tb.innerHTML = "";
     const rohre = fasseZusammen(bom.tubes, "tubeId");
-    if (rohre.length === 0) tb.appendChild(el("div", "muted", "–"));
+    bomAbschnitt("bom-tubes", rohre.length === 0);
     for (const r of rohre) {
       bomRow(tb, r.color ? `${r.name} · ${r.colorName}` : r.name, r.color, r.count, r.subtotal,
         "tubes:" + r.tubeId + (r.color ? "|" + r.color : ""),
@@ -2658,7 +2673,7 @@ export function initUI({ scene, model, builder }) {
     }
 
     const cb = $("bom-connectors"); cb.innerHTML = "";
-    if (bom.connectors.length === 0) cb.appendChild(el("div", "muted", "–"));
+    bomAbschnitt("bom-connectors", bom.connectors.length === 0 && !bom.openEnds);
     for (const r of bom.connectors) {
       bomRow(cb, r.name, null, r.count, r.subtotal, "connectors:" + r.type,
         { kind: "connectors", id: r.type });
@@ -2675,7 +2690,7 @@ export function initUI({ scene, model, builder }) {
 
     const pb = $("bom-panels"); pb.innerHTML = "";
     const platten = fasseZusammen(bom.panels, "panelId");
-    if (platten.length === 0) pb.appendChild(el("div", "muted", "–"));
+    bomAbschnitt("bom-panels", platten.length === 0);
     for (const r of platten) {
       bomRow(pb, r.color ? `${r.name} · ${r.colorName}` : r.name, r.color, r.count, r.subtotal,
         "panels:" + r.panelId + (r.color ? "|" + r.color : ""),
@@ -2692,7 +2707,7 @@ export function initUI({ scene, model, builder }) {
 
     const slb = $("bom-slides"); slb.innerHTML = "";
     const slides = bom.slides || [];
-    if (slides.length === 0) slb.appendChild(el("div", "muted", "–"));
+    bomAbschnitt("bom-slides", slides.length === 0);
     for (const r of slides) {
       bomRow(slb, r.name || slideKindName(r.kind), null, r.count, r.subtotal || null,
         r.id ? "fittings:" + r.id : null, { kind: "slides", id: r.kind });
@@ -2710,20 +2725,19 @@ export function initUI({ scene, model, builder }) {
       bomRow(ziele[gruppe], r.name, null, r.count, r.subtotal || null, "fittings:" + r.id,
         { kind: "fittings", id: r.id });
     }
-    for (const [gruppe, box] of Object.entries(ziele)) {
-      if (!zaehler[gruppe]) box.appendChild(el("div", "muted", "–"));
-    }
+    const boxIds = { textiles: "bom-textiles", wheels: "bom-wheels", fittings: "bom-fittings" };
+    for (const gruppe of Object.keys(ziele)) bomAbschnitt(boxIds[gruppe], !zaehler[gruppe]);
 
     const rb = $("bom-reinforcements"); rb.innerHTML = "";
     const reinf = bom.reinforcements || [];
-    if (reinf.length === 0) rb.appendChild(el("div", "muted", "–"));
+    bomAbschnitt("bom-reinforcements", reinf.length === 0);
     for (const r of reinf) bomRow(rb, r.name, null, r.count, r.subtotal, "reinforcements:" + r.id, { kind: "reinforcements", id: r.id });
 
     // Schrauben: nur gerechnet -- kein Bestand (kein invKey) und nichts zum
     // Hervorheben (kein hl), im Modell gibt es sie ja nicht.
     const sb = $("bom-screws"); sb.innerHTML = "";
     const schrauben = bom.screws || [];
-    if (!schrauben.length) sb.appendChild(el("div", "muted", "–"));
+    bomAbschnitt("bom-screws", !schrauben.length);
     // Rohrschrauben gibt es in den Rohrfarben; ohne Farbtrennung stehen sie in
     // einer Summenzeile, genau wie Rohre und Platten.
     const schraubenZeilen = fasseZusammen(schrauben, "id");
@@ -2827,7 +2841,9 @@ export function initUI({ scene, model, builder }) {
     const farbigeToepfe = { tubes: tubeColors(), panels: [...tubeColors(), ...PANEL_EXTRA_COLORS],
       screws: tubeColors() };
     for (const [boxId, bucket, teile] of abschnitte) {
-      const box = $(boxId);
+      // Beim Bearbeiten steht jeder Abschnitt da -- auch für Teile, die im
+      // Modell (noch) nicht vorkommen; nur so lässt sich Bestand eintragen.
+      const box = bomAbschnitt(boxId, false);
       box.innerHTML = "";
       if (!teile.length) { box.appendChild(el("div", "muted", "–")); continue; }
       for (const it of teile) {
