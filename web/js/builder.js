@@ -320,13 +320,18 @@ export class Builder {
    * zu seiner Ecke -- der Versatz IST also die Stelle, an der diese Ecke landen
    * soll: waagerecht auf das Raster gerundet dem Zeiger nach, in der Hoehe
    * unveraendert.
+   *
+   * Gerastert wird vom URSPRUNG aus, nicht vom Nullpunkt der Welt: sonst rutscht
+   * eine Kopie um bis zu einen halben Schritt zur Seite, sobald das Original
+   * nicht selbst auf dem Raster liegt (importierte und gedrehte Aufbauten tun
+   * das oft nicht). So bleibt sie in derselben Teilung wie ihre Vorlage.
    */
   _placePaste(point) {
     const d = this._paste;
     const a = d.frag.anchor;
-    const raster = (v) => Math.round(v / MOVE_STEP) * MOVE_STEP;
+    const raster = (v, ref) => ref + Math.round((v - ref) / MOVE_STEP) * MOVE_STEP;
     const offset = point
-      ? [raster(point.x), a[1], raster(point.z)]
+      ? [raster(point.x, a[0]), a[1], raster(point.z, a[2])]
       : (d.offset || [a[0], a[1], a[2]]);
     if (d.offset && offset[0] === d.offset[0] && offset[1] === d.offset[1] && offset[2] === d.offset[2]) return;
     this.model.loadJSON(JSON.parse(d.before));

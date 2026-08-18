@@ -295,7 +295,9 @@ Koordinaten in **cm**, Three.js-Konvention **y = oben**, Boden bei y = 0.
   und wandert nur waagerecht (`scene.pointOnPlane` mit Normale Y) – in drei Achsen zugleich trifft
   man die Stelle nicht; die Höhe stellt man danach mit den Pfeiltasten ein, denn das Eingefügte
   bleibt ausgewählt. Der Versatz an `insertFragment` ist die **Weltstelle der Fragment-Ecke**, nicht
-  eine Differenz – die Koordinaten im Fragment liegen bereits relativ zu dieser Ecke. **Während der Vorschau wird nicht gespeichert** (`scheduleDocSave`,
+  eine Differenz – die Koordinaten im Fragment liegen bereits relativ zu dieser Ecke. Gerastert
+  wird **vom Ursprung der Kopie aus** (`_placePaste`), nicht gegen den Weltnullpunkt: sonst
+  rutscht eine Vorlage, die selbst nicht auf dem Raster liegt, beim Einfügen zur Seite. **Während der Vorschau wird nicht gespeichert** (`scheduleDocSave`,
   `scheduleSessionSave` und `evaluateDirty` steigen bei `builder.pasting` aus): sonst schrieb das
   automatische Speichern die schwebende Kopie mit, und eine Server-Übernahme ließ sie verschwinden.
 - **Vorschau-Tabs:** ein Klick in „Meine Modelle"/Bibliothek öffnet mit `preview: true`; ein
