@@ -4069,9 +4069,12 @@ export class SceneManager {
     if (Math.abs(v.y) > Math.cos(POLE_GAP)) {
       const quer = this.camera.position.clone().sub(target);
       quer.y = 0;
-      if (quer.lengthSq() < 1e-9) quer.set(0, 0, -1); else quer.normalize();
+      // Auf die naechste Vierteldrehung einrasten: die Draufsicht steht damit
+      // immer achsenparallel, behaelt aber die Seite, von der man kommt.
+      const az = quer.lengthSq() < 1e-9 ? Math.PI
+        : Math.round(Math.atan2(quer.x, quer.z) / (Math.PI / 2)) * (Math.PI / 2);
       const kipp = Math.sin(POLE_GAP);
-      v.set(quer.x * kipp, Math.sign(v.y) * Math.cos(POLE_GAP), quer.z * kipp);
+      v.set(Math.sin(az) * kipp, Math.sign(v.y) * Math.cos(POLE_GAP), Math.cos(az) * kipp);
     }
     this._camAnim = {
       from: this.camera.position.clone().sub(target).normalize(),
