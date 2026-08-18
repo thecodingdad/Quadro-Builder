@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Quadro Builder mit Backend: statische App + Datei-API + Ereignis-Kanal.
+"""QUADRO 3D mit Backend: statische App + Datei-API + Ereignis-Kanal.
 
 Der Server liefert dasselbe Arbeitsverzeichnis aus wie `serve.py` und zusaetzlich
 unter `/api/` die gemeinsame Ablage fuer gespeicherte Modelle und die
@@ -276,7 +276,7 @@ def check_id(doc_id):
 
 
 async def health(request):
-    return json_response({"ok": True, "api": API_VERSION, "name": "quadro-builder"})
+    return json_response({"ok": True, "api": API_VERSION, "name": "quadro-3d"})
 
 
 async def docs_list(request):
@@ -447,7 +447,7 @@ def build_app():
 def main():
     port = int(sys.argv[1]) if len(sys.argv) > 1 else int(os.environ.get("QUADRO_PORT") or 8000)
     print("=" * 56)
-    print("  Quadro Builder (mit Backend)")
+    print("  QUADRO 3D (mit Backend)")
     print(f"  App:    http://127.0.0.1:{port}/web/index.html")
     print(f"  API:    http://127.0.0.1:{port}/api/health")
     print(f"  Daten:  {DATA}")

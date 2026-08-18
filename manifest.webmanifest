@@ -1,6 +1,6 @@
 {
-  "name": "Quadro Builder",
-  "short_name": "Quadro",
+  "name": "QUADRO 3D",
+  "short_name": "QUADRO 3D",
   "description": "3D-Planungstool für QUADRO-Klettergerüste: bauen, Stückliste, QDF-Import und -Export.",
   "lang": "de",
   "start_url": "web/index.html",

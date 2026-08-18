@@ -1,6 +1,6 @@
 <div align="center">
 
-# 🏗️ Quadro Builder
+# 🏗️ QUADRO 3D
 
 **3D-Planungstool für QUADRO-Klettergerüste · 3D planning tool for QUADRO climbing frames**
 
@@ -19,9 +19,9 @@
 
 ### Was ist das?
 
-Quadro Builder ist eine moderne, **offline-fähige Web-App** zum Planen von [QUADRO-Klettergerüsten](https://quadroshop.com) – entstanden als Nachbau der alten Windows-Software „Quadro 3D".
+QUADRO 3D ist eine moderne, **offline-fähige Web-App** zum Planen von [QUADRO-Klettergerüsten](https://quadroshop.com) – entstanden als Nachbau der alten Windows-Software „Quadro 3D".
 
-Der Anlass: Die originale Software wirkt heute sehr altmodisch, die Kamerasteuerung ist umständlich und eine saubere Schritt-für-Schritt-Aufbauanleitung fehlt dort ganz. Genau das sollte der Quadro Builder besser machen.
+Der Anlass: Die originale Software wirkt heute sehr altmodisch, die Kamerasteuerung ist umständlich und eine saubere Schritt-für-Schritt-Aufbauanleitung fehlt dort ganz. Genau das sollte diese App besser machen.
 
 Man baut ein Gerüst frei im **3D-Raum** aus Kupplungen und Rohren und bekommt sofort:
 - eine **Live-Stückliste** mit geschätztem Materialpreis
@@ -57,7 +57,7 @@ Keine Installation, kein Account, keine Cloud – alles läuft lokal im Browser.
 
 ### Schnellstart
 
-Die App ist direkt unter der GitHub-Pages-URL erreichbar – einfach den [Link](https://thecodingdad.github.io/Quadro-Builder/) aufrufen, fertig. Alternativ kann sie auch selbst gehostet werden.
+Die App ist direkt unter der GitHub-Pages-URL erreichbar – einfach den [Link](https://thecodingdad.github.io/quadro-3D/) aufrufen, fertig. Alternativ kann sie auch selbst gehostet werden.
 
 > Für eigene Änderungen: Fork erstellen → Pages aktivieren (Settings → Pages → Branch `main`, Ordner `/`) → fertig.
 

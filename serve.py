@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Lokaler Entwicklungs-Server fuer den Quadro Builder.
+"""Lokaler Entwicklungs-Server fuer QUADRO 3D.
 
 Startet einen statischen Server (nur Python-Standardbibliothek, keine Pakete noetig)
 und oeffnet den Editor im Browser. Damit funktionieren ES-Module und der
@@ -42,7 +42,7 @@ def main():
     with socketserver.TCPServer(("0.0.0.0", port), handler) as httpd:
         url = f"http://127.0.0.1:{port}/web/index.html"
         print("=" * 52)
-        print("  Quadro Builder")
+        print("  QUADRO 3D")
         print(f"  laeuft auf:  {url}")
         print("  Beenden:     Strg + C")
         print("=" * 52)

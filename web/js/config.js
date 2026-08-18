@@ -1,4 +1,4 @@
-// Globale Konstanten fuer den Quadro-Builder.
+// Globale Konstanten fuer QUADRO 3D.
 
 // Die 6 Achsen-Richtungen eines Wuerfel-Knotens (Three.js: y = oben).
 export const DIRECTIONS = [

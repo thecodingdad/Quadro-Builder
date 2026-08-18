@@ -1,4 +1,4 @@
-# Quadro Builder samt Backend.
+# QUADRO 3D samt Backend.
 #
 #   docker compose up --build     App unter http://localhost:8000/web/index.html
 #

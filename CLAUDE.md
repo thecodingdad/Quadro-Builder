@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-Quadro Builder – 3D-Planungstool für QUADRO-Klettergerüste. Reine Vanilla-JS-Web-App,
+QUADRO 3D – Planungstool für QUADRO-Klettergerüste. Reine Vanilla-JS-Web-App,
 **kein Build-Step, kein npm, keine Frameworks**, läuft offline aus dem Dateisystem eines
 statischen Servers. Nutzerdoku: `README.md`, Beitragsregeln: `CONTRIBUTING.md`,
 Historie: `CHANGELOG.md`.

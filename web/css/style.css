@@ -112,7 +112,12 @@ body {
    Beschriftung gequetscht, statt die Gruppe scrollen zu lassen. */
 #toolbar-ctx .btn { flex-shrink: 0; }
 
-.brand { font-weight: 800; letter-spacing: 0.5px; font-size: 18px; white-space: nowrap; }
+.brand {
+  font-weight: 800; letter-spacing: 0.5px; font-size: 18px; white-space: nowrap;
+  display: flex; align-items: center; gap: 8px;
+}
+/* Dasselbe Symbol wie die installierte App -- eine Quelle, kein zweites Bild. */
+.brand-icon { width: 24px; height: 24px; border-radius: 6px; display: block; flex-shrink: 0; }
 .brand span { color: var(--accent); font-weight: 700; }
 .group { display: flex; align-items: center; gap: 6px; }
 .group > label { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.4px; white-space: nowrap; }

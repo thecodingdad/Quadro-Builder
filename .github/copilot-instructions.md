@@ -1,4 +1,4 @@
-# Quadro Builder – Copilot Instructions
+# QUADRO 3D – Copilot Instructions
 
 Modern, **offline-capable web app for planning QUADRO climbing scaffolds** (modular system of
 couplings + tubes). Replaces the old Windows software "Quadro 3D". You build in 3D space,
@@ -11,7 +11,7 @@ see a live **bill of materials** with material costs, and verify feasibility aga
 
 ## Start & Setup
 ```bash
-cd Quadro-Builder
+cd quadro-3D
 python serve.py          # öffnet Browser automatisch
 ```
 Läuft komplett lokal/offline (Three.js liegt unter `web/vendor/`). **Wichtig:** über `serve.py`
