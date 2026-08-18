@@ -145,18 +145,31 @@ function loadInv() {
 function saveInv(inv) { storage.saveInventory(inv); }
 
 /** Rendert die Hilfe-Tabelle aus den Übersetzungen neu. */
+/**
+ * Tastenkuerzel-Karte: je Thema ein Block aus Kuerzel und Erklaerung. Wie viele
+ * Bloecke nebeneinander stehen, entscheidet die Breite (CSS-Spalten) -- die
+ * Liste ist zu lang fuer eine einzige Spalte geworden.
+ */
 function renderHelpTable() {
-  const table = $("help-table");
-  if (!table) return;
-  table.innerHTML = "";
+  const box = $("help-table");
+  if (!box) return;
+  box.innerHTML = "";
   // {n} = Zahl der geraden Rohre: die Zifferntasten reichen genau so weit.
   const ziffern = String(buildableTubes().length);
-  for (const [key, desc] of t("help_shortcuts")) {
-    const tr = document.createElement("tr");
-    const td1 = document.createElement("td"); td1.textContent = key.replace("{n}", ziffern);
-    const td2 = document.createElement("td"); td2.textContent = desc;
-    tr.appendChild(td1); tr.appendChild(td2);
-    table.appendChild(tr);
+  for (const [titel, eintraege] of t("help_groups")) {
+    const gruppe = document.createElement("section");
+    gruppe.className = "help-group";
+    const h = document.createElement("h4");
+    h.textContent = titel;
+    gruppe.appendChild(h);
+    const liste = document.createElement("dl");
+    for (const [key, desc] of eintraege) {
+      const dt = document.createElement("dt"); dt.textContent = key.replace("{n}", ziffern);
+      const dd = document.createElement("dd"); dd.textContent = desc;
+      liste.appendChild(dt); liste.appendChild(dd);
+    }
+    gruppe.appendChild(liste);
+    box.appendChild(gruppe);
   }
 }
 
