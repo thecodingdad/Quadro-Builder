@@ -35,10 +35,12 @@ const PANEL_RANDOM_EXTRA = ["black"];
 const MOVE_STEP = 5;
 
 export class Builder {
-  constructor(scene, model, { onChange } = {}) {
+  constructor(scene, model, { onChange, onPreview } = {}) {
     this.scene = scene;
     this.model = model;
     this.onChange = onChange || (() => {});
+    // Waehrend einer Vorschau: nur die Knoepfe nachziehen, nicht neu rechnen.
+    this.onPreview = onPreview || (() => {});
     this.onNotice = () => {};        // kurze Hinweis-Meldung an die UI
     this._tubeHandles = new Map();   // Rohr -> mitwandernder Ankerpunkt
     this.slideKind = "slide-new2";   // gewaehltes Rutschenteil
@@ -256,6 +258,36 @@ export class Builder {
     const res = this._move(dir[0] * step, dir[1] * step, dir[2] * step);
     if (!res.ok) { this.onNotice(t("notice_move_" + res.reason)); return false; }
     this._afterMove(before, res);
+    return true;
+  }
+
+  /**
+   * Auswahl um die Hochachse drehen, in 90-Grad-Schritten (+1 = im Uhrzeiger-
+   * sinn von oben). Haengt eine Kopie am Zeiger, dreht sich diese -- sie bleibt
+   * dabei stehen und wird rot, wenn sie so nicht passt. Sonst gilt dieselbe
+   * Regel wie bei den Pfeiltasten: geht es nicht, bleibt alles, wie es war.
+   */
+  rotateSelectionBy(steps = 1) {
+    if (this._drag) return false;         // laufender Zug hat seinen eigenen Stand
+    if (this._paste) return this._rotatePaste(steps);
+    if (this.mode !== "select" || !this.selection.size) return false;
+    const before = JSON.stringify(this.model.toJSON());
+    const res = this.model.rotateSelection(this.selection, steps,
+      { merge: true, validate: infeasibleConnectors, grid: MOVE_STEP });
+    if (!res.ok) { this.onNotice(t("notice_rotate_" + res.reason)); return false; }
+    this._afterMove(before, res);
+    return true;
+  }
+
+  /** Die Kopie am Zeiger dreht sich an Ort und Stelle mit. */
+  _rotatePaste(steps) {
+    const d = this._paste;
+    if (!d || !d.sel) return false;
+    // Ohne Zusammenlegen und ohne Trennen: die Kopie steht ja noch frei.
+    const res = this.model.rotateSelection(d.sel, steps, { merge: false, grid: MOVE_STEP });
+    if (!res.ok) return false;
+    d.valid = !this._troubleWith(d.sel, d.collidedBefore);
+    this.refresh();
     return true;
   }
 
@@ -974,8 +1006,10 @@ export class Builder {
     // Waehrend einer Vorschau (Ziehen, Kopie am Zeiger) bleibt die Oberflaeche
     // aussen vor: Stueckliste und Sitzung rechnen sonst bei jedem Rasterschritt
     // mit, obwohl der Stand noch gar nicht gilt. Beim Absetzen wird ohnehin neu
-    // gezeichnet -- dann laeuft es einmal.
+    // gezeichnet -- dann laeuft es einmal. Nur die Knoepfe, die vom Zustand
+    // abhaengen (Drehen), werden nachgezogen.
     if (!this._paste && !this._drag) this.onChange();
+    else this.onPreview();
   }
 
   // --- Handles ------------------------------------------------------------

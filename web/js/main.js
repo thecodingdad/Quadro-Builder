@@ -28,6 +28,10 @@ async function boot() {
     ui.update();
     ui.touchActiveTab();
   };
+  // Waehrend einer Vorschau (Ziehen, Kopie am Zeiger) rechnet die Oberflaeche
+  // nicht mit -- die Knoepfe, die an der Auswahl haengen, gehoeren aber
+  // nachgezogen: der Dreh-Knopf gilt auch fuer die schwebende Kopie.
+  builder.onPreview = () => ui.syncButtons();
 
   // Gibt es hier ein Backend? Wenn ja, wird der Speicher im Browser einmal mit
   // dem Server abgeglichen, bevor die Sitzung aufgeht -- so öffnen die Tabs

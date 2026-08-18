@@ -282,6 +282,19 @@ Koordinaten in **cm**, Three.js-Konvention **y = oben**, Boden bei y = 0.
   und bricht ihn ab, sobald ein zweiter Finger dazukommt (`_abortGesture`).
 - Undo/Redo in `builder.js` arbeiten mit vollständigen JSON-Snapshots (`recordHistory`,
   max. 60 Schritte). Modelländerungen deshalb immer durch `recordHistory(...)` kapseln.
+- **Drehen der Auswahl:** `model.rotateSelection(sel, steps, {merge, validate, grid})` dreht in
+  90°-Schritten um die **Hochachse** – derselbe Ablauf wie `moveSelection` (trennen, prüfen,
+  zusammenlegen), nur mit `_applyTurn` statt `_applyOffset`. Mitgedreht wird **alles Gerichtete**:
+  Kupplungs-Quaternionen (`spinAroundY` dreht um die WELT-Y-Achse, `turnAroundY` dagegen um die
+  lokale), `stub`, `c45axis`, `arms`, `armDirs` (samt Namen über `cardinalName`), die Datei-Lagen
+  von Rohren und Platten (`geom`, `bowCenter`) sowie Klemmen, Rutschen und Anbauteile.
+  Die Drehachse ist die **auf 5 cm gerundete Mitte** der Auswahl: bei ungerader Kantenlänge
+  (z. B. 45 cm) rückt die Auswahl dabei um 2,5 cm – gewollt, denn außerhalb des Rasters passten
+  die Teile nicht mehr zusammen. Bedient wird über **Strg/Cmd + ←/→**, **Q/E** und den Knopf
+  `#mode-rotate` (sichtbar wie „Löschen", zusätzlich solange eine Kopie am Zeiger hängt); die
+  Kopie dreht sich an Ort und Stelle mit. Während einer Vorschau ruft `builder.refresh()` statt
+  `onChange` nur `onPreview` – daran hängt `ui.syncButtons()`, sonst fehlte der Knopf beim
+  Einfügen.
 - **Vorschau vs. Vollzug (Ziehen und Einfügen):** Während des Zugs wird nur **verschoben**
   (`model.translateSelection`) – nicht getrennt, nicht zusammengelegt, keine Kupplungen geprüft.
   Der echte Zug läuft **einmal** beim Loslassen bzw. Absetzen (`moveSelection` mit `merge`/

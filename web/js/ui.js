@@ -492,6 +492,11 @@ export function initUI({ scene, model, builder }) {
     if (n) flash(t("flash_deleted_n", n));
     syncDeleteButton();
   });
+  // Drehen: 90 Grad je Druck, im Uhrzeigersinn von oben. Gilt fuer die Auswahl
+  // und fuer eine Kopie, die noch am Zeiger haengt.
+  $("mode-rotate").addEventListener("click", () => {
+    if (builder.rotateSelectionBy(1)) flash(t("flash_rotated"));
+  });
   $("mode-reinforce").addEventListener("click", () => setMode(builder.mode === "reinforce" ? "select" : "reinforce"));
   $("mode-assembly").addEventListener("click", () => { toggleHamburger(false); setMode("assembly"); });
   $("btn-hints").addEventListener("click", () => toggleHints());
@@ -533,11 +538,17 @@ export function initUI({ scene, model, builder }) {
     syncPartColors();
   }
 
-  /** Loeschen-Button: nur sichtbar, wenn im Cursor-Modus etwas ausgewaehlt ist. */
+  /**
+   * Loeschen- und Dreh-Knopf: sichtbar, wenn im Cursor-Modus etwas ausgewaehlt
+   * ist. Gedreht wird auch eine Kopie, die noch am Zeiger haengt -- geloescht
+   * nicht, die ist ja noch gar nicht gesetzt.
+   */
   function syncDeleteButton() {
     const on = builder.mode === "select" && builder.selection.size > 0;
+    const drehbar = on || builder.pasting;
     $("mode-delete").hidden = !on;
-    $("delete-divider").hidden = !on;
+    $("mode-rotate").hidden = !drehbar;
+    $("delete-divider").hidden = !drehbar;
   }
 
   /** Alle Knöpfe zum Bauen sperren oder freigeben (Aufbau-Modus). */
@@ -2329,6 +2340,14 @@ export function initUI({ scene, model, builder }) {
       flash(t("flash_paste_hint"));
       return;
     }
+    // Drehen: Strg/Cmd + Pfeil links/rechts dreht die Auswahl (oder die Kopie am
+    // Zeiger) um 90 Grad um die Hochachse. Ohne Strg schieben die Pfeiltasten.
+    if ((e.metaKey || e.ctrlKey) && !e.shiftKey
+        && (e.key === "ArrowLeft" || e.key === "ArrowRight")) {
+      e.preventDefault();
+      if (builder.rotateSelectionBy(e.key === "ArrowRight" ? 1 : -1)) flash(t("flash_rotated"));
+      return;
+    }
     // Strg+A: alles auswaehlen -- nur im Cursor-Modus, sonst gibt es keine
     // Auswahl, die es treffen koennte (und der Browser markiert die Seite).
     if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "a") {
@@ -2431,6 +2450,9 @@ export function initUI({ scene, model, builder }) {
       case "v": setMode("reinforce"); break;
       case "a": setMode("assembly"); break;
       case "k": setMode("clamp"); break;
+      // Drehen wie mit Strg+Pfeil -- Q gegen, E im Uhrzeigersinn.
+      case "q": if (builder.rotateSelectionBy(-1)) flash(t("flash_rotated")); break;
+      case "e": if (builder.rotateSelectionBy(1)) flash(t("flash_rotated")); break;
       case "d": toggleDiagonal(); break;
       case "h": toggleHints(); break;
       case "c": scene.resetCamera(model); break;
@@ -3874,6 +3896,7 @@ export function initUI({ scene, model, builder }) {
   Object.assign(ui, {
     update, start, touchActiveTab, openTab, closeTab, activateTab, captureActiveTab,
     openDocById, saveActiveTab, refreshDocList, isAutosaveOn, setAutosaveOn,
+    syncButtons: syncDeleteButton,
   });
   // Als echte Zugriffsfunktionen anlegen: Object.assign würde einen Getter
   // sofort auswerten und den damaligen Stand einfrieren.

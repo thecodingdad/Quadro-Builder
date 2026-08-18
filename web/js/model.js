@@ -113,6 +113,34 @@ function turnAroundY(q, grad) {
   ];
 }
 
+/**
+ * Quaternion um die WELT-Hochachse drehen (r  q statt q  r wie turnAroundY,
+ * das um die eigene Y-Achse dreht). Gebraucht, wenn eine ganze Auswahl im
+ * Raster gedreht wird: die Teile behalten ihre Neigung, ihre Ausrichtung
+ * wandert aber mit der Drehung der Welt mit.
+ */
+function spinAroundY(q, grad) {
+  if (!q || q.length !== 4 || !grad) return q ? q.slice() : q;
+  const h = (grad * Math.PI) / 180 / 2;
+  const [x2, y2, z2, w2] = q, [x1, y1, z1, w1] = [0, Math.sin(h), 0, Math.cos(h)];
+  // Fein runden (neun Stellen): das raeumt den Rechenrest von 1e-16 weg, ohne
+  // die teils krummen Werte aus den Dateien zu verbiegen -- vier Vierteldrehungen
+  // ergeben so wieder genau die Ausgangswerte. Die 0 ohne Vorzeichen halten,
+  // sonst steht -0 in der Datei.
+  const r9 = (v) => (Math.round(v * 1e9) / 1e9) || 0;
+  const out = [
+    r9(w1 * x2 + x1 * w2 + y1 * z2 - z1 * y2),
+    r9(w1 * y2 - x1 * z2 + y1 * w2 + z1 * x2),
+    r9(w1 * z2 + x1 * y2 - y1 * x2 + z1 * w2),
+    r9(w1 * w2 - x1 * x2 - y1 * y2 - z1 * z2),
+  ];
+  // q und -q beschreiben dieselbe Drehung; nach vier Vierteln kaeme sonst das
+  // negierte Quaternion heraus und jede Datei saehe "geaendert" aus. Der
+  // uebliche Schnitt haelt den Realteil positiv.
+  const fuehrend = out[3] !== 0 ? out[3] : out.find((v) => Math.abs(v) > 1e-9);
+  return fuehrend < 0 ? out.map((v) => (v === 0 ? 0 : -v)) : out;
+}
+
 function rotateX(q) {
   const [x, y, z, w] = q;
   return [
@@ -1985,6 +2013,157 @@ export class BuildModel {
       for (const id of validate(this)) if (!badBefore.has(id)) return fail("connector");
     }
     return { ok: true, merged, detached };
+  }
+
+  /**
+   * Verdreht die ausgewaehlten Teile um die HOCHACHSE, in 90-Grad-Schritten.
+   *
+   * Der Ablauf ist derselbe wie beim Verschieben (moveSelection): was am
+   * stehenden Rest haengt, wird getrennt; am Ziel deckungsgleiche Kupplungen
+   * verschmelzen; abgelehnt wird, was sich ueberlagern wuerde oder eine
+   * Kupplung braeuchte, die es nicht gibt.
+   *
+   * Gedreht wird um die Mitte der Auswahl, auf `grid` gerundet -- so bleiben
+   * die Teile in demselben Raster, in dem sie vorher lagen.
+   *
+   * Liefert { ok, reason, merged, detached }.
+   */
+  rotateSelection(sel, steps = 1, { merge = true, validate = null, grid = 5 } = {}) {
+    const schritte = ((steps % 4) + 4) % 4;
+    if (!schritte) return { ok: true, merged: 0, detached: 0 };
+    const tg = this.moveTargets(sel);
+    if (!tg.nodes.size && !tg.clamps.size && !tg.slides.size && !tg.fittings.size) return { ok: false, reason: "empty" };
+
+    // Drehachse: senkrecht durch die Mitte der Auswahl. Auf das Raster
+    // gerundet, sonst landen die Teile zwischen den Rasterpunkten.
+    const punkte = [];
+    for (const id of tg.nodes) punkte.push(this.nodes.get(id));
+    for (const id of tg.clamps) punkte.push(this.clamps.get(id));
+    for (const id of tg.slides) punkte.push(this.slides.get(id));
+    for (const id of tg.fittings || []) punkte.push(this.fittings.get(id));
+    const gueltig = punkte.filter(Boolean);
+    if (!gueltig.length) return { ok: false, reason: "empty" };
+    const xs = gueltig.map((o) => o.x), zs = gueltig.map((o) => o.z);
+    const raster = (v) => Math.round(v / grid) * grid;
+    const cx = raster((Math.min(...xs) + Math.max(...xs)) / 2);
+    const cz = raster((Math.min(...zs) + Math.max(...zs)) / 2);
+
+    const snapshot = this.toJSON();
+    const movedTubes = this.tubesAt(tg.nodes);
+    const collidedBefore = this.collisions({ only: movedTubes });
+    const badBefore = validate ? validate(this) : null;
+    const fail = (reason) => { this.loadJSON(snapshot); return { ok: false, reason }; };
+
+    const detached = this._detachBoundary(tg.nodes);
+    this._applyTurn(tg, schritte, cx, cz);
+    // Ueberlagerung VOR dem Zusammenlegen pruefen -- wie beim Verschieben.
+    for (const id of this.collisions({ only: movedTubes })) if (!collidedBefore.has(id)) return fail("collision");
+
+    const merged = merge ? this._mergeMovedNodes(tg.nodes) : 0;
+    if (badBefore) {
+      for (const id of validate(this)) if (!badBefore.has(id)) return fail("connector");
+    }
+    return { ok: true, merged, detached };
+  }
+
+  /**
+   * Die eigentliche Drehung: Lage UND Ausrichtung aller betroffenen Teile.
+   * Ein Viertel um die Hochachse ist reine Vertauschung -- ohne Sinus und
+   * Kosinus bleiben die Koordinaten exakt auf dem Raster.
+   */
+  _applyTurn(tg, schritte, cx, cz) {
+    // Ein Schritt: x' = cx + (z - cz), z' = cz - (x - cx)
+    const drehePunkt = (x, z) => {
+      let dx = x - cx, dz = z - cz;
+      for (let k = 0; k < schritte; k++) { const nx = dz, nz = -dx; dx = nx; dz = nz; }
+      return [round(cx + dx), round(cz + dz)];
+    };
+    // Richtungen drehen um den Ursprung, nicht um die Achse.
+    const dreheDir = (v) => {
+      if (!v || v.length !== 3) return v;
+      let x = v[0], z = v[2];
+      for (let k = 0; k < schritte; k++) { const nx = z, nz = -x; x = nx; z = nz; }
+      const r6 = (t) => Math.round(t * 1e6) / 1e6;
+      return [r6(x), v[1], r6(z)];
+    };
+    const grad = schritte * 90;
+    const dreheOrt = (o) => { if (!o) return; const [x, z] = drehePunkt(o.x, o.z); o.x = x; o.z = z; };
+
+    for (const id of tg.nodes) {
+      const n = this.nodes.get(id);
+      if (!n) continue;
+      dreheOrt(n);
+      if (n.quat) n.quat = spinAroundY(n.quat, grad);
+      if (n.partQuat) n.partQuat = spinAroundY(n.partQuat, grad);
+      if (n.stub) n.stub = dreheDir(n.stub);
+      if (n.c45axis) n.c45axis = dreheDir(n.c45axis);
+      if (n.arms) n.arms = n.arms.map(dreheDir);
+      // Die Arm-Richtungen tragen ihren Namen mit -- der muss mitwandern.
+      if (n.armDirs) n.armDirs = n.armDirs.map((a) => {
+        const vec = dreheDir(a.vec || a);
+        return a.vec ? { name: cardinalName(vec), vec } : vec;
+      });
+    }
+    for (const id of tg.clamps) {
+      const c = this.clamps.get(id);
+      if (!c) continue;
+      dreheOrt(c);
+      if (c.dir) c.dir = dreheDir(c.dir);
+      if (c.off) c.off = dreheDir(c.off).map(round);
+    }
+    for (const id of tg.slides) {
+      const sl = this.slides.get(id);
+      if (!sl) continue;
+      dreheOrt(sl);
+      if (sl.quat) sl.quat = spinAroundY(sl.quat, grad);
+      if (sl.hook && sl.hook.length === 3) {
+        const [hx, hz] = drehePunkt(sl.hook[0], sl.hook[2]);
+        sl.hook = [hx, sl.hook[1], hz];
+      }
+      if (sl.foot && sl.foot.p0) {
+        const [fx, fz] = drehePunkt(sl.foot.p0[0], sl.foot.p0[2]);
+        sl.foot = { ...sl.foot, p0: [fx, sl.foot.p0[1], fz], dir: dreheDir(sl.foot.dir) };
+      }
+    }
+    for (const id of tg.fittings || []) {
+      const f = this.fittings.get(id);
+      if (!f) continue;
+      dreheOrt(f);
+      if (f.quat) f.quat = spinAroundY(f.quat, grad);
+    }
+    // Rohre und Platten aus der Datei bringen ihre eigene Lage mit -- die dreht
+    // mit, solange BEIDE Enden bzw. beide Traeger in der Auswahl sind. Sonst
+    // faellt sie weg und das Teil rechnet sich wieder aus seinen Kupplungen.
+    for (const t of this.tubes.values()) {
+      const ba = tg.nodes.has(t.a), bb = tg.nodes.has(t.b);
+      if (!ba && !bb) continue;
+      if (t.bow && t.bowCenter && ba && bb) {
+        const [bx, bz] = drehePunkt(t.bowCenter[0], t.bowCenter[2]);
+        t.bowCenter = [bx, t.bowCenter[1], bz];
+      }
+      if (!t.geom) continue;
+      if (ba && bb) {
+        const [px, pz] = drehePunkt(t.geom.p0[0], t.geom.p0[2]);
+        t.geom = { ...t.geom, p0: [px, t.geom.p0[1], pz], dir: dreheDir(t.geom.dir) };
+        if (t.geom.up) t.geom.up = dreheDir(t.geom.up);
+      } else {
+        delete t.geom;
+      }
+    }
+    for (const p of this.panels.values()) {
+      if (!p.geom) continue;
+      const traeger = [this.tubes.get(p.a), this.tubes.get(p.b)].filter(Boolean);
+      const ids = traeger.flatMap((t) => [t.a, t.b]);
+      const bewegt = ids.filter((id) => tg.nodes.has(id)).length;
+      if (!bewegt) continue;
+      if (bewegt === ids.length && p.geom.p) {
+        const [px, pz] = drehePunkt(p.geom.p[0], p.geom.p[2]);
+        p.geom = { ...p.geom, p: [px, p.geom.p[1], pz],
+          quat: p.geom.quat ? spinAroundY(p.geom.quat, grad) : p.geom.quat };
+      } else {
+        delete p.geom;
+      }
+    }
   }
 
   /**
