@@ -72,6 +72,8 @@ export class Builder {
 
     this._down = null;
     this._boxing = false;
+    this._paste = null;              // Kopie, die gerade am Zeiger haengt
+    this._lastPointer = null;        // letzte Zeigerstelle (fuer Strg+V)
     this._attach();
     // Wird der Renderer ersetzt (Kantenglaettung), haengt das alte Canvas nicht
     // mehr im DOM -- die Zeiger-Listener muessen ans neue.
@@ -154,6 +156,9 @@ export class Builder {
 
   // --- oeffentliche Steuerung --------------------------------------------
   setMode(mode) {
+    // Ein Moduswechsel beendet ein laufendes Einfuegen (startPaste schaltet
+    // selbst auf "select" und setzt seinen Zustand danach).
+    if (this._paste && mode !== "select") this.cancelPaste();
     this.mode = mode;
     if (this.panelRail) { this.panelRail = null; this.highlight = null; }
     // Im Cursor-Modus gibt es keine Bau-Kupplung: sonst blieben Ankerpunkte
@@ -251,6 +256,130 @@ export class Builder {
     const res = this._move(dir[0] * step, dir[1] * step, dir[2] * step);
     if (!res.ok) { this.onNotice(t("notice_move_" + res.reason)); return false; }
     this._afterMove(before, res);
+    return true;
+  }
+
+  // --- Kopieren und Einfuegen ---------------------------------------------
+  // Das Einfuegen laeuft wie das Ziehen einer Auswahl: Schnappschuss, bei jeder
+  // Zeigerbewegung neu einsetzen, am Ende EIN Undo-Schritt. Der Unterschied --
+  // die Kopie klebt am Zeiger, bis ein echter Klick sie absetzt, und wo sie
+  // nicht hinpasst, wird sie rot gezeichnet statt stehen zu bleiben.
+
+  /** Ausschnitt der Auswahl fuer die Zwischenablage. Null, wenn nichts gewaehlt. */
+  copySelection() {
+    if (!this.selection.size) return null;
+    return this.model.extractSelection(this.selection);
+  }
+
+  /** Haengt gerade eine Kopie am Zeiger? */
+  get pasting() { return !!this._paste; }
+
+  /**
+   * Kopie an den Zeiger haengen. Sie steckt ab sofort IM Modell (nur so
+   * zeichnet die Szene sie und nur so laesst sich auf Kollisionen pruefen);
+   * abgebrochen wird ueber den Schnappschuss.
+   */
+  startPaste(frag) {
+    if (!frag) return false;
+    this.cancelPaste();
+    this.setMode("select");
+    this._paste = {
+      frag,
+      before: JSON.stringify(this.model.toJSON()),
+      collidedBefore: this.model.collisions(),
+      offset: null,
+      ids: null,
+      valid: true,
+    };
+    this.selection.clear();
+    // Erste Lage: dort, wo der Zeiger zuletzt stand.
+    const zeiger = this._lastPointer;
+    const p = zeiger ? this.scene.dragPlanePoint(zeiger.x, zeiger.y, this._pasteOrigin()) : null;
+    this._placePaste(p);
+    this.scene.setCursor("copy");
+    return true;
+  }
+
+  /** Bezugspunkt der Schiebe-Ebene: die Ecke des Ausschnitts (Weltpunkt). */
+  _pasteOrigin() {
+    return this._paste.frag.anchor;
+  }
+
+  /** Kopie an einen Weltpunkt setzen (auf das Raster gerundet). */
+  _placePaste(point) {
+    const d = this._paste;
+    const a = d.frag.anchor;
+    const raster = (v) => Math.round(v / MOVE_STEP) * MOVE_STEP;
+    const offset = point
+      ? [raster(point.x - a[0]), raster(point.y - a[1]), raster(point.z - a[2])]
+      : [0, 0, 0];
+    if (d.offset && offset[0] === d.offset[0] && offset[1] === d.offset[1] && offset[2] === d.offset[2]) return;
+    this.model.loadJSON(JSON.parse(d.before));
+    d.offset = offset;
+    d.ids = this.model.insertFragment(d.frag, offset);
+    // Ungueltig ist die Lage, wenn sie neue Kollisionen bringt oder unter den
+    // Boden reicht -- gezeichnet wird sie trotzdem, nur eben rot.
+    let schlecht = false;
+    for (const id of this.model.collisions()) if (!d.collidedBefore.has(id)) { schlecht = true; break; }
+    if (!schlecht) {
+      for (const id of d.ids.nodes) {
+        const n = this.model.nodes.get(id);
+        if (n && this.model.isBelowGround(n.y)) { schlecht = true; break; }
+      }
+    }
+    d.valid = !schlecht;
+    this.refresh();
+  }
+
+  _updatePaste(e) {
+    const d = this._paste;
+    if (!d) return;
+    // Mit gedrueckter Taste wird gedreht -- die Kopie bleibt so lange stehen.
+    if (e.buttons & 1) return;
+    const p = this.scene.dragPlanePoint(e.clientX, e.clientY, this._pasteOrigin());
+    if (p) this._placePaste(p);
+  }
+
+  /** Kopie absetzen. Nur an einer gueltigen Stelle; sonst bleibt sie haengen. */
+  commitPaste() {
+    const d = this._paste;
+    if (!d) return false;
+    if (!d.valid) { this.onNotice(t("notice_collision")); return false; }
+    this._paste = null;
+    this.scene.setCursor("default");
+    const merged = this.model._mergeMovedNodes(new Set(d.ids.nodes));
+    // Die Kopie ist die neue Auswahl -- so laesst sie sich gleich weiterschieben.
+    this.selection.clear();
+    for (const id of d.ids.tubes) this.selection.set(id, "tube");
+    for (const id of d.ids.panels) this.selection.set(id, "panel");
+    for (const id of d.ids.textiles) this.selection.set(id, "textile");
+    for (const id of d.ids.slides) this.selection.set(id, "slide");
+    for (const id of d.ids.fittings) this.selection.set(id, "fitting");
+    if (!this.selection.size) for (const id of d.ids.nodes) this.selection.set(id, "node");
+    this._pruneSelection();
+    this._pushHistory(d.before);
+    this.onNotice(merged ? t("notice_paste_merged", merged) : t("notice_pasted"));
+    this.refresh();
+    return true;
+  }
+
+  /**
+   * Stand VOR dem Einfuegen. Die Oberflaeche sichert ihn statt des laufenden
+   * Modells: die Kopie am Zeiger ist noch nicht abgesetzt und gehoert weder in
+   * die Sitzung noch in die Datei.
+   */
+  pasteSnapshot() {
+    return this._paste ? JSON.parse(this._paste.before) : null;
+  }
+
+  /** Einfuegen abbrechen -- das Modell steht wieder wie vorher. */
+  cancelPaste() {
+    const d = this._paste;
+    if (!d) return false;
+    this._paste = null;
+    this.model.loadJSON(JSON.parse(d.before));
+    this.scene.setCursor("default");
+    this.refresh();
     return true;
   }
 
@@ -753,10 +882,16 @@ export class Builder {
     // erkennt und die uebrigen Rohre grau zeichnet.
     const selected = (this.mode === "select" || this.mode === "assembly") && this.selection.size
       ? this.selection : null;
+    // Kopie an einer belegten Stelle: ihre Teile gehen als "geht nicht" mit.
+    const invalid = this._paste && !this._paste.valid && this._paste.ids
+      ? new Set([...this._paste.ids.nodes, ...this._paste.ids.tubes, ...this._paste.ids.panels,
+        ...this._paste.ids.textiles, ...this._paste.ids.clamps, ...this._paste.ids.slides,
+        ...this._paste.ids.fittings])
+      : null;
     this.scene.renderModel(this.model, this.selectedNodeId,
       { labelFor, slideNameFor, labelIds, soloId, soloLabel, assembly, suggest, reinforce,
         hintDim: this.showHints,
-        selected, highlight: this.highlight });
+        selected, highlight: this.highlight, invalid });
     this._buildHandles();
     this.scene.requestRender();
     this.onChange();
@@ -1215,6 +1350,12 @@ export class Builder {
       // anderen bleibt es beim Drehen -- so verliert man die Kamerasteuerung
       // nicht, nur weil etwas markiert ist.
       this._drag = null;
+      // Haengt eine Kopie am Zeiger, gehoert die linke Taste ihr: gezogen wird
+      // gedreht, ein echter Klick setzt ab (siehe _onUp).
+      if (this._paste) {
+        if (e.button === 0) this.scene.beginOrbit(e.clientX, e.clientY);
+        return;
+      }
       if (e.button === 0 && !this._down.box && this.mode === "select" && this.selection.size) {
         const pick = this.scene.pickForDelete(e.clientX, e.clientY);
         if (pick && this._isMoveHandle(pick.data.id)) {
@@ -1244,6 +1385,7 @@ export class Builder {
    */
   _abortGesture() {
     this._pointerId = null;
+    this.cancelPaste();
     this._down = null;
     this._cubeDown = null;
     this._cubeDrag = null;
@@ -1266,6 +1408,8 @@ export class Builder {
   // auch wirklich anklickbar ist -- sonst verspricht er Interaktionen, die es
   // nicht gibt.
   _onMove(e) {
+    // Zeigerstelle merken -- Strg+V setzt die Kopie dorthin.
+    this._lastPointer = { x: e.clientX, y: e.clientY };
     // Am Wuerfel ziehen dreht die Ansicht frei -- um den Bezugspunkt, denn der
     // Zeiger steht ja neben der Szene.
     if (this._cubeDown && (e.buttons & 1)) {
@@ -1289,6 +1433,8 @@ export class Builder {
       this.scene.setViewCubeHover(cell);
       if (cell) { this.scene.setHover(null); this.scene.setCursor("pointer"); return; }
     }
+    // Kopie am Zeiger: sie folgt ihm, solange keine Taste gedrueckt ist.
+    if (this._paste) { this._updatePaste(e); return; }
     // Cursor-Modus: mit gedrueckter linker Taste ziehen zieht ein Auswahl-
     // Rechteck auf, statt zu drehen (das liegt dort auf der rechten Taste).
     // Auswahl wird gerade geschoben.
@@ -1426,6 +1572,15 @@ export class Builder {
     }
     const d = this._down;
     this._down = null;
+    // Kopie absetzen -- aber nur bei einem ECHTEN Klick. Wer mit gedrueckter
+    // Taste gezogen hat, wollte die Ansicht drehen.
+    if (this._paste) {
+      this.scene.endOrbit();
+      if (d && Math.hypot(e.clientX - d.x, e.clientY - d.y) <= CLICK_TOLERANCE && e.button === 0) {
+        this.commitPaste();
+      }
+      return;
+    }
     // Verschieben abschliessen: hier faellt der eine Undo-Schritt an und hier
     // werden deckungsgleiche Kupplungen zusammengelegt.
     if (this._drag) { this._endMoveDrag(); return; }

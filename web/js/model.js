@@ -1664,6 +1664,139 @@ export class BuildModel {
     return { nodes, clamps, slides, fittings };
   }
 
+  // --- Kopieren und Einfuegen ---------------------------------------------
+
+  /**
+   * Ausschnitt aus dem Modell: alles, was zur Auswahl gehoert, als reines JSON.
+   * Koordinaten liegen relativ zum `anchor` (kleinste Ecke), damit sich das
+   * Fragment ueberall wieder einsetzen laesst -- auch in einem anderen Entwurf.
+   *
+   * Mitgenommen wird ein Rohr nur, wenn BEIDE Enden dabei sind (ein halbes Rohr
+   * gibt es nicht), eine Platte nur mit beiden Tragrohren. Die aus Dateien
+   * stammenden Lagen (`geom`, `pool`) fallen weg: sie beschreiben die
+   * URSPRUENGLICHE Stelle und wuerden die Kopie dorthin zurueckziehen.
+   */
+  extractSelection(sel) {
+    const tg = this.moveTargets(sel);
+    if (!tg.nodes.size && !tg.clamps.size && !tg.slides.size && !tg.fittings.size) return null;
+    const json = this.toJSON();
+    const ohneGeom = (o) => { const c = { ...o }; delete c.geom; delete c.pool; delete c.poolPart; return c; };
+
+    const nodes = (json.nodes || []).filter((n) => tg.nodes.has(n.id));
+    const tubeIds = new Set();
+    const tubes = (json.tubes || []).filter((t) => {
+      const drin = tg.nodes.has(t.a) && tg.nodes.has(t.b);
+      if (drin) tubeIds.add(t.id);
+      return drin;
+    }).map(ohneGeom);
+    const aufRohren = (list) => (list || [])
+      .filter((p) => tubeIds.has(p.a) && tubeIds.has(p.b)).map(ohneGeom);
+
+    const clamps = (json.clamps || []).filter((c) => tg.clamps.has(c.id));
+    const slides = (json.slides || []).filter((s) => tg.slides.has(s.id));
+    const fittings = (json.fittings || []).filter((f) => tg.fittings.has(f.id));
+
+    // Anker: kleinste Ecke ueber alles, was eine eigene Lage hat.
+    const punkte = [...nodes, ...clamps, ...slides, ...fittings];
+    if (!punkte.length) return null;
+    const anchor = [
+      Math.min(...punkte.map((o) => o.x)),
+      Math.min(...punkte.map((o) => o.y)),
+      Math.min(...punkte.map((o) => o.z)),
+    ];
+    const rel = (o) => ({ ...o, x: o.x - anchor[0], y: o.y - anchor[1], z: o.z - anchor[2] });
+    const relPunkt = (p) => (Array.isArray(p) && p.length === 3
+      ? [p[0] - anchor[0], p[1] - anchor[1], p[2] - anchor[2]] : p);
+
+    return {
+      anchor,
+      nodes: nodes.map(rel),
+      tubes,
+      panels: aufRohren(json.panels),
+      textiles: aufRohren(json.textiles),
+      clamps: clamps.map(rel),
+      slides: slides.map((s) => {
+        const o = rel(s);
+        if (s.hook) o.hook = relPunkt(s.hook);
+        if (s.foot) o.foot = relPunkt(s.foot);
+        return o;
+      }),
+      fittings: fittings.map(rel),
+    };
+  }
+
+  /**
+   * Fragment an einer Stelle einsetzen. Jedes Teil bekommt eine neue Kennung,
+   * die Verweise (Rohre auf Knoten, Platten auf Rohre) werden mit umgeschrieben.
+   * Es wird NICHT geprueft und NICHT zusammengelegt -- das entscheidet der
+   * Aufrufer, wenn die Lage feststeht. Liefert die neuen Kennungen je Art.
+   */
+  insertFragment(frag, offset = [0, 0, 0]) {
+    const out = { nodes: [], tubes: [], panels: [], textiles: [], clamps: [], slides: [], fittings: [] };
+    if (!frag) return out;
+    const [dx, dy, dz] = offset;
+    const neu = new Map();                       // alte Kennung -> neue
+    const versetzt = (o, prefix, art) => {
+      const id = this._id(prefix);
+      neu.set(o.id, id);
+      out[art].push(id);
+      return { ...o, id, x: round(o.x + dx), y: round(o.y + dy), z: round(o.z + dz) };
+    };
+    const punktVersetzt = (p) => (Array.isArray(p) && p.length === 3
+      ? [round(p[0] + dx), round(p[1] + dy), round(p[2] + dz)] : p);
+
+    for (const n of frag.nodes || []) {
+      const rec = versetzt(n, "n", "nodes");
+      this.nodes.set(rec.id, {
+        id: rec.id, x: rec.x, y: rec.y, z: rec.z,
+        c45: !!n.c45, c45body: !!n.c45body, c45axis: n.c45axis || null,
+        armDirs: n.armDirs || null, arms: n.arms || null, quat: n.quat || null,
+        part: n.part || null, clampOn: n.clampOn ? { ...n.clampOn } : null,
+        stub: n.stub || null, ownConnector: !!n.ownConnector, c45file: !!n.c45file,
+        unused: !!n.unused, partQuat: n.partQuat || null,
+      });
+    }
+    for (const t of frag.tubes || []) {
+      const a = neu.get(t.a), b = neu.get(t.b);
+      if (!a || !b) continue;
+      const id = this._id("t");
+      neu.set(t.id, id);
+      out.tubes.push(id);
+      this.tubes.set(id, { ...t, id, a, b });
+    }
+    // Klemm-Kupplungen zeigen auf ihr Rohr -- der Verweis muss mitwandern.
+    for (const id of out.nodes) {
+      const n = this.nodes.get(id);
+      if (n && n.clampOn && neu.has(n.clampOn.tubeId)) n.clampOn.tubeId = neu.get(n.clampOn.tubeId);
+    }
+    const aufRohre = (list, map, prefix, art) => {
+      for (const p of list || []) {
+        const a = neu.get(p.a), b = neu.get(p.b);
+        if (!a || !b) continue;
+        const id = this._id(prefix);
+        out[art].push(id);
+        map.set(id, { ...p, id, a, b });
+      }
+    };
+    aufRohre(frag.panels, this.panels, "p", "panels");
+    aufRohre(frag.textiles, this.textiles, "x", "textiles");
+    for (const c of frag.clamps || []) {
+      const rec = versetzt(c, "k", "clamps");
+      this.clamps.set(rec.id, rec);
+    }
+    for (const s of frag.slides || []) {
+      const rec = versetzt(s, "s", "slides");
+      if (s.hook) rec.hook = punktVersetzt(s.hook);
+      if (s.foot) rec.foot = punktVersetzt(s.foot);
+      this.slides.set(rec.id, rec);
+    }
+    for (const f of frag.fittings || []) {
+      const rec = versetzt(f, "f", "fittings");
+      this.fittings.set(rec.id, rec);
+    }
+    return out;
+  }
+
   /**
    * Verbindungen zum stehen bleibenden Teil trennen.
    *

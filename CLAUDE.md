@@ -242,6 +242,16 @@ Koordinaten in **cm**, Three.js-Konvention **y = oben**, Boden bei y = 0.
   und bricht ihn ab, sobald ein zweiter Finger dazukommt (`_abortGesture`).
 - Undo/Redo in `builder.js` arbeiten mit vollständigen JSON-Snapshots (`recordHistory`,
   max. 60 Schritte). Modelländerungen deshalb immer durch `recordHistory(...)` kapseln.
+- **Kopieren/Einfügen** läuft wie das Ziehen einer Auswahl: `model.extractSelection(sel)` schneidet
+  ein Fragment heraus (Koordinaten relativ zum `anchor`, `geom`/`pool` fallen weg – sie zeigten
+  sonst auf die alte Stelle), `startPaste` setzt es über `model.insertFragment` ins Modell und
+  hängt es an den Zeiger. Die Kopie steckt also **wirklich im Modell** – nur so zeichnet die Szene
+  sie und nur so lässt sich auf Kollisionen prüfen. Abgesichert ist das an zwei Stellen:
+  `ui.captureActiveTab()` sichert `builder.pasteSnapshot()` statt des laufenden Modells (sonst
+  landete die Vorschau in Sitzung und Datei), und Tab-Wechsel, Moduswechsel, Escape sowie
+  abgebrochene Zeigergesten rufen `cancelPaste()`. Abgesetzt wird nur bei einem **echten Klick**
+  (Bewegung unter `CLICK_TOLERANCE`) und nur an gültiger Stelle; sonst zeichnet `scene.js` die
+  Kopie über `opts.invalid` rot.
 - **Vorschau-Tabs:** ein Klick in „Meine Modelle"/Bibliothek öffnet mit `preview: true`; ein
   zweiter Vorschau-Klick wirft den alten Tab weg (`discardPreview`). Angeheftet wird er beim
   Doppelklick, beim Speichern und sobald sich das Modell gegenüber `tab.baseJson` unterscheidet.

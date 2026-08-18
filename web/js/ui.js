@@ -160,6 +160,9 @@ function renderHelpTable() {
 }
 
 export function initUI({ scene, model, builder }) {
+  // Kopierter Ausschnitt (Strg+C). Er lebt im Speicher der Seite: zwischen
+  // Entwurf-Tabs einfügbar, nach einem Reload weg.
+  let clipboard = null;
   let slideGroupBtn = null;
   let renderFittingButton = () => {};
   const inventory = loadInv();
@@ -2245,6 +2248,26 @@ export function initUI({ scene, model, builder }) {
       builder.redo();
       return;
     }
+    // Strg+C / Strg+V: Auswahl kopieren und am Zeiger wieder einsetzen. Die
+    // Zwischenablage lebt im Speicher der Seite -- damit auch in einem anderen
+    // Entwurf-Tab, aber nicht ueber einen Reload hinaus.
+    if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "c" && !e.shiftKey) {
+      if (builder.mode !== "select") return;
+      e.preventDefault();
+      const frag = builder.copySelection();
+      if (!frag) { flash(t("flash_copy_empty")); return; }
+      clipboard = frag;
+      flash(t("flash_copied", frag.tubes.length + frag.panels.length
+        + frag.textiles.length + frag.slides.length + frag.fittings.length + frag.clamps.length));
+      return;
+    }
+    if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "v" && !e.shiftKey) {
+      e.preventDefault();
+      if (!clipboard) { flash(t("flash_paste_empty")); return; }
+      builder.startPaste(clipboard);
+      flash(t("flash_paste_hint"));
+      return;
+    }
     // Strg+A: alles auswaehlen -- nur im Cursor-Modus, sonst gibt es keine
     // Auswahl, die es treffen koennte (und der Browser markiert die Seite).
     if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "a") {
@@ -2356,6 +2379,8 @@ export function initUI({ scene, model, builder }) {
       // Fortschritt fuer eine Taste, die man beilaeufig drueckt).
       case "escape":
         closePopup();
+        // Haengt eine Kopie am Zeiger, nimmt Escape zuerst sie weg.
+        if (builder.cancelPaste()) { flash(t("flash_paste_cancelled")); update(); break; }
         // Offene Overlays zuerst: Escape schliesst sie, statt den Modus zu wechseln.
         if (!$("help-overlay").hidden) { $("help-overlay").hidden = true; break; }
         // Ueberlagernde Seitenleiste verhaelt sich wie ein Menue: Escape zu.
@@ -2953,7 +2978,10 @@ export function initUI({ scene, model, builder }) {
   function captureActiveTab() {
     const tab = activeTab();
     if (!tab) return null;
-    tab.model = model.toJSON();
+    // Eine Kopie am Zeiger steckt zwar im Modell, ist aber noch nicht
+    // abgesetzt: gesichert wird der Stand davor, sonst landete die Vorschau in
+    // der Sitzung oder in der Datei.
+    tab.model = builder.pasteSnapshot() || model.toJSON();
     tab.view = viewState();
     return tab;
   }
@@ -3051,6 +3079,9 @@ export function initUI({ scene, model, builder }) {
 
   function activateTab(tabId) {
     if (tabId === activeTabId) return;
+    // Ein Tab-Wechsel beendet ein laufendes Einfuegen -- die Kopie gehoert zu
+    // diesem Modell, nicht zum naechsten. Die Zwischenablage bleibt.
+    builder.cancelPaste();
     captureActiveTab();
     const tab = tabs.find((x) => x.tabId === tabId);
     if (!tab) return;
@@ -3072,6 +3103,7 @@ export function initUI({ scene, model, builder }) {
    * importiertes im Auswahl-Modus.
    */
   function openTab({ name, data, docId = null, view = null, dirty = false, preview = false }) {
+    builder.cancelPaste();
     captureActiveTab();
     // Nur EIN Vorschau-Tab: der vorige war unberührt und macht Platz.
     if (preview) discardPreview();

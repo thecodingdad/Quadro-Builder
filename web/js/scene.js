@@ -96,6 +96,9 @@ const ARM_FITTINGS = new Set(["adapter2", "bearing2", "steering-lock2"]);
 
 const HIGHLIGHT_COLOR = 0x9b30ff;
 const HIGHLIGHT_EMISSIVE = 0x3a0066;
+// Einfuegen an einer belegten Stelle: die Kopie wird rot gezeichnet.
+const INVALID_COLOR = 0xe03131;
+const INVALID_EMISSIVE = 0x5a0000;
 
 // Rundung des Kupplungs-Wuerfels (p-Norm des Superellipsoids). 2 waere die
 // Kugel, grosse Werte ein scharfer Wuerfel. Bei 3 liegen die Flanken buendig
@@ -448,7 +451,11 @@ export class SceneManager {
     const n = this.isFrontalView()
       ? new THREE.Vector3(ax.forward[0], ax.forward[1], ax.forward[2])
       : new THREE.Vector3(0, 1, 0);
-    const plane = new THREE.Plane().setFromNormalAndCoplanarPoint(n, origin);
+    // Der Aufrufer darf auch ein einfaches [x,y,z] schicken -- builder.js
+    // kennt Three.js nicht.
+    const o = origin && origin.isVector3
+      ? origin : new THREE.Vector3(origin[0], origin[1], origin[2]);
+    const plane = new THREE.Plane().setFromNormalAndCoplanarPoint(n, o);
     const p = new THREE.Vector3();
     return this._raycaster.ray.intersectPlane(plane, p) ? p : null;
   }
@@ -1097,6 +1104,19 @@ export class SceneManager {
       const m = base.clone();
       m.color = new THREE.Color(HIGHLIGHT_COLOR);
       if (m.emissive) m.emissive = new THREE.Color(HIGHLIGHT_EMISSIVE);
+      this._materials[key] = m;
+    }
+    return this._materials[key];
+  }
+
+  // Rot: die Lage geht nicht (Kollision beim Einfuegen). Gleiche Machart wie
+  // die Auswahl-Farbe, nur eben als Absage.
+  _invalidMaterial(base) {
+    const key = "bad:" + base.uuid;
+    if (!this._materials[key]) {
+      const m = base.clone();
+      m.color = new THREE.Color(INVALID_COLOR);
+      if (m.emissive) m.emissive = new THREE.Color(INVALID_EMISSIVE);
       this._materials[key] = m;
     }
     return this._materials[key];
@@ -1874,7 +1894,11 @@ export class SceneManager {
     // Im Vorschlags-Modus treten alle Teile zurueck, die keine Verstaerkung
     // brauchen -- sonst sucht man die orangen Rohre im Gewirr.
     const hintDim = !!opts.hintDim && !!opts.suggest;
+    // Eingefuegte Teile an einer belegten Stelle: Rot geht allem vor -- es sagt,
+    // dass der Klick hier nichts absetzt.
+    const invalid = opts.invalid && opts.invalid.size ? opts.invalid : null;
     const matFor = (id, base) => {
+      if (invalid && id != null && invalid.has(id)) return this._invalidMaterial(base);
       if (marked) {
         if (id != null && marked.has(id)) return this._selectedMaterial(base);
         return dimOthers ? this._dimmedMaterial(base) : base;
