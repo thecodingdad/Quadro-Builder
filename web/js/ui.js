@@ -1930,6 +1930,9 @@ export function initUI({ scene, model, builder }) {
 
   let currentPanel = null;      // 'bom' | 'library' | 'assembly' | null
   let vorAufbauPanel = "bom";   // wohin die Leiste nach dem Aufbau zurückkehrt
+  // Womit die Leiste wieder aufgeht. Der Aufbau zählt nicht: seinen Tab gibt es
+  // außerhalb des Aufbau-Modus nicht.
+  let letzterPanel = localStorage.getItem(SIDEBAR_PANEL_KEY) || "bom";
 
   function applyPanelVisibility() {
     $("panel-bom").hidden = currentPanel !== "bom";
@@ -1951,6 +1954,10 @@ export function initUI({ scene, model, builder }) {
   // name: 'bom' | 'inventory' | 'library' | 'assembly' | null.
   // Nur bom/inventory/library/zu wird gemerkt.
   function showSidebarPanel(name) {
+    // Beim Zumachen merken, was zu sehen war -- egal auf welchem Weg zugemacht
+    // wurde (Knopf, Hintergrund, Escape). Beim nächsten Öffnen kommt genau das
+    // wieder, statt immer der Stückliste.
+    if (name === null && currentPanel && currentPanel !== "assembly") letzterPanel = currentPanel;
     currentPanel = name;
     if (name === "own") renderOwnModels();
     if (name === "library" && !libLoaded) loadLibrary();
@@ -1980,10 +1987,8 @@ export function initUI({ scene, model, builder }) {
 
   // EIN Knopf oben rechts: Leiste auf oder zu. Welcher Inhalt zu sehen ist,
   // wählt die Tab-Leiste in der Seitenleiste selbst.
-  let letzterPanel = localStorage.getItem(SIDEBAR_PANEL_KEY) || "bom";
   $("toggle-sidebar").addEventListener("click", () => {
-    if (currentPanel) { letzterPanel = currentPanel; showSidebarPanel(null); }
-    else showSidebarPanel(letzterPanel || "bom");
+    showSidebarPanel(currentPanel ? null : (letzterPanel || "bom"));
   });
 
   // Szene (Gras, Baeume, Himmel) ein-/ausblenden via Canvas-Icon. Der Zustand
