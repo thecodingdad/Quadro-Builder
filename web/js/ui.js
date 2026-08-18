@@ -519,9 +519,7 @@ export function initUI({ scene, model, builder }) {
     // Die Buttons zeigen die Auswahl (auch wenn sie per Tastatur kam) und
     // markieren per .active, welcher der beiden Bau-Modi gerade laeuft.
     renderPartButtons();
-    const curved = isCurved(builder.tubeId);
-    tubeBtn.classList.toggle("active", inAdd && !curved);
-    if (bowBtn) bowBtn.classList.toggle("active", inAdd && curved);
+    tubeBtn.classList.toggle("active", inAdd);
     panelBtn.classList.toggle("active", inPanel);
     if (slideGroupBtn) {
       slideGroupBtn.classList.toggle("active", builder.mode === "slide");
@@ -831,15 +829,13 @@ export function initUI({ scene, model, builder }) {
   // Screens musste die Haelfte davon per hide-narrow verschwinden. Jetzt zeigt
   // EIN Button die aktuelle Wahl, der Klick klappt die Varianten darunter auf.
   // Bogenrohre haben keine gerade Laenge und stehen deshalb nicht in
-  // buildableTubes(); sie bauen ueber dieselben Richtungs-Handles, setzen dort
-  // aber einen Viertelkreis -> eigener Button daneben.
+  // buildableTubes(); gebaut werden sie ueber dieselben Richtungs-Handles und
+  // stehen daher mit in der Liste des Rohr-Knopfes.
   const tubeWrap = $("tube-buttons");
   const tubes = buildableTubes();
   const curvedTubes = buildableCurvedTubes();
-  const isCurved = (id) => curvedTubes.some((x) => x.id === id);
-  // Der Rohr-Button zeigt weiter die zuletzt gewaehlte GERADE Laenge, auch
-  // waehrend ein Bogenrohr aktiv ist.
-  let lastStraightTubeId = tubes.some((x) => x.id === builder.tubeId) ? builder.tubeId : tubes[0].id;
+  // Gerade Laengen und Boegen in EINER Liste -- die Boegen stehen hinten.
+  const tubeList = [...tubes, ...curvedTubes];
 
   function tubeIcon(tube) {
     if (tube.shape === "curved")
@@ -860,35 +856,13 @@ export function initUI({ scene, model, builder }) {
     // Der Gruppen-Knopf klappt nur die Liste auf -- in der Hand liegt erst,
     // was man darin anklickt. Sonst schnappte schon das Nachsehen das zuletzt
     // benutzte Rohr, wie es die uebrigen Gruppen auch nicht tun.
-    showPartPopup(tubeBtn, tubes, builder.tubeId, tubeIcon, (tube) => {
+    showPartPopup(tubeBtn, tubeList, builder.tubeId, tubeIcon, (tube) => {
       builder.setTube(tube.id);
       if (builder.mode !== "add") setMode("add");
       else syncPartHighlights();
     });
   });
   tubeWrap.appendChild(tubeBtn);
-
-  // Bogenrohr: eigener Button direkt neben den geraden Rohren. Bei mehreren
-  // Bogen-Varianten klappt dieselbe Varianten-Liste auf.
-  const bowBtn = curvedTubes.length ? el("button", "btn part") : null;
-  if (bowBtn) {
-    bowBtn.dataset.tube = "";
-    bowBtn.addEventListener("click", (e) => {
-      e.stopPropagation();
-      // Gibt es nur eine Bogen-Variante, ist der Klick auf den Knopf die Wahl
-      // -- eine Liste mit einer Zeile waere nur ein Klick mehr.
-      if (curvedTubes.length < 2) {
-        builder.setTube(curvedTubes[0].id);
-        if (builder.mode !== "add") setMode("add"); else syncPartHighlights();
-        return;
-      }
-      showPartPopup(bowBtn, curvedTubes, builder.tubeId, tubeIcon, (tube) => {
-        builder.setTube(tube.id);
-        if (builder.mode !== "add") setMode("add"); else syncPartHighlights();
-      });
-    });
-    tubeWrap.appendChild(bowBtn);
-  }
 
   // --- Farb-Buttons ------------------------------------------------------
   // Die Farben stehen direkt in der Toolbar. Frueher oeffnete ein zweiter Klick
@@ -977,20 +951,12 @@ export function initUI({ scene, model, builder }) {
 
   /** Beschriftet die Bauteil-Buttons mit der jeweils aktuellen Variante. */
   function renderPartButtons() {
-    if (tubes.some((x) => x.id === builder.tubeId)) lastStraightTubeId = builder.tubeId;
-    const tube = tubes.find((x) => x.id === lastStraightTubeId) || tubes[0];
+    const tube = tubeList.find((x) => x.id === builder.tubeId) || tubes[0];
     // Der Gruppen-Knopf trägt den Gruppennamen, nicht die gewählte Variante --
     // welches Teil in der Hand liegt, steht oben mittig über der Szene.
     tubeBtn.innerHTML = tubeIcon(tube) + `<span></span>`;
     tubeBtn.lastChild.textContent = t("label_tubes");
     tubeBtn.title = `${t("label_tube")}: ${partName(tube)}`;
-
-    if (bowBtn) {
-      const bow = curvedTubes.find((x) => x.id === builder.tubeId) || curvedTubes[0];
-      bowBtn.innerHTML = tubeIcon(bow) + `<span></span>`;
-      bowBtn.lastChild.textContent = t("part_bow");
-      bowBtn.title = partName(bow);
-    }
 
     const pan = panelList.find((x) => x.id === builder.panelId) || panelList[0];
     panelBtn.innerHTML = panelIcon(pan) + `<span></span>`;
