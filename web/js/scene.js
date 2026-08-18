@@ -38,6 +38,16 @@ const PANEL_GAP = 1.5;
 // Laenge des Doppelrohrverbinders entlang der Rohre.
 const CLAMP_LEN = 5;
 
+// Wandstaerke des Klemmenkoerpers (cm). Ohne sie ist der Ring eine blosse
+// Mantelflaeche -- von der Seite betrachtet papierduenn und ohne sichtbare
+// Stirnflaeche.
+const CLAMP_WALL = 0.7;
+
+// Oeffnungswinkel der Rohrklammer in der Ringebene: der Bogen laeuft von
+// CLIP_A0 bis CLIP_A1, der Rest ist der Schlitz, in den das Rohr einklickt.
+const CLIP_A0 = -Math.PI * 0.15;
+const CLIP_A1 = Math.PI * 1.15;
+
 // Tiefe des Spielsacks: er haengt an allen vier Seiten rund 17 cm hinunter.
 const BAG_DEPTH = 17;
 
@@ -722,14 +732,27 @@ export class SceneManager {
   _clampRingGeometry(open = false) {
     const key = open ? "_clampClipGeo" : "_clampRingGeo";
     if (!this[key]) {
-      const r = geometry().tubeRadius + 0.45;
+      const ri = geometry().tubeRadius + 0.45;      // Loch: hier laeuft das Rohr durch
+      const ro = ri + CLAMP_WALL;
       const seg = Math.max(12, this._q().tube);
-      // Die Rohrklammer ist an einer Seite offen -- dort klickt das Rohr ein.
-      // Der Schlitz zeigt vom ersten Loch weg (thetaStart passend gedreht).
-      const g = open
-        ? new THREE.CylinderGeometry(r, r, CLAMP_LEN, seg, 1, true, Math.PI * 0.35, Math.PI * 1.3)
-        : new THREE.CylinderGeometry(r, r, CLAMP_LEN, seg, 1, true);
-      g.rotateX(Math.PI / 2);                       // Achse auf +Z
+      // Umriss in der XY-Ebene, danach zu einem Koerper ausgezogen -- so hat der
+      // Ring eine Wand statt nur einer Haut.
+      const shape = new THREE.Shape();
+      if (open) {
+        // Die Rohrklammer ist an einer Seite offen -- dort klickt das Rohr ein.
+        // Aussenbogen hin, Innenbogen zurueck; die Enden schliesst der Umriss.
+        shape.absarc(0, 0, ro, CLIP_A0, CLIP_A1, false);
+        shape.absarc(0, 0, ri, CLIP_A1, CLIP_A0, true);
+      } else {
+        shape.absarc(0, 0, ro, 0, Math.PI * 2, false);
+        const hole = new THREE.Path();
+        hole.absarc(0, 0, ri, 0, Math.PI * 2, true);
+        shape.holes.push(hole);
+      }
+      const g = new THREE.ExtrudeGeometry(shape, {
+        depth: CLAMP_LEN, bevelEnabled: false, curveSegments: seg,
+      });
+      g.translate(0, 0, -CLAMP_LEN / 2);            // Achse auf +Z, um die Mitte
       this[key] = g;
       this._keepGeos.add(g);
     }
@@ -910,8 +933,10 @@ export class SceneManager {
       case "steering-lock2": {          // Radarretierung: runde Scheibe in der Nabe
         // Sie liegt in derselben Ebene wie das Rad (Achse = lokales +X) und ist
         // immer rot -- unabhaengig von der Baufarbe.
+        // Durchmesser 7 cm (Massblatt), also Radius 3,5 -- gut halb so gross
+        // wie die Radkappe des Schwimmrads.
         geo = this._cachedGeo("wheellock", () => {
-          const g = new THREE.CylinderGeometry(6, 6, 2.4, Math.max(16, this._q().tube * 2));
+          const g = new THREE.CylinderGeometry(3.5, 3.5, 2.4, Math.max(16, this._q().tube * 2));
           g.rotateZ(Math.PI / 2);
           // Sie sitzt am Ende des Kupplungs-Stutzens, also eine Kupplungslaenge
           // von der Kupplung entfernt -- genau dort, wo das Multirad auf seinem

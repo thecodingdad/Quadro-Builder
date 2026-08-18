@@ -11,6 +11,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ## [Unreleased]
 
 ### Geändert · Changed
+- **Doppelrohrverbinder und Rohrklammer haben einen Körper** – sie waren als offene Mantelfläche gezeichnet und wirkten dadurch papierdünn; jetzt haben sie eine Wand von 7 mm und sichtbare Stirnflächen · **Double-tube connector and tube clamp now have a body** – they were drawn as an open shell and looked paper-thin; now they have a 7 mm wall
+- **Multirad-Arretierung auf Originalmaß** – 7 cm Durchmesser statt 12 · **Multi-wheel lock at its real size** – 7 cm across instead of 12
 - **Die Ansicht passt sich beim Öffnen an das Modell an** – der Blickwinkel bleibt der gewohnte, aber Abstand und Bildmitte richten sich nach dem Modell, sodass es vollständig im Bild steht. Dasselbe tut „Ansicht zurücksetzen" (Knopf und Taste C); ein leerer Entwurf startet unverändert · **The view now fits the model when opening** – same angle as before, but distance and centre follow the model
 - **Leere Abschnitte der Stückliste fallen weg** – wo nichts gebraucht wird, steht jetzt nichts, statt einer Überschrift mit „–". Im Bestands-Modus bleiben alle Abschnitte stehen, dort trägt man ja auch Teile ein, die das Modell (noch) nicht braucht · **Empty parts-list sections are hidden** instead of showing a dash
 - **„Gitter" heißt jetzt „Netz"** (englisch „Net") – so steht es auch beim Hersteller · **„Lattice" is now „Net"**
