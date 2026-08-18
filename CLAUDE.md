@@ -187,7 +187,9 @@ Koordinaten in **cm**, Three.js-Konvention **y = oben**, Boden bei y = 0.
   greift über den **Stutzen einer Kupplung**, quer dazu steht ihr eigener Stutzen, in dem das Rohr
   steckt; sie klemmt also nichts. Der Knoten liegt am Fuß dieses Stutzens, eine Kupplungslänge
   neben dem Würfel; `stub` ist die Rohrrichtung, die Ringachse die lokale **−X**-Achse von
-  `partQuat`. Der Import hängt das Rohr an sie um
+  `partQuat`. Der eigene Stutzen setzt an der **Innenwand** des Rings an, und die tragende
+  Kupplung bekommt in diese Richtung einen Arm-Stutzen gezeichnet, obwohl dort kein Rohr steckt
+  (`tubeDirsAt` in `scene.js`). Der Import hängt das Rohr an sie um
   (beim Einlesen der Rohre gab es sie noch nicht, ihr Ende war auf die Kupplung daneben
   geschnappt), und `neighborDirs` zählt sie als belegten Arm der tragenden Kupplung.
 - **Bällebad = EIN Teil:** Es ist ein **Anbauteil** (`kind: "pool2"`/`"pool-small2"`), kein

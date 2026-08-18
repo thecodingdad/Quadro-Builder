@@ -43,6 +43,10 @@ const CLAMP_LEN = 5;
 // Stirnflaeche.
 const CLAMP_WALL = 0.7;
 
+// Wandstaerke des Rings der Lochzapfenkupplung. Ihr eigener Stutzen setzt an
+// dessen Innenwand an, sonst klafft dazwischen eine Luecke.
+const PIN_RING_WALL = 0.7;
+
 // Schlitz der Rohrklammer: so breit ist die Oeffnung, durch die das Rohr
 // einklickt (in der Ringebene gemessen).
 const CLIP_GAP = Math.PI * 0.55;
@@ -1866,12 +1870,12 @@ export class SceneManager {
     // "O--": ein Ring, der ueber den Stutzen der tragenden Kupplung greift, und
     // quer dazu ein eigener Stutzen, in dem das Rohr steckt.
     const ringLen = cs * 0.9;
-    const ringR = armR + 0.75;                   // Aussenmass des Rings
+    const ringR = armR + 0.05 + PIN_RING_WALL;   // Aussenmass des Rings
     const ring = new THREE.Mesh(this._cachedGeo(`pinRing${seg}`, () => {
       const s = new THREE.Shape();
       s.absarc(0, 0, ringR, 0, Math.PI * 2, false);
       const loch = new THREE.Path();
-      loch.absarc(0, 0, armR + 0.05, 0, Math.PI * 2, true);
+      loch.absarc(0, 0, ringR - PIN_RING_WALL, 0, Math.PI * 2, true);
       s.holes.push(loch);
       const geo = new THREE.ExtrudeGeometry(s, { depth: ringLen, bevelEnabled: false, curveSegments: seg });
       geo.rotateX(Math.PI / 2);            // Achse von +Z auf +Y, wie die Rohre
@@ -1887,14 +1891,14 @@ export class SceneManager {
     this.buildGroup.add(ring);
     if (st !== "future") this.pickNodes.push(ring);
     // Der eigene Stutzen ist so duenn wie ein Kupplungs-Arm -- er steckt IM
-    // Rohr und ist deshalb nur an der Muendung zu sehen. Er sitzt AUSSEN am
-    // Ring, faengt also erst an dessen Mantel an; vom Knoten aus gemessen ragte
-    // er sonst durch den Ring hindurch.
+    // Rohr und ist deshalb nur an der Muendung zu sehen. Er waechst aus der
+    // INNENwand des Rings heraus: am Aussenmantel angesetzt klaffte zwischen
+    // Ring und Stutzen eine Luecke.
     const stubLen = cs * 0.85;
     const arm = new THREE.Mesh(
       this._cachedGeo(`pinStub${seg}`, () => this._tubeGeometry(armR, stubLen, Math.max(6, seg - 4))), mat);
     arm.quaternion.setFromUnitVectors(UP, stub);
-    arm.position.copy(at).addScaledVector(stub, ringR + stubLen / 2);
+    arm.position.copy(at).addScaledVector(stub, ringR - PIN_RING_WALL + stubLen / 2);
     arm.userData = { kind: "node", id: n.id };
     this.buildGroup.add(arm);
     if (st !== "future") this.pickNodes.push(arm);
@@ -2143,8 +2147,27 @@ export class SceneManager {
       const L = Math.hypot(vx, vy, vz);
       if (L < 1e-6) return;
       if (!tubeDirsAt.has(nodeId)) tubeDirsAt.set(nodeId, []);
-      tubeDirsAt.get(nodeId).push({ d: [vx / L, vy / L, vz / L], bow: !!bow });
+      const d = [vx / L, vy / L, vz / L];
+      // Ein Stutzen je Richtung: an einer Kupplung koennen mehrere Teile
+      // denselben Arm belegen (Multirad-Arretierung und Lochzapfenkupplung
+      // sitzen sogar zusammen darauf) -- gezeichnet wird er trotzdem einmal.
+      const liste = tubeDirsAt.get(nodeId);
+      if (liste.some((e) => e.d[0] * d[0] + e.d[1] * d[1] + e.d[2] * d[2] > 0.99)) return;
+      liste.push({ d, bow: !!bow });
     };
+    // Die Lochzapfenkupplung greift mit ihrem Ring ueber einen Stutzen der
+    // Kupplung -- der gehoert also gezeichnet, obwohl dort kein Rohr steckt.
+    // Ihr Knoten liegt eine Kupplungslaenge daneben, das gibt die Richtung.
+    for (const p of model.nodes.values()) {
+      if (p.part !== "hole_1") continue;
+      let near = null, nd = geometry().connectorSize * 1.4;
+      for (const n of model.nodes.values()) {
+        if (n === p || n.part) continue;
+        const d = Math.hypot(n.x - p.x, n.y - p.y, n.z - p.z);
+        if (d < nd) { nd = d; near = n; }
+      }
+      if (near) pushDir(near.id, p.x - near.x, p.y - near.y, p.z - near.z, false);
+    }
     // Ein Rad sitzt auf einem Stutzen der Kupplung -- also bekommt die Kupplung
     // dort auch einen, so wie bei einem Rohr. Der Anker ist die naechstgelegene
     // Kupplung, die Richtung die eigene Achse des Teils (lokales +X).
