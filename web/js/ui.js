@@ -2610,6 +2610,11 @@ export function initUI({ scene, model, builder }) {
       return [...map.values()];
     };
 
+    // Schrauben stehen nicht im Bestand -- beim Bearbeiten fällt der Abschnitt
+    // weg, sonst blieben dort Zeilen ohne Eingabefeld stehen.
+    $("bom-screws-head").hidden = bomEditMode;
+    $("bom-screws").hidden = bomEditMode;
+
     // Bearbeiten: jede Kategorie zeigt den ganzen Katalog, damit sich auch
     // Bestand für Teile eintragen lässt, die im Modell (noch) nicht vorkommen.
     if (bomEditMode) { renderBestand(); return; }
@@ -2684,6 +2689,19 @@ export function initUI({ scene, model, builder }) {
     const reinf = bom.reinforcements || [];
     if (reinf.length === 0) rb.appendChild(el("div", "muted", "–"));
     for (const r of reinf) bomRow(rb, r.name, null, r.count, r.subtotal, "reinforcements:" + r.id, { kind: "reinforcements", id: r.id });
+
+    // Schrauben: nur gerechnet -- kein Bestand (kein invKey) und nichts zum
+    // Hervorheben (kein hl), im Modell gibt es sie ja nicht.
+    const sb = $("bom-screws"); sb.innerHTML = "";
+    const schrauben = bom.screws || [];
+    if (!schrauben.length) sb.appendChild(el("div", "muted", "–"));
+    // Rohrschrauben gibt es in den Rohrfarben; ohne Farbtrennung stehen sie in
+    // einer Summenzeile, genau wie Rohre und Platten.
+    const schraubenZeilen = fasseZusammen(schrauben, "id");
+    for (const r of schraubenZeilen) {
+      const name = r.colorName ? `${r.name} · ${r.colorName}` : r.name;
+      bomRow(sb, name, r.color || null, r.count, r.subtotal);
+    }
 
     $("sum-tubes").textContent = bom.totals.tubes;
     $("sum-conn").textContent = bom.totals.connectors;

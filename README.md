@@ -37,7 +37,7 @@ Keine Installation, kein Account, keine Cloud – alles läuft lokal im Browser.
 
 - **3D-Editor** – frei im Raum bauen mit Kupplungen, Rohren und Platten
 - **Tastatursteuerung** – Pfeiltasten, Shortcuts für alle Aktionen (sieh `⌨ Tasten` in der App)
-- **Live-Stückliste** – Kupplungstyp-Heuristik, Materialpreise, Gesamtkosten
+- **Live-Stückliste** – Kupplungstyp-Heuristik, Materialpreise, Gesamtkosten, samt der nötigen Schrauben
 - **Bestand & Machbarkeit** – eintragen was man hat, sofort sehen ob's reicht
 - **Aufbaumodus** – Lage für Lage durch den Bauplan navigieren, drucken
 - **Platten** – an zwei parallelen Rohren einsetzen, alle Katalogformate von 30×30 bis 80×80

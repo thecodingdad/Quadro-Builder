@@ -182,13 +182,23 @@ Koordinaten in **cm**, Three.js-Konvention **y = oben**, Boden bei y = 0.
 - `connectorsForNode` liefert **alle** Kupplungen eines Knotens: an einem `c45`-Knoten
   Basiskupplung **plus** je Diagonale eine `diagonal`-Winkelkupplung.
 - `link`-Kanten sind kein Arm und fließen nicht in die Heuristik ein; `arm`-Kanten schon.
+- **Schrauben** (`computeScrews`) werden nur gerechnet: kein Teil im Modell, nichts zu setzen,
+  nichts zu zeichnen, nichts im Bestand. Grundregel des Systems: an einer Kupplung hat ein Rohr
+  genau EIN Loch. Deshalb wird nicht addiert, sondern **belegt** – jedes Rohr (ohne `arm`/`link`)
+  bringt zwei Plätze mit (`tubeId@nodeId`), Platten (4 je Platte) und Rutschen nehmen sich welche,
+  und was frei bleibt, sind die Rohrschrauben (nach Rohrfarbe). Rutschen: je Verbindung
+  (`model.slideExit` trifft ein weiteres Teil) 2 konische + 2 Gegenstücke + 2 Rutschenschrauben,
+  der Kettenkopf zusätzlich 2 konische + 2 Plattenschrauben; die Integralrutsche braucht keine.
+  Die Katalog-Gruppe `screws` in `parts.json` führt den **Packungs**preis plus `pack`; die Liste
+  rechnet anteilig (`price = Packpreis / pack`).
 - Verstärkungen: kollineare verstärkte Rohre werden per Union-Find zu **Läufen** verschmolzen.
   In den BOM-Zeilen ist `count` = Anzahl Läufe (Anzeige), `pieces` = physische 40-cm-Profile
   (maßgeblich für Bestellung/Bestandscheck in `neededParts`).
 
 ## Konventionen
 
-- **Neues Teil:** nur Eintrag in `data/parts.json` (`connectors`/`tubes`/`panels`/`reinforcements`).
+- **Neues Teil:** nur Eintrag in `data/parts.json` (`connectors`/`tubes`/`panels`/`reinforcements`/
+  `accessories`/`screws`).
   Dazu gehört `url` – die Seite des Teils bei quadroshop.com (gibt es das Teil nicht einzeln, die
   passende Übersichtsseite). Daraus baut die Stückliste im Bestands-Modus den 🛈-Link.
   Gerade Rohre mit `buildable:true` + `length_cm` und Platten mit `buildable:true` + `w`/`h`

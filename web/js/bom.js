@@ -1,6 +1,6 @@
 // Stueckliste (BOM) + Kupplungstyp-Heuristik + Bestands-/Machbarkeitscheck.
 
-import { getTube, getConnector, getPanel, colorName, partName, reinforcementPart, reinforcementRunName, partForFitting, getPartById, accessories } from "./catalog.js";
+import { getTube, getConnector, getPanel, colorName, partName, reinforcementPart, reinforcementRunName, partForFitting, getPartById, accessories, getScrew } from "./catalog.js";
 import { round2, xAxisOf } from "./util.js";
 
 // Einheitsvektoren der Nachbarn eines Knotens. Doppelrohr-Verbindungen (link)
@@ -291,6 +291,140 @@ function poolLinerFor(s1, s2) {
   }, null).def;
 }
 
+// --- Schrauben ------------------------------------------------------------
+// Sie werden nur gerechnet: kein Teil im Modell, nichts zu setzen, nichts zu
+// zeichnen. Grundregel des Systems: an einer Kupplung hat ein Rohr genau EIN
+// Loch. Deshalb wird nicht addiert, sondern belegt -- jedes Rohr bringt zwei
+// PLAETZE mit (je Ende einen), Platten- und Rutschenschrauben nehmen sich
+// welche davon, und was uebrig bleibt, sind die Rohrschrauben.
+
+// So nah muss ein Knoten liegen, damit eine Schraube ihn als ihren Platz
+// nimmt: eine halbe Kupplung plus Toleranz.
+const SCREW_SLOT_EPS = 6;
+// Rutschenschrauben laufen durch das Geruest daneben -- dort darf der Knoten
+// weiter weg liegen (eine Rutschenbreite).
+const SCREW_SLIDE_EPS = 45;
+
+/**
+ * Schrauben eines Modells. Liefert Zeilen wie die uebrigen Abschnitte:
+ * `{ key, id, name, color, colorName, count, price, subtotal }`. `price` ist
+ * der STUECKpreis (Packpreis / Packgroesse) -- gekauft werden Packungen, die
+ * Liste rechnet anteilig.
+ */
+export function computeScrews(model) {
+  // 1. Plaetze aufspannen: je Rohrende einer. Arme und Doppelrohr-Verbindungen
+  //    sind keine Rohre und tragen keine Schrauben.
+  const slots = new Map();            // "tubeId@nodeId" -> { tube, node, frei }
+  const slotsAtNode = new Map();      // nodeId -> [slotKey]
+  for (const t of model.tubes.values()) {
+    if (t.arm || t.link) continue;
+    for (const nodeId of [t.a, t.b]) {
+      const key = t.id + "@" + nodeId;
+      slots.set(key, { tube: t, node: nodeId, free: true });
+      if (!slotsAtNode.has(nodeId)) slotsAtNode.set(nodeId, []);
+      slotsAtNode.get(nodeId).push(key);
+    }
+  }
+  const takeSlot = (key) => {
+    const slot = key && slots.get(key);
+    if (!slot || !slot.free) return false;
+    slot.free = false;
+    return true;
+  };
+  /** Freien Platz an einem Knoten belegen -- egal an welchem seiner Rohre. */
+  const takeAtNode = (nodeId) => {
+    for (const key of slotsAtNode.get(nodeId) || []) if (takeSlot(key)) return true;
+    return false;
+  };
+  /** Knoten, der einem Punkt am naechsten liegt (innerhalb `eps`). */
+  const nodeNear = (point, eps) => {
+    let best = null, bestDist = eps;
+    for (const n of model.nodes.values()) {
+      const d = Math.hypot(n.x - point[0], n.y - point[1], n.z - point[2]);
+      if (d <= bestDist) { best = n; bestDist = d; }
+    }
+    return best;
+  };
+
+  const count = { panel: 0, conical: 0, counter: 0, slide: 0 };
+
+  // 2. Platten: vier Schrauben, je Ecke eine. Sie laufen durch das Tragrohr in
+  //    die Kupplung -- liegt dort eine, ist der Platz weg.
+  for (const p of model.panels.values()) {
+    if (p.poolPart) continue;                  // Baellebad ist eine Folie
+    count.panel += 4;
+    const corners = model.panelCorners(p);
+    if (!corners) continue;
+    // corners: [Anfang a, Ende a, Ende b, Anfang b]
+    for (const [tubeId, punkt] of [[p.a, corners[0]], [p.a, corners[1]],
+                                   [p.b, corners[3]], [p.b, corners[2]]]) {
+      const t = model.tubes.get(tubeId);
+      if (!t) continue;
+      const node = nodeNear(punkt, SCREW_SLOT_EPS);
+      if (!node) continue;                     // Platte sitzt mitten auf dem Rohr
+      takeSlot(t.id + "@" + node.id);
+    }
+  }
+
+  // 3. Rutschen. Die Integralrutsche braucht keine Schraube; Kettenteile
+  //    schon: je Verbindung zwei konische Schrauben mit Gegenstueck und zwei
+  //    Rutschenschrauben, und der Einstieg haengt mit zwei konischen Schrauben
+  //    und zwei Plattenschrauben am Geruest.
+  const slides = [...(model.slides ? model.slides.values() : [])];
+  const belegt = new Set();                    // Rutschen, die an einem Ausgang haengen
+  for (const s of slides) {
+    const exit = model.slideExit(s);
+    if (!exit) continue;
+    const folge = slides.find((o) => o.id !== s.id
+      && Math.hypot(o.x - exit.pos[0], o.y - exit.pos[1], o.z - exit.pos[2]) < 5);
+    if (!folge) continue;
+    belegt.add(folge.id);
+    count.conical += 2;
+    count.counter += 2;
+    count.slide += 2;
+    const node = nodeNear(exit.pos, SCREW_SLIDE_EPS);
+    if (node) { takeAtNode(node.id); takeAtNode(node.id); }
+  }
+  for (const s of slides) {
+    // Kopf der Kette = Rutschenkoerper, der an keinem Ausgang haengt.
+    if (!model.slideExit(s) || belegt.has(s.id)) continue;
+    count.conical += 2;
+    count.panel += 2;
+    const einstieg = s.hook && s.hook.length === 3 ? s.hook : [s.x, s.y, s.z];
+    const node = nodeNear(einstieg, SCREW_SLIDE_EPS);
+    if (node) for (let i = 0; i < 4; i++) takeAtNode(node.id);
+  }
+
+  // 4. Rohrschrauben: was an Plaetzen uebrig ist, nach Rohrfarbe.
+  const tubeScrews = new Map();                // Farbe -> Anzahl
+  for (const slot of slots.values()) {
+    if (!slot.free) continue;
+    const color = slot.tube.color || null;
+    tubeScrews.set(color, (tubeScrews.get(color) || 0) + 1);
+  }
+
+  const rows = [];
+  const push = (id, anzahl, color = null) => {
+    if (!anzahl) return;
+    const def = getScrew(id);
+    if (!def) return;
+    const stueck = round2((def.price || 0) / (def.pack || 1));
+    rows.push({
+      key: id + (color ? "|" + color : ""), id, name: partName(def),
+      color, colorName: color ? colorName(color) : null,
+      count: anzahl, pack: def.pack || 1,
+      price: stueck, subtotal: round2(stueck * anzahl),
+    });
+  };
+  for (const [color, anzahl] of [...tubeScrews.entries()]
+    .sort((a, b) => b[1] - a[1])) push("screw_tube", anzahl, color);
+  push("screw_panel", count.panel);
+  push("screw_slide_conical", count.conical);
+  push("screw_slide_conical_counter", count.counter);
+  push("screw_slide", count.slide);
+  return rows;
+}
+
 export function computeBOM(model) {
   // --- Rohre nach Typ + Farbe ---
   const tubeMap = new Map();
@@ -488,7 +622,10 @@ export function computeBOM(model) {
   // Gesamtzahl der Laeufe (konzeptuelle Einheiten, erscheint im Summen-Footer).
   const reinfCount = runs.length;
 
+  const screwRows = computeScrews(model);
+
   const price = round2(
+    screwRows.reduce((s, r) => s + r.subtotal, 0) +
     tubes.reduce((s, r) => s + r.subtotal, 0) +
     connectors.reduce((s, r) => s + r.subtotal, 0) +
     panels.reduce((s, r) => s + r.subtotal, 0) +
@@ -500,6 +637,7 @@ export function computeBOM(model) {
 
   return {
     tubes, connectors, panels, reinforcements, openEnds, textiles, slides, fittings,
+    screws: screwRows,
     totals: {
       tubes: tubeCount, connectors: connCount, panels: panelCount,
       reinforcements: reinfCount, textiles: textileCount, slides: slideCount,

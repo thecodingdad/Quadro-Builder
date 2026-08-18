@@ -70,7 +70,8 @@ export function getPanel(id) {
 // am Geruest haengt und keine Kupplung, kein Rohr und keine Platte ist.
 /** Teil nach id ueber alle Rubriken -- fuer Stueckliste und Bestand. */
 export function getPartById(id) {
-  const all = [...allConnectors(), ...accessories(), ...allTubes(), ...panels(), ...reinforcements()];
+  const all = [...allConnectors(), ...accessories(), ...allTubes(), ...panels(),
+    ...reinforcements(), ...screws()];
   return all.find((p) => p.id === id) || null;
 }
 
@@ -100,6 +101,17 @@ export function partForFitting(kind, mask) {
 // Verstaerkungen (Alu-Profile), die in Rohre geschoben werden.
 export function reinforcements() {
   return catalog().reinforcements || [];
+}
+
+// Schrauben. Eigene Gruppe, weil sie NUR gerechnet werden: nichts zu setzen,
+// nichts zu zeichnen, nichts im Bestand. Der Preis gilt je Packung (`pack`).
+export function screws() {
+  return catalog().screws || [];
+}
+
+/** Schraube nach Kennung, z. B. "screw_panel". */
+export function getScrew(id) {
+  return screws().find((s) => s.id === id) || null;
 }
 
 // Standard-Verstaerkungsprofil (erstes definiertes).
