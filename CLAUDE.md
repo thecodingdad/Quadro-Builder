@@ -263,6 +263,11 @@ Koordinaten in **cm**, Three.js-Konvention **y = oben**, Boden bei y = 0.
   Ausschnitt folgt automatisch, weil `_updateOrthoFrustum()` ihn aus Abstand und Öffnungswinkel
   ableitet. Aufrufer geben das Modell mit – ein **gespeicherter** Kamerastand (Tab-Wechsel) wird
   weiterhin über `restoreCameraState` gesetzt und nicht überschrieben.
+- **Orthografisch anklicken:** Die orthografische Kamera zeichnet mit `near = -100000` auch,
+  was **hinter** ihrer Ebene liegt (sonst schnitte das Drehen Teile weg). Der Auswahlstrahl von
+  `Raycaster.setFromCamera` beginnt dort aber genau in der Kameraebene und trifft nur nach
+  vorn – `scene._setMouse()` zieht seinen Ursprung deshalb um `camera.near` zurück. Ohne das
+  waren Teile sichtbar, aber nicht wählbar, und erst ein Wechsel der Projektion half.
 - **Layout ohne feste Breakpoints:** `ui.js` setzt Klassen auf `<body>`, das CSS liest nur diese –
   `compact-colors`/`compact-view` (Bauteil-Zeile eng), `compact-head` (Kopfzeile eng),
   `sidebar-overlay`, `mobile-portrait`, `asm-sheet-on`. Die beiden Kollaps-Stufen misst ein

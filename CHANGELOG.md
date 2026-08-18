@@ -11,6 +11,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ## [Unreleased]
 
 ### Behoben · Fixed
+- **In der orthografischen Ansicht ließ sich manches nicht anklicken** – Teile, die hinter der Kameraebene lagen, wurden zwar gezeichnet, der Auswahlstrahl begann aber genau dort und erreichte sie nie. Er setzt jetzt so weit hinten an wie die Kamera zeichnet · **Some parts could not be clicked in the orthographic view** – anything behind the camera plane was drawn but never hit by the pick ray
 - **Drehen läuft im Uhrzeigersinn**, wie der Pfeil auf dem Knopf – vorher drehte es andersherum (Strg + → und E ebenso) · **Rotating goes clockwise** as the arrow on the button says
 - **Eine Zeile in Stückliste oder Aufbauliste hebt auch dann hervor, wenn im Modell etwas markiert ist** – vorher gewann die Markierung und der Klick blieb wirkungslos. Solange eine Zeile hervorhebt, tritt die Markierung zurück, damit klar bleibt, welche Teile gemeint sind · **A row in the parts or assembly list highlights even while something is selected in the model** – the selection steps back while a row is highlighting
 - **Angrenzende Rohre werden beim Ziehen nicht mehr gedehnt** – sie lösen sich gleich zu Beginn des Zugs vom bewegten Teil, statt bis zum Loslassen mitzuwachsen und dann zurückzuspringen · **Neighbouring tubes no longer stretch while dragging** – they come loose when the drag starts instead of snapping back on release

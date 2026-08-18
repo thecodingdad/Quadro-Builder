@@ -3119,6 +3119,16 @@ export class SceneManager {
     this._mouse.x = ((clientX - r.left) / r.width) * 2 - 1;
     this._mouse.y = -((clientY - r.top) / r.height) * 2 + 1;
     this._raycaster.setFromCamera(this._mouse, this.camera);
+    // Orthografisch beginnt der Strahl in der KAMERAEBENE. Gezeichnet wird aber
+    // auch, was dahinter liegt -- die vordere Ebene der Kamera steht mit Absicht
+    // weit im Ruecken (near = -100000), damit beim Drehen nichts wegschneidet.
+    // Teile hinter der Kameraebene waren dadurch zwar zu sehen, aber nicht
+    // anklickbar (der Strahl trifft nur, was vor seinem Ursprung liegt). Also
+    // den Ursprung um dieselbe Strecke zurueckziehen.
+    if (this.camera.isOrthographicCamera) {
+      const ray = this._raycaster.ray;
+      ray.origin.addScaledVector(ray.direction, this.camera.near);
+    }
   }
 
   raycastObjects(clientX, clientY, objects) {
