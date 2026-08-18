@@ -1361,6 +1361,10 @@ export function initUI({ scene, model, builder }) {
 
   function scheduleDocSave() {
     if (!autosaveOn) return;
+    // Hängt eine Kopie am Zeiger, wird nicht gespeichert: sie steckt zwar im
+    // Modell, gehört aber noch niemandem. Nach dem Absetzen oder Abbrechen
+    // meldet sich die nächste Änderung ohnehin wieder.
+    if (builder.pasting) return;
     clearTimeout(docSaveTimer);
     docSaveTimer = setTimeout(() => {
       const tab = activeTab();
@@ -1464,6 +1468,9 @@ export function initUI({ scene, model, builder }) {
   /** Eine Datei wurde anderswo gespeichert und liegt jetzt frisch im Speicher. */
   async function onDocUpdated(doc) {
     if (currentPanel === "own") renderOwnModels();
+    // Ein Serverstand ersetzt das ganze Modell -- eine Kopie am Zeiger würde
+    // dabei zu Teilen ohne Zuhause. Also vorher abräumen.
+    builder.cancelPaste();
     const tab = tabs.find((x) => x.docId === doc.id);
     if (!tab) return;
     if (!tab.dirty) {
@@ -3256,6 +3263,7 @@ export function initUI({ scene, model, builder }) {
   function evaluateDirty() {
     const tab = activeTab();
     if (!tab) return;
+    if (builder.pasting) return;         // die Vorschau zählt nicht als Änderung
     // Ohne bekannten Vergleichsstand (importiert, aus der Bibliothek geöffnet)
     // bleibt der Tab ungespeichert, bis er einmal in eine Datei geht.
     if (tab.savedJson == null && !(tab.preview && tab.baseJson != null)) return;
@@ -3282,6 +3290,8 @@ export function initUI({ scene, model, builder }) {
   }
 
   function scheduleSessionSave() {
+    // Wie beim Speichern: während des Einfügens bleibt die Sitzung, wie sie ist.
+    if (builder.pasting) return;
     clearTimeout(sessionTimer);
     sessionTimer = setTimeout(() => {
       captureActiveTab();

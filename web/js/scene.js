@@ -460,6 +460,24 @@ export class SceneManager {
     return this._raycaster.ray.intersectPlane(plane, p) ? p : null;
   }
 
+  /**
+   * Weltpunkt unter dem Zeiger auf einer frei gewaehlten Ebene. Anders als
+   * dragPlanePoint legt der Aufrufer die Normale fest -- das Einfuegen haelt
+   * damit die Tiefe (Z) fest und schiebt nur in X und Y. Steht die Ebene fast
+   * parallel zum Blick, gibt es keinen brauchbaren Schnittpunkt: dann null.
+   */
+  pointOnPlane(clientX, clientY, origin, normal) {
+    this._setMouse(clientX, clientY);
+    const n = new THREE.Vector3(normal[0], normal[1], normal[2]).normalize();
+    // Fast parallel = der Schnittpunkt wandert ins Unendliche.
+    if (Math.abs(this._raycaster.ray.direction.dot(n)) < 0.15) return null;
+    const o = origin && origin.isVector3
+      ? origin : new THREE.Vector3(origin[0], origin[1], origin[2]);
+    const plane = new THREE.Plane().setFromNormalAndCoplanarPoint(n, o);
+    const p = new THREE.Vector3();
+    return this._raycaster.ray.intersectPlane(plane, p) ? p : null;
+  }
+
   /** Mauszeiger-Form setzen (Builder signalisiert damit "verschiebbar"). */
   setCursor(css) {
     this.container.style.cursor = css || "default";

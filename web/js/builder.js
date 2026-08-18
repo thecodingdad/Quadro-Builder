@@ -294,7 +294,7 @@ export class Builder {
     this.selection.clear();
     // Erste Lage: dort, wo der Zeiger zuletzt stand.
     const zeiger = this._lastPointer;
-    const p = zeiger ? this.scene.dragPlanePoint(zeiger.x, zeiger.y, this._pasteOrigin()) : null;
+    const p = zeiger ? this._pastePoint(zeiger.x, zeiger.y) : null;
     this._placePaste(p);
     this.scene.setCursor("copy");
     return true;
@@ -305,14 +305,24 @@ export class Builder {
     return this._paste.frag.anchor;
   }
 
-  /** Kopie an einen Weltpunkt setzen (auf das Raster gerundet). */
+  /**
+   * Zeigerpunkt fuer das Einfuegen. Die Kopie bleibt in der Ebene ihres
+   * Ursprungs: die Tiefe (Z) steht fest, geschoben wird in X und Y. Alles
+   * andere macht das Treffen der richtigen Stelle unnoetig schwer -- fuer die
+   * dritte Achse gibt es die Pfeiltasten, sobald die Kopie liegt.
+   */
+  _pastePoint(clientX, clientY) {
+    return this.scene.pointOnPlane(clientX, clientY, this._pasteOrigin(), [0, 0, 1]);
+  }
+
+  /** Kopie an einen Weltpunkt setzen (auf das Raster gerundet, Z bleibt). */
   _placePaste(point) {
     const d = this._paste;
     const a = d.frag.anchor;
     const raster = (v) => Math.round(v / MOVE_STEP) * MOVE_STEP;
     const offset = point
-      ? [raster(point.x - a[0]), raster(point.y - a[1]), raster(point.z - a[2])]
-      : [0, 0, 0];
+      ? [raster(point.x - a[0]), raster(point.y - a[1]), 0]
+      : (d.offset || [0, 0, 0]);
     if (d.offset && offset[0] === d.offset[0] && offset[1] === d.offset[1] && offset[2] === d.offset[2]) return;
     this.model.loadJSON(JSON.parse(d.before));
     d.offset = offset;
@@ -336,7 +346,7 @@ export class Builder {
     if (!d) return;
     // Mit gedrueckter Taste wird gedreht -- die Kopie bleibt so lange stehen.
     if (e.buttons & 1) return;
-    const p = this.scene.dragPlanePoint(e.clientX, e.clientY, this._pasteOrigin());
+    const p = this._pastePoint(e.clientX, e.clientY);
     if (p) this._placePaste(p);
   }
 
@@ -359,7 +369,7 @@ export class Builder {
     this._pruneSelection();
     this._pushHistory(d.before);
     this.onNotice(merged ? t("notice_paste_merged", merged) : t("notice_pasted"));
-    this.refresh();
+    this.refresh();      // erst hier zählt die Kopie als Änderung
     return true;
   }
 

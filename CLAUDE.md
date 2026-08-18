@@ -251,7 +251,12 @@ Koordinaten in **cm**, Three.js-Konvention **y = oben**, Boden bei y = 0.
   landete die Vorschau in Sitzung und Datei), und Tab-Wechsel, Moduswechsel, Escape sowie
   abgebrochene Zeigergesten rufen `cancelPaste()`. Abgesetzt wird nur bei einem **echten Klick**
   (Bewegung unter `CLICK_TOLERANCE`) und nur an gültiger Stelle; sonst zeichnet `scene.js` die
-  Kopie über `opts.invalid` rot.
+  Kopie über `opts.invalid` rot. Die Kopie bleibt in der **X/Y-Ebene ihres Ursprungs**
+  (`scene.pointOnPlane` mit Normale Z, Versatz in Z immer 0) – in drei Achsen zugleich trifft man
+  die Stelle nicht; die Tiefe stellt man danach mit den Pfeiltasten ein, denn das Eingefügte
+  bleibt ausgewählt. **Während der Vorschau wird nicht gespeichert** (`scheduleDocSave`,
+  `scheduleSessionSave` und `evaluateDirty` steigen bei `builder.pasting` aus): sonst schrieb das
+  automatische Speichern die schwebende Kopie mit, und eine Server-Übernahme ließ sie verschwinden.
 - **Vorschau-Tabs:** ein Klick in „Meine Modelle"/Bibliothek öffnet mit `preview: true`; ein
   zweiter Vorschau-Klick wirft den alten Tab weg (`discardPreview`). Angeheftet wird er beim
   Doppelklick, beim Speichern und sobald sich das Modell gegenüber `tab.baseJson` unterscheidet.
