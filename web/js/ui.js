@@ -983,19 +983,19 @@ export function initUI({ scene, model, builder }) {
     // welches Teil in der Hand liegt, steht oben mittig über der Szene.
     tubeBtn.innerHTML = tubeIcon(tube) + `<span></span>`;
     tubeBtn.lastChild.textContent = t("label_tubes");
-    tubeBtn.title = `${t("label_tube")}: ${partName(tube)} – ${eur(tube.price)}`;
+    tubeBtn.title = `${t("label_tube")}: ${partName(tube)}`;
 
     if (bowBtn) {
       const bow = curvedTubes.find((x) => x.id === builder.tubeId) || curvedTubes[0];
       bowBtn.innerHTML = tubeIcon(bow) + `<span></span>`;
       bowBtn.lastChild.textContent = t("part_bow");
-      bowBtn.title = `${partName(bow)} – ${eur(bow.price)}`;
+      bowBtn.title = partName(bow);
     }
 
     const pan = panelList.find((x) => x.id === builder.panelId) || panelList[0];
     panelBtn.innerHTML = panelIcon(pan) + `<span></span>`;
     panelBtn.lastChild.textContent = t("label_panels");
-    panelBtn.title = `${t("label_panel")}: ${partName(pan)} – ${eur(pan.price)}`;
+    panelBtn.title = `${t("label_panel")}: ${partName(pan)}`;
   }
 
   // --- Rutschen-Button ---------------------------------------------------
