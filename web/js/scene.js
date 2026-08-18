@@ -2084,11 +2084,11 @@ export class SceneManager {
     const selected = opts.selected && opts.selected.size ? opts.selected : null;
     const highlight = opts.highlight && opts.highlight.size ? opts.highlight : null;
     // Beides zugleich ist der Normalfall: etwas ist im Modell gewaehlt UND in
-    // der Liste wird eine Zeile angeklickt. Frueher gewann die Auswahl und die
-    // Zeile blieb wirkungslos, bis man die Auswahl aufhob.
-    const marked = selected && highlight
-      ? new Set([...selected.keys(), ...highlight])
-      : (selected || highlight);
+    // der Liste wird eine Zeile angeklickt. Dann gilt die ZEILE -- die Auswahl
+    // tritt so lange zurueck, sonst leuchten zwei Dinge um die Wette und man
+    // sieht nicht mehr, welche Teile die Zeile meint. (Frueher war es
+    // umgekehrt: die Auswahl gewann und der Klick blieb wirkungslos.)
+    const marked = highlight || selected;
     const dimOthers = !!highlight;
     // Im Vorschlags-Modus treten alle Teile zurueck, die keine Verstaerkung
     // brauchen -- sonst sucht man die orangen Rohre im Gewirr.
