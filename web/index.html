@@ -465,9 +465,15 @@
   <!-- Tastenkürzel-Liste: wie die Rückfrage-Karte über der ganzen Seite. -->
   <div id="help-overlay" class="dlg-overlay" hidden>
     <div class="help-card">
-      <h3 data-i18n="help_title">Tastenkürzel</h3>
+      <div class="help-head">
+        <h3 data-i18n="help_title">Tastenkürzel</h3>
+        <button id="help-close" class="card-close" data-i18n-title="help_close" title="Schließen">
+          <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+            <line x1="4" y1="4" x2="12" y2="12"/><line x1="12" y1="4" x2="4" y2="12"/>
+          </svg>
+        </button>
+      </div>
       <div id="help-table" class="help-groups"></div>
-      <button id="help-close" class="btn" data-i18n="help_close">Schließen</button>
     </div>
   </div>
 

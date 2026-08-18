@@ -601,14 +601,22 @@ body.sidebar-hidden #sidebar, body.sidebar-hidden #sidebar-resizer { display: no
   max-height: min(88vh, 900px);
   display: flex; flex-direction: column;
 }
-.help-card h3 { margin: 0 0 12px; font-size: 16px; }
+/* Kopfzeile der Karte: Titel links, das Kreuz zum Schließen rechts. */
+.help-head { display: flex; align-items: center; gap: 12px; margin: 0 0 12px; }
+.help-card h3 { margin: 0; font-size: 16px; flex: 1 1 auto; }
+.card-close {
+  display: inline-flex; align-items: center; justify-content: center;
+  flex: 0 0 auto; width: 30px; height: 30px;
+  border: none; border-radius: 8px; background: none;
+  color: var(--muted); cursor: pointer;
+}
+.card-close:hover { background: rgba(0, 0, 0, 0.06); color: var(--ink); }
 /* Die Liste ist der einzige Teil, der wächst -- und scrollt, wenn es in der
    Höhe eng wird. Die Blöcke füllen die Breite in Spalten von ~330 px: eine
    Spalte auf dem Handy, zwei am Schirm. */
 .help-groups {
   flex: 1 1 auto; min-height: 0; overflow-y: auto;
   columns: 330px; column-gap: 28px;
-  margin-bottom: 14px;
 }
 .help-group { break-inside: avoid; margin: 0 0 14px; }
 .help-group h4 {

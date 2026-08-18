@@ -190,7 +190,7 @@ const de = {
     ]],
     ['Entwürfe', [
       ['Alt + N', 'neues Modell'],
-      ['Alt + W', 'Entwurf schließen (Strg+W gehört dem Browser)'],
+      ['Alt + W', 'Entwurf schließen'],
       ['Mittelklick auf den Tab', 'Entwurf schließen'],
       ['Strg/Cmd + S', 'Speichern'],
       ['Strg/Cmd + Shift + S', 'Speichern unter…'],
@@ -614,7 +614,7 @@ const en = {
     ]],
     ['Designs', [
       ['Alt + N', 'New model'],
-      ['Alt + W', 'Close design (Ctrl+W belongs to the browser)'],
+      ['Alt + W', 'Close design'],
       ['Middle click on a tab', 'Close design'],
       ['Ctrl/Cmd + S', 'Save'],
       ['Ctrl/Cmd + Shift + S', 'Save as…'],
