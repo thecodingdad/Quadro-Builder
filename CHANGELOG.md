@@ -11,6 +11,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ## [Unreleased]
 
 ### Behoben · Fixed
+- **Flexikupplung, Bolzen, Lagerkupplung und Rohrkappe heißen jetzt so** – aus Herstellerdateien wurden diese Teile bisher verworfen, ihre Stelle im Modell galt als geratene Raumkupplung. Sie werden nun eingelesen, in der Stückliste mit ihrem Namen gezählt und beim Speichern unverändert zurückgeschrieben; gezeichnet werden sie weiterhin nicht. Setzen lassen sie sich weiterhin nicht · **Flexi connector, bolt, bearing connector and tube cap are named correctly** – they used to be dropped on import and their spot counted as a guessed space connector; they are now read, counted by name and written back unchanged
 - **Lochzapfenkupplung sitzt richtig** – sie klemmt nicht um ein Rohr, sondern steckt mit ihrem Zapfen in einem Arm der Kupplung, während das Rohr quer durch ihr Loch läuft. Gezeichnet wird sie jetzt so, und das Rohr hängt an ihr statt an der Kupplung daneben · **Pin connector placed correctly** – its peg sits in a connector arm and the tube runs through its hole; the tube now hangs on the pin connector instead of the connector next to it
 - **Gedrehte Aufbauten bekommen die richtigen Kupplungen** – ob drei Arme in einer Ebene liegen, wird an der Ebene selbst gemessen und nicht mehr nur an den drei Achsenebenen. Im Ball Cage (45° gekippt) stand deshalb „Raumkupplung 3-armig", wo eine Flächenkupplung 3-armig sitzt · **Rotated builds get the right connectors** – coplanarity is measured on the actual plane instead of the three axis planes
 

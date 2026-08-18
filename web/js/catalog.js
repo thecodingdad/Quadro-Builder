@@ -89,6 +89,9 @@ export function partForFitting(kind, mask) {
   // Die Lagerkupplung hat kein eigenes QDF-Element -- sie ist eine Klemm-
   // Kupplung, die wir selbst setzen, und wird als bearing2 geschrieben.
   if (kind === "bearing-clamp") return getConnector("bearing");
+  // Fuer die Rohrkappe fuehren die Herstellerdateien zwei Elementarten; das
+  // Teil dahinter ist dasselbe.
+  if (kind === "tube-cap2") return accessories().find((a) => a.qdf === "open-connector2") || null;
   if (kind === "hole-connector4") {
     let arms = 0;
     for (let b = 0; b < 6; b++) if ((mask || 0) & (1 << b)) arms++;

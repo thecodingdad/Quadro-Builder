@@ -165,6 +165,7 @@
     },
     {
       "id": "flexi",
+      "qdf": "flexi-connector3",
       "code": "CX4",
       "name": "Flexikupplung",
       "name_en": "Flexi connector",
@@ -189,6 +190,7 @@
     },
     {
       "id": "flexi_bolt",
+      "qdf": "bolt2",
       "code": "CXA",
       "name": "Flexikupplung Bolzen",
       "name_en": "Flexi connector bolt",
@@ -226,6 +228,7 @@
     },
     {
       "id": "bearing",
+      "qdf": "bearing-connector4",
       "code": "CBR",
       "name": "Lagerkupplung",
       "name_en": "Bearing connector",

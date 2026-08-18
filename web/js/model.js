@@ -2415,6 +2415,7 @@ export class BuildModel {
         if (f.h != null) o.h = f.h;
         if (f.d != null) o.d = f.d;
         if (f.mask != null) o.mask = f.mask;
+        if (f.rest) o.rest = f.rest;
         return o;
       }),
       slides: [...this.slides.values()].map((s) => {
@@ -2495,6 +2496,8 @@ export class BuildModel {
         id: f.id, kind: f.kind, x: f.x, y: f.y, z: f.z,
         quat: f.quat || null, color: f.color || null,
         w: f.w, h: f.h, d: f.d, mask: f.mask,
+        // Felder aus der Datei, die wir nur durchreichen (Flexikupplung & Co.)
+        rest: f.rest || null,
       });
       maxSeq = Math.max(maxSeq, parseSeq(f.id));
     }

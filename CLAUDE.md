@@ -173,6 +173,16 @@ Koordinaten in **cm**, Three.js-Konvention **y = oben**, Boden bei y = 0.
   sonst `3way`/`4way`, …). Geprüft wird die **Ebene selbst** (Normale aus dem ersten nicht
   parallelen Paar), nicht nur die drei Achsenebenen – ein um 45° gedrehter Aufbau wie der
   Ball Cage hat sonst lauter Raumkupplungen, wo flache sitzen.
+- **Kupplungen, die wir nicht setzen können** (Flexikupplung `flexi-connector3`, ihr Bolzen
+  `bolt2`, Lagerkupplung `bearing-connector4`, Rohrkappe `tube-cap2`): sie kommen als
+  **Anbauteile** herein (`FITTING_KINDS` mit `keepRest`), werden über `qdf` im Katalog benannt
+  und gezählt, **nicht gezeichnet** (`_fittingMeshes` kennt sie nicht → `default: return []`)
+  und beim Speichern Zeile für Zeile so zurückgeschrieben, wie sie in der Datei standen
+  (`f.rest` hält den Rohtext hinter der Lage). An einem Punkt mit Flexi-Armen steht in der
+  Datei **keine** `connector3`: der Knoten bekommt `part = "flexi"` (nur wenn dort keine
+  Kupplung stand, `fromFile`), damit Anzeige und Liste „Flexikupplung" sagen statt eine
+  Raumkupplung zu raten – gezählt werden die Arme als Anbauteile, der Knoten selbst liefert
+  nichts (`connectorsForNode`).
 - **Lochzapfenkupplung** (`hole_1`, QDF `hole-connector4`): ihr Zapfen steckt in einem **Arm der
   Kupplung**, quer dazu läuft das Rohr durch ihr Loch – sie klemmt also nichts. Der Knoten liegt
   an der Mündung, eine Kupplungslänge neben dem Würfel; `stub` ist die Rohrrichtung, die

@@ -68,6 +68,13 @@ const FITTING_KINDS = {
   "lattice2":        { renderBase: 8, sized: true },  // Netz
   "bag2":            { renderBase: 4 },   // Spielsack
   "open-connector2": { renderBase: 4 },   // offener Anschluss
+  // Kupplungen, die wir (noch) nicht setzen koennen und auch nicht zeichnen --
+  // gelesen, benannt und beim Speichern unveraendert zurueckgeschrieben werden
+  // sie trotzdem. `keepRest` haelt dafuer die Felder hinter der Lage fest.
+  "flexi-connector3":   { keepRest: true },  // Flexikupplung (ein Arm)
+  "bolt2":              { keepRest: true },  // Flexikupplung Bolzen
+  "bearing-connector4": { keepRest: true },  // Lagerkupplung, klemmt um ein Rohr
+  "tube-cap2":          { keepRest: true },  // Rohrkappe
 };
 
 // Farbnamen aus material3 auf unsere Farb-IDs abbilden.
@@ -102,7 +109,11 @@ function parseLine(line) {
     const num = parseFloat(t);
     return Number.isNaN(num) ? t : num;
   });
-  return { name, tuple, rest };
+  // Rohtext der Felder HINTER der Lage: nur so kommen Teile, die wir bloss
+  // durchreichen, beim Speichern wieder genau so heraus (150. bleibt 150.).
+  const nach = body.indexOf("\u0000");
+  const rawRest = nach < 0 ? "" : body.slice(nach + 1).replace(/^\s*,\s*/, "").trim();
+  return { name, tuple, rest, rawRest };
 }
 
 // Vektor v mit (nicht normiertem) Quaternion q={w,x,y,z} drehen.
@@ -515,6 +526,10 @@ export function parseQDF(text, opts = {}) {
       }
       // Lochzapfenkupplung: Arm-Maske entscheidet ueber ein- oder dreiarmig.
       if (spec.masked && typeof p.rest[4] === "number") f.mask = p.rest[4];
+      // Teile, die wir nur durchreichen: die Felder hinter der Lage im
+      // Rohtext merken, damit der Export dieselbe Zeile schreibt wie die
+      // Datei sie hatte.
+      if (spec.keepRest && p.rawRest) f.rest = p.rawRest;
       fittings.push(f);
     } else if (
       p.name === "slide2" || p.name === "slide-new2" || p.name === "slide-end2" ||
@@ -906,6 +921,22 @@ export function parseQDF(text, opts = {}) {
         if (dot < 0.9) continue;               // laeuft woanders hin
         t[end] = nd.id;
       }
+    }
+  }
+
+  // Flexikupplung: ihre Arme sitzen zu zweit an einem Punkt, den ein Bolzen
+  // zusammenhaelt -- eine Kupplung steht dort NICHT (die Datei fuehrt an der
+  // Stelle keine connector3). Der Knoten bekommt sie deshalb als Teil, damit
+  // Stueckliste und Anzeige "Flexikupplung" sagen, statt aus den Rohren eine
+  // Raumkupplung zu raten. Gezaehlt und geschrieben werden die Arme selbst als
+  // Anbauteile, je einer je Zeile der Datei.
+  for (const f of fittings) {
+    if (f.kind !== "flexi-connector3") continue;
+    for (const n of nodes) {
+      if (n.part || n.fromFile) continue;
+      if (Math.hypot(n.x - f.x, n.y - f.y, n.z - f.z) > 1.5) continue;
+      n.part = "flexi";
+      break;
     }
   }
 

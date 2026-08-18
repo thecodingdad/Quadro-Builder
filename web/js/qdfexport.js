@@ -246,6 +246,10 @@ export function buildQDF(model) {
     // Adapter-Koerper sind keine eigene Kupplung -- ausser am freien Ende einer
     // Schraege, wo die Datei eine connector3 fuehrt (ownConnector).
     if (n.c45body && !n.ownConnector) continue;
+    // An einer Flexikupplung fuehrt die Datei keine connector3 -- dort halten
+    // zwei Flexi-Arme und ein Bolzen die Rohre. Die Arme stehen als Anbauteile
+    // in der Liste und werden weiter unten geschrieben.
+    if (n.part === "flexi") continue;
     // Klemm-Kupplung: eigene Zeile statt connector3. Der Punkt ist die
     // Muendung des offenen Anschlusses, das lokale -Y zeigt in ihn hinein und
     // das lokale X laeuft am umschlossenen Rohr entlang -- so steht es in allen
@@ -489,6 +493,11 @@ export function buildQDF(model) {
       lines.push(`hole-connector4{${CONNECTOR_MAT}, ${tuple(q, fx, fy, fz)}, 0, 0, ${mask}, ${mask - 3}, 3840, 0, 0}`);
     } else if (f.kind === "bearing2") {
       lines.push(`bearing2{${CONNECTOR_MAT}, ${tuple(q, fx, fy, fz)}, 1, ${mm(cs50)}, 0., 0}`);
+    } else if (f.rest) {
+      // Teile, die wir nur durchreichen (Flexikupplung, Bolzen, Lagerkupplung,
+      // Rohrkappe): die Felder hinter der Lage stehen noch so da, wie sie beim
+      // Einlesen in der Datei standen.
+      lines.push(`${f.kind}{${mat}, ${tuple(q, fx, fy, fz)}, ${f.rest}}`);
     } else {
       lines.push(`${f.kind}{${mat}, ${tuple(q, fx, fy, fz)}, 1, 0}`);
     }

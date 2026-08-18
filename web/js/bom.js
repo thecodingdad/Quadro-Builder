@@ -197,6 +197,11 @@ export function connectorsForNode(model, node) {
   // das Rohr selbst auf -- sie zaehlt allein. Die Lagerkupplung traegt eine
   // ganze Kupplung, die zusaetzlich in die Liste gehoert.
   if (node.part === "hole_1") return [node.part];
+  // Flexikupplung: an diesem Punkt sitzt keine Kupplung, sondern zwei ihrer
+  // Arme, die ein Bolzen haelt. Gezaehlt werden die Arme als Anbauteile (je
+  // eine Zeile der Datei) -- hier also nichts, sonst stuende beides in der
+  // Liste.
+  if (node.part === "flexi") return [];
   if (node.part) {
     // Die getragene Kupplung steckt mit einem Arm IN der Lagerkupplung -- der
     // zaehlt mit, sonst faende die Heuristik bei einem einzigen Rohr nur ein

@@ -722,9 +722,9 @@ export class SceneManager {
    * dem zwei Loecher ausgespart sind -- nicht zwei Ringe uebereinander, denn
    * dann ragte die Wand des einen Rings in das Loch des anderen.
    *
-   * Die Rohrklammer hat dieselben zwei Ringe, jeder aber zu einer Seite offen,
-   * und zwar zu entgegengesetzten: so laesst sie sich auf zwei nebeneinander
-   * liegende Rohre klicken.
+   * Die Rohrklammer ist derselbe Koerper, aber beide Schalen sind nach AUSSEN
+   * offen ("ↃC"): links zeigt die Luecke nach links, rechts nach rechts, dort
+   * klicken die Rohre ein. In der Taille bleibt ein gemeinsamer Steg.
    */
   _clampBodyGeometry(open, d) {
     const seg = Math.max(12, this._q().tube);
@@ -736,15 +736,27 @@ export class SceneManager {
       const ro = ri + CLAMP_WALL;
       const shapes = [];
       const lobes = d > 0 ? [-d / 2, d / 2] : [0];
-      if (open) {
-        // Oeffnungen nach +Y und -Y, also quer zur Verbindungslinie.
-        lobes.forEach((cx, i) => {
-          const mid = i === 0 ? Math.PI / 2 : -Math.PI / 2;
-          const s = new THREE.Shape();
-          s.absarc(cx, 0, ro, mid + CLIP_GAP / 2, mid - CLIP_GAP / 2 + Math.PI * 2, false);
-          s.absarc(cx, 0, ri, mid - CLIP_GAP / 2 + Math.PI * 2, mid + CLIP_GAP / 2, true);
-          shapes.push(s);
-        });
+      if (open && d > 0 && ro > d / 2) {
+        // "ↃC": beide Schalen sind nach AUSSEN offen, in der Taille teilen sie
+        // sich einen Steg. Ein einziger Umriss laeuft deshalb aussen um beide
+        // Schalen herum und durch die beiden Luecken jeweils in das Loch und
+        // wieder heraus -- zwei getrennte Ringe waeren in der Mitte doppelt
+        // gewandet.
+        const g = CLIP_GAP, b = Math.acos((d / 2) / ro);
+        const s = new THREE.Shape();
+        s.absarc(-d / 2, 0, ro, Math.PI + g / 2, Math.PI * 2 - b, false);  // links aussen, unten herum
+        s.absarc(d / 2, 0, ro, Math.PI + b, Math.PI * 2 - g / 2, false);   // rechts aussen bis zur Luecke
+        s.absarc(d / 2, 0, ri, Math.PI * 2 - g / 2, g / 2, true);          // rechtes Loch
+        s.absarc(d / 2, 0, ro, g / 2, Math.PI - b, false);                 // rechts aussen, oben herum
+        s.absarc(-d / 2, 0, ro, b, Math.PI - g / 2, false);                // links aussen bis zur Luecke
+        s.absarc(-d / 2, 0, ri, Math.PI - g / 2, Math.PI + g / 2, true);   // linkes Loch
+        shapes.push(s);
+      } else if (open) {
+        // Ohne zweites Rohr bleibt es bei einer offenen Schale.
+        const s = new THREE.Shape();
+        s.absarc(0, 0, ro, CLIP_GAP / 2, Math.PI * 2 - CLIP_GAP / 2, false);
+        s.absarc(0, 0, ri, Math.PI * 2 - CLIP_GAP / 2, CLIP_GAP / 2, true);
+        shapes.push(s);
       } else {
         const s = new THREE.Shape();
         if (d > 0 && ro > d / 2) {
