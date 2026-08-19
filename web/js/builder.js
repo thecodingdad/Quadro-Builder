@@ -1233,23 +1233,49 @@ export class Builder {
    * gesetzte Kupplung dreht sie um 90 Grad weiter.
    */
   _buildC45Handles() {
-    // Die Punkte liegen dort, WOHIN die Schraege zeigt -- genau wie frueher im
-    // Schraeg-Modus. Auf welchem Arm die Huelse dafuer sitzt, rechnet
-    // _diagSleeveAxis aus (Waagerechte bevorzugt, aber nur ein FREIER Arm).
-    const gap = (geometry().connectorSize / 2 + 4) * 1.6;
+    // Die Punkte sitzen dort, WO die Winkelkupplung ansetzt: an jedem freien
+    // Arm einer Kupplung, gruen wie die uebrigen Bau-Punkte. In welche Schraege
+    // sie dann zeigt, entscheidet der erste passende Wert -- weiterdrehen laesst
+    // sie sich danach mit einem Klick auf sie selbst.
+    const gap = geometry().connectorSize / 2 + 4;
     for (const node of this.model.nodes.values()) {
       if (node.unused || node.c45body || node.part) continue;
       const belegt = this._occupiedDirs(node);
-      for (const d of DIAGONAL_DIRECTIONS) {
-        if (belegt.has(d.name)) continue;
-        if (this._targetBelowGround(node, d.vec)) continue;
-        const axis = this._diagSleeveAxis(node, d.vec);
-        if (!axis) continue;
+      for (const a of DIRECTIONS) {
+        if (this._armOccupied(node, a.vec)) continue;
+        const dir = this._c45DirFor(node, a.vec, belegt);
+        if (!dir) continue;
         this.scene.addHandle(
-          [node.x + d.vec[0] * gap, node.y + d.vec[1] * gap, node.z + d.vec[2] * gap],
-          { c45mount: true, nodeId: node.id, axis, dir: d.vec }, "diag");
+          [node.x + a.vec[0] * gap, node.y + a.vec[1] * gap, node.z + a.vec[2] * gap],
+          { c45mount: true, nodeId: node.id, axis: a.vec, dir }, "dir");
       }
     }
+  }
+
+  /**
+   * Welche Schraege gehoert zu einer Winkelkupplung auf diesem Arm? Es gibt
+   * mehrere; genommen wird die erste freie, moeglichst nach oben -- die
+   * uebrigen erreicht man durch Weiterdrehen.
+   */
+  _c45DirFor(node, axis, belegt) {
+    const passt = DIAGONAL_DIRECTIONS.filter((d) => {
+      if (belegt && belegt.has(d.name)) return false;
+      if (this._targetBelowGround(node, d.vec)) return false;
+      const a = this._diagSleeveAxis(node, d.vec);
+      return a && a[0] === axis[0] && a[1] === axis[1] && a[2] === axis[2];
+    });
+    if (!passt.length) return null;
+    const hoch = passt.find((d) => d.vec[1] > 0.3);
+    return (hoch || passt[0]).vec;
+  }
+
+  /** Steckt in der Winkelkupplung schon ein Rohr? */
+  _c45HasTube(bodyId) {
+    for (const t of this.model.tubes.values()) {
+      if (t.arm || t.link) continue;
+      if (t.a === bodyId || t.b === bodyId) return true;
+    }
+    return false;
   }
 
   /** Haengt an dieser Kupplung eine Winkelkupplung? Dann deren Koerper. */
@@ -1283,6 +1309,9 @@ export class Builder {
     // der sie steckt (Huelse und Arm gehoeren beiden) -- beides dreht sie.
     const body = node && (node.c45body ? node : this._c45BodyAt(node.id));
     if (body) {
+      // Steckt schon ein Rohr darin, bleibt sie stehen: mitzudrehen hiesse, das
+      // halbe Modell mitzuziehen -- dafuer gibt es das Drehen der Auswahl.
+      if (this._c45HasTube(body.id)) { this.onNotice(t("notice_c45_has_tube"), "warn"); return; }
       let ok = false;
       this.recordHistory(() => { ok = this.model.rotateC45(body.id); });
       this.onNotice(ok ? t("notice_c45_turned") : t("notice_c45_no_turn"), ok ? "ok" : "warn");
