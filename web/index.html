@@ -84,6 +84,10 @@
 
       <!-- Fixierter rechter Bereich: Undo · Entwürfe · Toggles · Sidebar · Mehr -->
       <div id="toolbar-right">
+        <!-- Hochformat: Schnittebene und Perspektive wandern hierher, weil die
+             Bauteil-Zeile dann unten steht (siehe applyLayout in ui.js). -->
+        <span id="view-mobile" class="toolbar-icon-row"></span>
+        <span id="view-divider" class="divider" hidden></span>
         <!-- Hamburger: nur auf Mobile -->
         <button id="btn-hamburger" class="btn ghost icon-sq" aria-label="Menü">
           <svg viewBox="0 0 18 18" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">

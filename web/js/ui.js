@@ -316,6 +316,7 @@ export function initUI({ scene, model, builder }) {
   function applySlice() {
     if (!sliceBar) return;
     sliceBar.hidden = !slice.on;
+    requestAnimationFrame(syncCubeInset);
     $("btn-slice").classList.toggle("active", slice.on);
     if (!slice.on) { scene.clearClip(); builder.refresh(); return; }
     const lim = sliceLimits();
@@ -2040,6 +2041,16 @@ export function initUI({ scene, model, builder }) {
   // außerhalb des Aufbau-Modus nicht.
   let letzterPanel = localStorage.getItem(SIDEBAR_PANEL_KEY) || "bom";
 
+  /**
+   * Liegt die Schnittebenen-Leiste als Leiste UEBER dem Bild (schmale Schirme),
+   * rueckt der Ansichtswuerfel darunter -- sonst steckt er dahinter.
+   */
+  function syncCubeInset() {
+    const bar = $("slice-bar");
+    const alsLeiste = !bar.hidden && window.matchMedia("(max-width: 760px)").matches;
+    scene.setViewCubeInset(alsLeiste ? bar.getBoundingClientRect().height + 8 : 0);
+  }
+
   function applyPanelVisibility() {
     $("panel-bom").hidden = currentPanel !== "bom";
     $("panel-own").hidden = currentPanel !== "own";
@@ -3699,13 +3710,19 @@ export function initUI({ scene, model, builder }) {
     const hochformat = mqPortrait.matches;
     document.body.classList.toggle("mobile-portrait", hochformat);
     document.body.classList.toggle("sidebar-overlay", mqNarrow.matches || hochformat);
+    // Steht die Bauteil-Zeile unten, gehoeren Schnittebene und Perspektive nach
+    // oben -- unten bleibt die Farbauswahl. Ein Trenner haelt sie vom
+    // Seitenleisten-Schalter ab.
+    moveNode($("btn-slice"), hochformat ? $("view-mobile") : null);
+    moveNode($("btn-projection"), hochformat ? $("view-mobile") : null);
+    $("view-divider").hidden = !hochformat;
     // Im Hochformat verschwindet der Datei-Knopf; seine Eintraege stehen dann
     // oben im Hauptmenue, das auch ein Tipp auf die Marke oeffnet.
     renderMenuFileRows(hochformat);
     applyPanelVisibility();
     applyAssemblySheet();
     requestAnimationFrame(() => {
-      measureCollapse(); measureHead(); tidyDividers(); scene.onResize();
+      measureCollapse(); measureHead(); tidyDividers(); syncCubeInset(); scene.onResize();
     });
   }
 

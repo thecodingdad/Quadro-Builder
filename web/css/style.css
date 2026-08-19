@@ -516,14 +516,21 @@ body.sidebar-hidden #sidebar, body.sidebar-hidden #sidebar-resizer { display: no
 /* Die Achsen bleiben immer in EINER Zeile; enger wird stattdessen der Regler. */
 #slice-axes { flex: 0 0 auto; }
 #slice-range { width: 220px; min-width: 60px; flex: 1 1 auto; }
-/* Schmale Schirme: die Leiste spannt sich zwischen Szene-Knopf und
-   Ansichtswürfel, statt beide zu überdecken. */
+/* Schmale Schirme: die Schnittebene wird zur Leiste unter den Tabs. Sie LIEGT
+   über dem Bild (kein zweiter Streifen im Layout), damit der Canvas nicht
+   schrumpft; der Szene-Knopf rückt darunter, der Ansichtswürfel ebenfalls
+   (scene.setViewCubeInset in ui.js). */
 @media (max-width: 760px) {
   #slice-bar {
-    left: 68px; right: 78px; transform: none;
-    padding: 6px 8px; gap: 6px;
+    top: 0; left: 0; right: 0; transform: none;
+    border-radius: 0; border-left: none; border-right: none; border-top: none;
+    background: var(--panel);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.10);
+    padding: 6px 10px; gap: 8px;
   }
+  #slice-range { width: auto; }
   .slice-value { min-width: 46px; }
+  .scene-icon { top: 56px; }
 }
 .slice-value {
   font-size: 12px; font-variant-numeric: tabular-nums;

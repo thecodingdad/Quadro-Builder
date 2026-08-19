@@ -248,6 +248,7 @@ export class SceneManager {
 
     // Wiederverwendbare Ressourcen
     this._raycaster = new THREE.Raycaster();
+    this._cubeInset = 0;      // Abstand des Ansichtswuerfels von oben (Leiste darueber)
     this._mouse = new THREE.Vector2();
     this._hover = null;
 
@@ -1597,21 +1598,36 @@ export class SceneManager {
       if (!other) continue;
       if (t.arm) G = other; else if (!foot) foot = other;
     }
-    if (!G || !foot) return null;
-    const d = new THREE.Vector3(foot.x - n.x, foot.y - n.y, foot.z - n.z).normalize();
+    if (!G) return null;
     const v = new THREE.Vector3(n.x - G.x, n.y - G.y, n.z - G.z); // Basis -> Fuss
-    // 45°-Arm-Laenge a so waehlen, dass (Fuss - d*a) - G kardinal liegt (Huelse).
-    const active = [];
-    for (let k = 0; k < 3; k++) if (Math.abs(d.getComponent(k)) > 0.3) active.push(k);
-    let a = 0;
-    const ci = n.c45axis ? (Math.abs(n.c45axis[0]) > 0.5 ? 0 : Math.abs(n.c45axis[1]) > 0.5 ? 1 : 2) : -1;
-    if (ci >= 0) {
-      const m = active.find((k) => k !== ci);
-      if (m != null) a = v.getComponent(m) / d.getComponent(m);
+    let d, a;
+    if (foot) {
+      d = new THREE.Vector3(foot.x - n.x, foot.y - n.y, foot.z - n.z).normalize();
+      // 45°-Arm-Laenge a so waehlen, dass (Fuss - d*a) - G kardinal liegt (Huelse).
+      const active = [];
+      for (let k = 0; k < 3; k++) if (Math.abs(d.getComponent(k)) > 0.3) active.push(k);
+      a = 0;
+      const ci = n.c45axis ? (Math.abs(n.c45axis[0]) > 0.5 ? 0 : Math.abs(n.c45axis[1]) > 0.5 ? 1 : 2) : -1;
+      if (ci >= 0) {
+        const m = active.find((k) => k !== ci);
+        if (m != null) a = v.getComponent(m) / d.getComponent(m);
+      }
+      if (!(a > 0.01)) {
+        for (const m of active) { const aa = v.getComponent(m) / d.getComponent(m); if (aa > 0.01) { a = aa; break; } }
+      }
+    } else {
+      // Noch kein Rohr daran: die Lage steckt in der Huelsenachse. Der Fuss
+      // liegt um die Huelse UND den 45-Grad-Arm neben der Kupplung -- daraus
+      // ergeben sich Armrichtung (genau zwischen Achse und Querteil) und Laenge.
+      if (!n.c45axis) return null;
+      const u = new THREE.Vector3(n.c45axis[0], n.c45axis[1], n.c45axis[2]).normalize();
+      const quer = v.clone().addScaledVector(u, -v.dot(u));
+      const L = quer.length();
+      if (L < 0.01) return null;
+      d = u.clone().add(quer.multiplyScalar(1 / L)).normalize();
+      a = L * Math.SQRT2;
     }
-    if (!(a > 0.01)) {
-      for (const m of active) { const aa = v.getComponent(m) / d.getComponent(m); if (aa > 0.01) { a = aa; break; } }
-    }
+    if (!(a > 0.01)) return null;
     const bodyPos = new THREE.Vector3(n.x - d.x * a, n.y - d.y * a, n.z - d.z * a);
     const sleeveVec = new THREE.Vector3().subVectors(bodyPos, G);
     const fullLen = sleeveVec.length();
@@ -3996,11 +4012,23 @@ export class SceneManager {
     return tex;
   }
 
+  /**
+   * Wie weit der Ansichtswuerfel von oben abruecken soll. Gebraucht, wenn eine
+   * Leiste ueber dem Bild liegt (Schnittebene auf schmalen Schirmen) -- sonst
+   * verschwindet er dahinter.
+   */
+  setViewCubeInset(px) {
+    const v = Math.max(0, px || 0);
+    if (v === this._cubeInset) return;
+    this._cubeInset = v;
+    this._needsRender = true;
+  }
+
   /** Ausschnitt des Wuerfels in CSS-Pixeln, gemessen von der linken oberen Ecke. */
   _cubeRect() {
     const w = this.container.clientWidth, h = this.container.clientHeight;
     if (w < CUBE_PX * 2 || h < CUBE_PX * 2) return null;   // zu wenig Platz
-    return { x: w - CUBE_PX - CUBE_MARGIN, y: CUBE_MARGIN, size: CUBE_PX, w, h };
+    return { x: w - CUBE_PX - CUBE_MARGIN, y: CUBE_MARGIN + (this._cubeInset || 0), size: CUBE_PX, w, h };
   }
 
   _renderViewCube() {
