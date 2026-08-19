@@ -511,7 +511,18 @@ export function initUI({ scene, model, builder }) {
   $("mode-rotate").addEventListener("click", () => {
     if (builder.rotateSelectionBy(1)) flash(t("flash_rotated"));
   });
-  $("mode-reinforce").addEventListener("click", () => setMode(builder.mode === "reinforce" ? "select" : "reinforce"));
+  // Verstaerken ist eine Gruppe wie Rohre oder Platten: der Knopf oeffnet die
+  // Liste, gewaehlt wird darin. Zu kaufen gibt es nur das Holz-Profil 80 cm --
+  // bis es ein zweites Teil gibt, steht dort eben genau eine Zeile.
+  $("mode-reinforce").addEventListener("click", (e) => {
+    e.stopPropagation();
+    const items = reinforcements();
+    if (!items.length) return;
+    const icon = () => svg16(REINFORCE_ICON);
+    showPartPopup($("mode-reinforce"), items,
+      builder.mode === "reinforce" ? items[0].id : null, icon,
+      () => setMode("reinforce"));
+  });
   $("mode-assembly").addEventListener("click", () => { toggleHamburger(false); setMode("assembly"); });
 
 
@@ -1160,7 +1171,7 @@ export function initUI({ scene, model, builder }) {
     flexi_bolt: `<circle cx="4.4" cy="8" r="2.6" fill="none" stroke="currentColor" stroke-width="1.5"/>` +
       `<line x1="7" y1="8" x2="14" y2="8" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/>`,
   };
-  // Verstaerkungsprofil: Rohr im Schnitt mit dem Alu-Profil darin -- dasselbe
+  // Verstaerkungsprofil: Rohr im Schnitt mit dem Holz-Profil darin -- dasselbe
   // Sinnbild wie am Knopf "Verstärken".
   const REINFORCE_ICON = `<rect x="1.6" y="4.8" width="12.8" height="6.4" rx="2.4" fill="none" stroke="currentColor" stroke-width="1.3"/>` +
     `<line x1="4" y1="8" x2="12" y2="8" stroke="currentColor" stroke-width="2.1" stroke-linecap="round"/>`;
@@ -2237,7 +2248,7 @@ export function initUI({ scene, model, builder }) {
   let asmHighlightKey = null;
 
   function asmRowKey(sel) {
-    return [sel.kind, sel.type || sel.tubeId || sel.panelId || "", sel.color || ""].join(":");
+    return [sel.kind, sel.type || sel.tubeId || sel.panelId || sel.id || "", sel.color || ""].join(":");
   }
 
   function partsForAssemblyRow(step, sel) {
@@ -2260,6 +2271,12 @@ export function initUI({ scene, model, builder }) {
       for (const id of step.panelIds || []) {
         const p = model.panels.get(id);
         if (p && p.panelId === sel.panelId && (sel.color == null || p.color === sel.color)) ids.add(id);
+      }
+    } else if (sel.kind === "reinforcement") {
+      // Gezeigt werden die Rohre, in denen die Profile stecken.
+      for (const id of step.tubeIds || []) {
+        const tb = model.tubes.get(id);
+        if (tb && tb.reinforced) ids.add(id);
       }
     }
     return ids;
@@ -2330,6 +2347,13 @@ export function initUI({ scene, model, builder }) {
         asmRow(body, plain ? p.name : `${p.name} · ${p.colorName}`,
           p.color, p.count, bomIcon("panels", p.panelId),
           { kind: "panel", panelId: p.panelId, color: p.color });
+    }
+    // Die Profile stecken IN den Rohren dieses Schritts -- sie gehoeren also
+    // eingeschoben, bevor die Rohre verbaut werden.
+    for (const r of (step.reinforcements || [])) {
+      body.appendChild(el("h4", "asm-cat", t("asm_cat_reinforcements")));
+      asmRow(body, r.name, null, r.count, bomIcon("reinforcements", r.id),
+        { kind: "reinforcement", id: r.id });
     }
   }
 

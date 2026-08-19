@@ -582,14 +582,14 @@
   ],
   "reinforcements": [
     {
-      "id": "reinforce40",
-      "code": "RV4",
-      "name": "Verstärkungsprofil 40 cm (Holz)",
-      "name_en": "Reinforcement profile 40 cm (wood)",
-      "length_cm": 40,
+      "id": "reinforce80",
+      "code": "RV8",
+      "name": "Holz-Profil 80 cm",
+      "name_en": "Wood profile 80 cm",
+      "length_cm": 80,
       "material": "Holz",
-      "price": 4.49,
-      "note": "Stab, der in ein Rohr geschoben wird und es versteift; kommt in 40-cm-Längen; heute aus Holz (früher Alu, günstiger); nötig bei frei tragenden, von unten ungestuetzten Ebenen",
+      "price": 8.99,
+      "note": "Stab, der in die Rohre geschoben wird und sie versteift; es gibt NUR diese eine Länge (80 cm, Holz) zu kaufen -- die Alu-Profile der Herstellersoftware sind nicht mehr erhältlich. Ein Profil deckt 80 cm Knotenabstand: entweder ein 75er-Rohr oder zwei 35er in einer Linie; nötig bei frei tragenden, von unten ungestuetzten Ebenen",
       "url": "https://quadroshop.com/products/wood-tube-core"
     }
   ],

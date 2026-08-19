@@ -2049,7 +2049,7 @@ export class SceneManager {
   // Transparenz -- das laesst sich nicht je Instanz setzen. Da es nur eine
   // Handvoll Rohrlaengen und Farben gibt, bleiben es trotzdem wenige Buendel.
   //
-  // kind/id duerfen null sein (nicht anklickbare Teile wie die Alu-Profile).
+  // kind/id duerfen null sein (nicht anklickbare Teile wie die Verstaerkungsprofile).
   _batchAdd(geo, mat, matrix, kind, id, pickList) {
     const key = geo.uuid + "|" + mat.uuid;
     let b = this._batches.get(key);
@@ -2107,11 +2107,9 @@ export class SceneManager {
     // sieht nicht mehr, welche Teile die Zeile meint. (Frueher war es
     // umgekehrt: die Auswahl gewann und der Klick blieb wirkungslos.)
     const marked = highlight || selected;
-    const dimOthers = !!highlight;
-    // Im Vorschlags-Modus treten alle Teile zurueck, die keine Verstaerkung
-    // brauchen -- sonst sucht man die orangen Rohre im Gewirr.
-    // Im Verstaerken-Modus treten Rohre zurueck, die kein Profil brauchen.
-    const hintDim = !!opts.suggest && !!opts.reinforce;
+    // Beim Verstaerken steht das Modell ohnehin schon in Grau -- es dann auch
+    // noch zurueckzublenden nimmt nur Licht, ohne etwas zu klaeren.
+    const dimOthers = !!highlight && !opts.reinforce;
     // Eingefuegte Teile an einer belegten Stelle: Rot geht allem vor -- es sagt,
     // dass der Klick hier nichts absetzt.
     const invalid = opts.invalid && opts.invalid.size ? opts.invalid : null;
@@ -2121,7 +2119,6 @@ export class SceneManager {
         if (id != null && marked.has(id)) return this._selectedMaterial(base);
         return dimOthers ? this._dimmedMaterial(base) : base;
       }
-      if (hintDim && !(id != null && opts.suggest.has(id))) return this._dimmedMaterial(base);
       return base;
     };
 
@@ -2503,7 +2500,7 @@ export class SceneManager {
       this._batchAdd(isReinforceActive ? geo2 : geo, matFor(t.id, mat),
         new THREE.Matrix4().compose(mid, quat, ONE), "tube", t.id, this.pickTubes);
 
-      // Verstaerkungsprofil: dünner Alu-Innenstab im Bauen-Modus sichtbar.
+      // Verstaerkungsprofil: dünner Innenstab im Bauen-Modus sichtbar.
       // Das Profil (ca. 2,5 cm) liegt im hohlen Rohr (5 cm Außen-Ø) und ragt
       // durch die Kupplungen hindurch – deshalb volle Rohrlänge.
       if (t.reinforced && !reinforce && st !== "future") {

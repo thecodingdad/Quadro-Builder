@@ -361,12 +361,96 @@ export class BuildModel {
     return link;
   }
 
-  // Verstaerkung (Alu-Profil im Rohr) ein-/ausschalten. Liefert den neuen Zustand.
-  toggleReinforced(id) {
+  // --- Verstaerkung (Holz-Profil 80 cm) -------------------------------------
+  // Zu kaufen gibt es nur EINE Laenge: 80 cm. Sie deckt genau 80 cm Knoten-
+  // abstand -- also ein 75er-Rohr (75 + 2 x halbe Kupplung) oder zwei 35er in
+  // einer Linie (40 + 40). Aus Herstellerdateien kommen auch andere Rohre
+  // verstaerkt herein; die bleiben, wie sie sind, lassen sich hier aber nicht
+  // neu setzen.
+  static REINFORCE_SPAN = 80;
+
+  /** Knotenabstand eines Rohrs (Rohrlaenge + eine ganze Kupplung). */
+  tubeSpan(t) {
+    const a = this.nodes.get(t.a), b = this.nodes.get(t.b);
+    if (!a || !b) return 0;
+    return Math.hypot(b.x - a.x, b.y - a.y, b.z - a.z);
+  }
+
+  _tubeDir(t) {
+    const a = this.nodes.get(t.a), b = this.nodes.get(t.b);
+    if (!a || !b) return null;
+    const d = [b.x - a.x, b.y - a.y, b.z - a.z];
+    const L = Math.hypot(d[0], d[1], d[2]) || 1;
+    return [d[0] / L, d[1] / L, d[2] / L];
+  }
+
+  /** Traegt dieses Rohr allein ein ganzes Profil (75er)? */
+  takesReinforcementAlone(t) {
+    return !!t && !t.arm && !t.link && !t.bow
+      && Math.abs(this.tubeSpan(t) - BuildModel.REINFORCE_SPAN) < 1;
+  }
+
+  /** Braucht dieses Rohr einen Partner (35er)? */
+  takesReinforcementPaired(t) {
+    return !!t && !t.arm && !t.link && !t.bow
+      && Math.abs(this.tubeSpan(t) - BuildModel.REINFORCE_SPAN / 2) < 1;
+  }
+
+  /**
+   * Welche Rohre koennen zusammen mit `id` EIN Profil aufnehmen? Sie stossen an
+   * einem gemeinsamen Knoten an, laufen in derselben Geraden weiter und sind
+   * selbst noch unverstaerkt.
+   */
+  reinforcePartners(id) {
     const t = this.tubes.get(id);
-    if (!t) return null;
-    t.reinforced = !t.reinforced;
-    return t.reinforced;
+    if (!this.takesReinforcementPaired(t) || t.reinforced) return [];
+    const d1 = this._tubeDir(t);
+    if (!d1) return [];
+    const out = [];
+    for (const o of this.tubes.values()) {
+      if (o.id === t.id || o.reinforced) continue;
+      if (!this.takesReinforcementPaired(o)) continue;
+      // Gemeinsame Kupplung?
+      if (o.a !== t.a && o.a !== t.b && o.b !== t.a && o.b !== t.b) continue;
+      const d2 = this._tubeDir(o);
+      if (!d2) continue;
+      if (Math.abs(d1[0] * d2[0] + d1[1] * d2[1] + d1[2] * d2[2]) < 0.999) continue;
+      out.push(o);
+    }
+    return out;
+  }
+
+  /** Profil einschieben. `ids` ist ein 75er oder zwei 35er in einer Linie. */
+  addReinforcement(ids) {
+    const list = ids.map((id) => this.tubes.get(id)).filter(Boolean);
+    if (!list.length) return false;
+    for (const t of list) t.reinforced = true;
+    return true;
+  }
+
+  /**
+   * Profil an diesem Rohr herausziehen. Bei einem 35er geht der Partner mit --
+   * ein halbes Profil gibt es nicht. Liefert die betroffenen Rohr-IDs.
+   */
+  removeReinforcement(id) {
+    const t = this.tubes.get(id);
+    if (!t || !t.reinforced) return [];
+    const raus = [t];
+    if (this.takesReinforcementPaired(t)) {
+      const d1 = this._tubeDir(t);
+      for (const o of this.tubes.values()) {
+        if (o.id === t.id || !o.reinforced) continue;
+        if (!this.takesReinforcementPaired(o)) continue;
+        if (o.a !== t.a && o.a !== t.b && o.b !== t.a && o.b !== t.b) continue;
+        const d2 = this._tubeDir(o);
+        if (!d2 || !d1) continue;
+        if (Math.abs(d1[0] * d2[0] + d1[1] * d2[1] + d1[2] * d2[2]) < 0.999) continue;
+        raus.push(o);
+        break;   // ein Profil deckt genau zwei 35er
+      }
+    }
+    for (const x of raus) x.reinforced = false;
+    return raus.map((x) => x.id);
   }
 
   // Prueft, ob ein neues Rohr von p nach q ein bestehendes Rohr ueberdeckt:
@@ -1664,7 +1748,7 @@ export class BuildModel {
     }
   }
 
-  // Schlaegt Rohre vor, die ein Alu-Verstaerkungsprofil gebrauchen koennten:
+  // Schlaegt Rohre vor, die ein Holz-Profil gebrauchen koennten:
   // Alle waagerechten und schraegen Rohre, bei denen mindestens ein erhoehter
   // Endknoten keine senkrechte Stuetze nach unten hat (frei tragend, Kragarm,
   // Diagonale mit ungestuetzter Kupplung).  Senkrechte Rohre und Rohre auf

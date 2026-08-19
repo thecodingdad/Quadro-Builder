@@ -11,6 +11,9 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ## [Unreleased]
 
 ### Geändert · Changed
+- **Verstärkt wird nur noch mit dem Holz-Profil 80 cm** – das ist das einzige Teil, das es zu kaufen gibt. Es passt in ein 75er-Rohr oder in zwei 35er in einer Linie; beim 35er zeigt der erste Klick die möglichen Partner an, wie beim Platzieren einer Platte. „Verstärken" ist dafür zu einem Menü geworden, und in der Stückliste stehen jetzt Profile statt Lauflängen · **Reinforcement is now the 80 cm wood profile only**
+- **Die Verstärkungen stehen auch in der Aufbauanleitung** – bisher fehlten sie dort ganz · **Reinforcements now appear in the assembly instructions**
+- **Im Verstärken-Modus bleibt das Modell klar** – es stand grau UND zurückgeblendet da; das Zurückblenden ist weg · **The model no longer fades on top of going grey while reinforcing**
 - **Die Kopfzeile gibt der Reihe nach nach** – wird der Platz eng, verschwindet erst das „3D", dann „QUADRO"; das Zeichen bleibt stehen und erst danach schrumpft die Marke · **The header gives way in order: „3D" first, then „QUADRO", the icon stays**
 
 ### Behoben · Fixed

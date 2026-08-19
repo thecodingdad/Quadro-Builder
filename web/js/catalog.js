@@ -101,7 +101,8 @@ export function partForFitting(kind, mask) {
   return all.find((x) => x.qdf === kind) || null;
 }
 
-// Verstaerkungen (Alu-Profile), die in Rohre geschoben werden.
+// Verstaerkungen (Holz-Profile), die in Rohre geschoben werden. Zu kaufen gibt
+// es nur die 80-cm-Laenge; die Alu-Profile der Herstellersoftware sind weg.
 export function reinforcements() {
   return catalog().reinforcements || [];
 }
@@ -139,13 +140,6 @@ export function getScrew(id) {
 // Standard-Verstaerkungsprofil (erstes definiertes).
 export function reinforcementPart() {
   return reinforcements()[0] || null;
-}
-
-// Name eines Verstaerkungslaufs: ersetzt die Katalog-Laenge (40 cm) durch die
-// tatsaechliche Lauflange, z. B. "Verstaerkungsprofil 160 cm (Holz)".
-export function reinforcementRunName(part, lenCm) {
-  const base = (getLang() === 'en' ? part.name_en : null) || part.name || '';
-  return base.replace(/\b40\b/, String(Math.round(lenCm)));
 }
 
 export function defaultPanel() {

@@ -1,6 +1,6 @@
 // Stueckliste (BOM) + Kupplungstyp-Heuristik + Bestands-/Machbarkeitscheck.
 
-import { getTube, getConnector, getPanel, colorName, partName, reinforcementPart, reinforcementRunName, partForFitting, getPartById, getScrew, poolLinerFor, geometry } from "./catalog.js";
+import { getTube, getConnector, getPanel, colorName, partName, reinforcementPart, partForFitting, getPartById, getScrew, poolLinerFor, geometry } from "./catalog.js";
 import { round2, xAxisOf } from "./util.js";
 import { POOL_KINDS } from "./model.js";
 
@@ -662,42 +662,33 @@ export function computeBOM(model) {
   const slideCount = slides.reduce((s, r) => s + r.count, 0);
 
   // --- Verstaerkungen ---
-  // Kollineare verstaerkte Rohre bilden einen "Lauf" (Union-Find). Jeder Lauf
-  // wird als EINE Zeile mit seiner Gesamtlaenge angezeigt: 4 x 40 cm = 160 cm.
-  // Gleich lange Laeufe werden zusammengefasst (z. B. zwei Laeufe a 160 cm -> 2x).
-  // Fuer Bestellung / Bestandspruefung bleibt die physische Stueckzahl massgeblich
-  // (r.pieces): ein 40-cm-Profil geht in jedes einzelne verstaerkte Rohr.
+  // Zu kaufen gibt es nur EINE Laenge: das Holz-Profil mit 80 cm. Es deckt
+  // 80 cm Knotenabstand -- ein 75er-Rohr oder zwei 35er in einer Linie.
+  // Gezaehlt wird deshalb nicht nach Laufllaenge, sondern in Profilen: ein Lauf
+  // von 160 cm braucht zwei. (Aus Herstellerdateien kommen auch andere Laengen
+  // verstaerkt herein; die werden auf ganze Profile aufgerundet.)
   const runs = reinforcementRuns(model);
   const reinforcements = [];
   const part = reinforcementPart();
+  const profilLaenge = (part && part.length_cm) || 80;
+  const profileCount = runs.reduce(
+    (s, run) => s + Math.max(1, Math.round(run.length / profilLaenge)), 0);
 
-  if (runs.length > 0 && part) {
-    // Laeufe nach gerundeter Gesamtlaenge gruppieren.
-    const lenGroups = new Map(); // len_cm -> { runCount, segCount }
-    for (const run of runs) {
-      const len = Math.round(run.length);
-      if (!lenGroups.has(len)) lenGroups.set(len, { runCount: 0, segCount: 0 });
-      const g = lenGroups.get(len);
-      g.runCount++;
-      g.segCount += run.segments;
-    }
-    // Laengste Laeufe zuerst.
-    for (const [len, g] of [...lenGroups.entries()].sort((a, b) => b[0] - a[0])) {
-      reinforcements.push({
-        key:      part.id + "|" + len,
-        id:       part.id,
-        len,
-        name:     reinforcementRunName(part, len), // z. B. "Verstaerkungsprofil 160 cm (Holz)"
-        count:    g.runCount,    // Anzahl Laeufe dieser Laenge (BOM-Anzeige)
-        pieces:   g.segCount,    // Physische 40-cm-Profile (Bestellung / Bestand)
-        price:    round2(part.price * g.segCount / g.runCount), // Preis je Lauf
-        subtotal: round2(part.price * g.segCount),              // Gesamtpreis Gruppe
-      });
-    }
+  if (profileCount > 0 && part) {
+    reinforcements.push({
+      key:      part.id,
+      id:       part.id,
+      len:      profilLaenge,
+      name:     partName(part),
+      count:    profileCount,
+      pieces:   profileCount,
+      price:    part.price,
+      subtotal: round2(part.price * profileCount),
+    });
   }
 
-  // Gesamtzahl der Laeufe (konzeptuelle Einheiten, erscheint im Summen-Footer).
-  const reinfCount = runs.length;
+  // Gesamtzahl der Profile (erscheint im Summen-Footer).
+  const reinfCount = profileCount;
 
   const screwRows = computeScrews(model);
 

@@ -7,7 +7,7 @@
 // Modell abgeleitet (man greift beim Bau die endgueltige Kupplung).
 
 import { inferConnectorType, connectorsForNode } from "./bom.js";
-import { getTube, getConnector, getPanel, colorName, partName } from "./catalog.js";
+import { getTube, getConnector, getPanel, colorName, partName, reinforcementPart } from "./catalog.js";
 import { getLang, t } from "./i18n.js";
 
 const Y_EPS = 0.6; // cm: Knoten innerhalb dieser Hoehe gelten als gleiche Ebene
@@ -150,6 +150,24 @@ function countPanels(panels) {
   }).sort((a, b) => a.name.localeCompare(b.name));
 }
 
+// Holz-Profile eines Schritts. Gekauft wird nur die 80-cm-Laenge; sie deckt
+// 80 cm Knotenabstand (ein 75er-Rohr oder zwei 35er in einer Linie). Gezaehlt
+// wird deshalb die verstaerkte Strecke des Schritts, nicht die Zahl der Rohre.
+function countReinforcements(model, tubes) {
+  const part = reinforcementPart();
+  if (!part) return [];
+  let strecke = 0;
+  for (const t of tubes) {
+    if (!t.reinforced) continue;
+    const a = model.nodes.get(t.a), b = model.nodes.get(t.b);
+    if (!a || !b) continue;
+    strecke += Math.hypot(b.x - a.x, b.y - a.y, b.z - a.z);
+  }
+  if (strecke <= 0) return [];
+  const count = Math.max(1, Math.round(strecke / (part.length_cm || 80)));
+  return [{ id: part.id, name: partName(part), count, price: part.price || 0 }];
+}
+
 // Erzeugt den Aufbauplan: ein Array von Schritten.
 // Jeder Schritt: { kind, title, level, y, connectors, openEnds, tubes, panels,
 //                  nodeIds, tubeIds, panelIds }
@@ -243,6 +261,7 @@ export function computeBuildPlan(model, order = "y+") {
         kind: "frame", title, level: i, y: levels[i],
         connectors: conn.rows, openEnds: conn.openEnds,
         tubes: countTubes(horiz), panels: countPanels(pans),
+        reinforcements: countReinforcements(model, horiz),
         nodeIds: nodes.map((n) => n.id),
         tubeIds: horiz.map((t) => t.id),
         panelIds: pans.map((p) => p.id),
@@ -263,6 +282,7 @@ export function computeBuildPlan(model, order = "y+") {
         level: i, y: levels[i],
         connectors: [], openEnds: 0,
         tubes: countTubes(risers), panels: [],
+        reinforcements: countReinforcements(model, risers),
         nodeIds: [],
         tubeIds: risers.map((t) => t.id),
         panelIds: [],

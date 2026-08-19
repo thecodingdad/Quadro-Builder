@@ -68,7 +68,7 @@ Three.js ausschließlich in `scene.js`, DOM ausschließlich in `ui.js`/`scene.js
 | `web/js/catalog.js` | Einziger Ort, der `data/parts.json` kennt; `getTube/getConnector/getPanel/colorHex/spacingFor/gridSpacing` |
 | `web/js/i18n.js` | DE/EN-Dictionaries, `t()`, `setLang()`, `applyTranslations()` |
 | `web/js/model.js` | Datenmodell (Graph), Auto-Merge, Kollisionsprüfung, `findRectangles`, `toJSON`/`loadJSON` |
-| `web/js/bom.js` | Stückliste, Kupplungstyp-Heuristik, Verstärkungs-Läufe, Bestandsvergleich |
+| `web/js/bom.js` | Stückliste, Kupplungstyp-Heuristik, Verstärkungs-Profile, Bestandsvergleich |
 | `web/js/buildplan.js` | Aufbauplan: Modell Lage für Lage in Bauschritte zerlegen |
 | `web/js/scene.js` | Three.js: Renderer, Kamera, Rendering, Raycasting, Handles, Label-Sprites, Umgebung (Gras/Bäume/Himmel) |
 | `web/js/builder.js` | Interaktion: Auswahl, Handles, Setzen/Löschen, Modi, Undo/Redo |
@@ -221,9 +221,16 @@ Koordinaten in **cm**, Three.js-Konvention **y = oben**, Boden bei y = 0.
   ersten eingetragenen Stück zählt der Bestand normal mit. Die Bibliothek lässt Schrauben ganz
   außen vor: ihre gespeicherten Kennzahlen (`meta.parts`) führen nur Rohre, Kupplungen, Platten
   und Verstärkungen.
-- Verstärkungen: kollineare verstärkte Rohre werden per Union-Find zu **Läufen** verschmolzen.
-  In den BOM-Zeilen ist `count` = Anzahl Läufe (Anzeige), `pieces` = physische 40-cm-Profile
-  (maßgeblich für Bestellung/Bestandscheck in `neededParts`).
+- **Verstärkungen:** zu kaufen gibt es nur **ein** Teil, das Holz-Profil mit 80 cm
+  (`reinforce80`); die Alu-Profile der Herstellersoftware sind nirgends mehr erhältlich, kommen
+  aber weiter aus QDF-Dateien herein. Ein Profil deckt **80 cm Knotenabstand**: ein 75er-Rohr
+  (Span 80) oder zwei 35er in einer Linie (40 + 40). Gesetzt wird über `model.addReinforcement()`,
+  gezogen über `removeReinforcement()` – beim 35er geht der Partner mit, ein halbes Profil gibt es
+  nicht. Kollineare verstärkte Rohre werden für die Stückliste per Union-Find zu **Läufen**
+  verschmolzen; gezählt werden daraus ganze Profile (`Lauflänge / 80`, aufgerundet auf mindestens
+  eins), nicht Rohre – sonst stünden zwei 35er als „2 x 80 cm" da. Das Anbau-Kennzeichen bleibt
+  `tube.reinforced`; es gibt bewusst **kein** eigenes Profil-Objekt im Modell, damit Verschieben,
+  Kopieren und der QDF-Rundlauf unverändert bleiben.
 
 ## Konventionen
 

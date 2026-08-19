@@ -17,7 +17,7 @@ const de = {
   btn_clamp: 'Doppelrohr',
   btn_clamp_title: 'Doppelrohrverbinder setzen (K) – auf ein Rohr klicken',
   btn_reinforce: 'Verstärken',
-  btn_reinforce_title: 'Rohr verstärken (V) – Alu-Profil einschieben',
+  btn_reinforce_title: 'Verstärken (V) – Holz-Profil 80 cm einschieben',
   label_part: 'Bauteil',
   label_tube: 'Rohr wählen',
   label_panel: 'Platte wählen',
@@ -27,6 +27,12 @@ const de = {
   notice_panel_pick_second: (n) => `Rohr gewählt – jetzt eines der ${n} hervorgehobenen Gegenrohre anklicken.`,
   notice_panel_no_partner: 'Zu diesem Rohr passt kein Gegenrohr für die gewählte Platte.',
   notice_panel_no_fit: 'Diese beiden Rohre tragen die gewählte Platte nicht.',
+  notice_reinforce_pick_second: (n) => n === 1
+    ? 'Rohr gewählt – jetzt das hervorgehobene Rohr in derselben Linie anklicken.'
+    : `Rohr gewählt – jetzt eines der ${n} hervorgehobenen Rohre in derselben Linie anklicken.`,
+  notice_reinforce_no_partner: 'Neben diesem 35er liegt kein freies 35er in derselben Linie.',
+  notice_reinforce_no_fit: 'Diese beiden Rohre liegen nicht in einer Linie.',
+  notice_reinforce_wrong_tube: 'Das Holz-Profil ist 80 cm lang: es passt in ein 75er-Rohr oder in zwei 35er in einer Linie.',
   notice_panel_exists: 'Dort liegt schon eine Platte.',
   notice_panel_placed: 'Platte eingesetzt.',
   notice_bow_blocked: 'Gedreht passt der Bogen hier nicht.',
@@ -241,7 +247,7 @@ const de = {
   // Statuszeile
   status_add: 'Bauen: Kupplung wählen, dann grünen Punkt klicken. Oder Pfeiltasten. Ziehen = drehen.',
   status_panel: 'Platte: erst ein Tragrohr anklicken, dann eines der hervorgehobenen Gegenrohre. Klick auf eine Platte legt sie um.',
-  status_reinforce: 'Verstärken: Rohr anklicken, um ein Alu-Profil ein-/auszuschieben (metallisch = verstärkt, orange = empfohlen).',
+  status_reinforce: 'Verstärken: 75er-Rohr anklicken – oder zwei 35er in einer Linie nacheinander. Ein Klick auf ein verstärktes Rohr zieht das Profil wieder heraus (orange = empfohlen).',
   status_c45: 'Winkelkupplung: auf einen grünen Punkt an einer Kupplung klicken. Erneuter Klick auf die gesetzte Kupplung dreht sie um 90°.',
   notice_c45_click_arm: 'Auf einen grünen Punkt an einer Kupplung klicken.',
   notice_c45_turned: 'Winkelkupplung gedreht.',
@@ -371,6 +377,7 @@ const de = {
   asm_cat_connectors: 'Kupplungen',
   asm_cat_tubes: 'Rohre',
   asm_cat_panels: 'Platten',
+  asm_cat_reinforcements: 'Verstärkungen',
   asm_open_ends: 'Offene Enden (Kappe/Kupplung nötig)',
 
 
@@ -441,7 +448,7 @@ const en = {
   btn_clamp: 'Double tube',
   btn_clamp_title: 'Place double-tube connector (K) – click a tube',
   btn_reinforce: 'Reinforce',
-  btn_reinforce_title: 'Reinforce tube (V) – insert aluminium profile',
+  btn_reinforce_title: 'Reinforce (V) – insert 80 cm wood profile',
   label_part: 'Part',
   label_tube: 'Select tube',
   label_panel: 'Select panel',
@@ -451,6 +458,12 @@ const en = {
   notice_panel_pick_second: (n) => `Tube selected – now click one of the ${n} highlighted counterparts.`,
   notice_panel_no_partner: 'No counterpart fits this tube for the selected panel.',
   notice_panel_no_fit: 'These two tubes do not carry the selected panel.',
+  notice_reinforce_pick_second: (n) => n === 1
+    ? 'Tube selected – now click the highlighted tube in the same line.'
+    : `Tube selected – now click one of the ${n} highlighted tubes in the same line.`,
+  notice_reinforce_no_partner: 'No free 35 cm tube sits in line with this one.',
+  notice_reinforce_no_fit: 'These two tubes are not in one line.',
+  notice_reinforce_wrong_tube: 'The wood profile is 80 cm long: it fits one 75 cm tube or two 35 cm tubes in one line.',
   notice_panel_exists: 'There is already a panel there.',
   notice_panel_placed: 'Panel placed.',
   notice_bow_blocked: 'Turned that way the bow does not fit here.',
@@ -664,7 +677,7 @@ const en = {
   // Status bar
   status_add: 'Build: select a connector, then click the green dot. Or use arrow keys. Drag = rotate.',
   status_panel: 'Panel: click one rail tube, then one of the highlighted counterparts. Clicking a panel flips it.',
-  status_reinforce: 'Reinforce: click a tube to insert/remove an aluminium profile (metallic = reinforced, orange = recommended).',
+  status_reinforce: 'Reinforce: click a 75 cm tube – or two 35 cm tubes in one line, one after the other. Clicking a reinforced tube pulls the profile back out (orange = recommended).',
   status_c45: 'Angle connector: click a green dot at a connector. Clicking the placed one again turns it by 90°.',
   notice_c45_click_arm: 'Click a green dot at a connector.',
   notice_c45_turned: 'Angle connector turned.',
@@ -794,6 +807,7 @@ const en = {
   asm_cat_connectors: 'Connectors',
   asm_cat_tubes: 'Tubes',
   asm_cat_panels: 'Panels',
+  asm_cat_reinforcements: 'Reinforcements',
   asm_open_ends: 'Open ends (cap / connector needed)',
 
   // Print

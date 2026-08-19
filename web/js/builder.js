@@ -55,6 +55,9 @@ export class Builder {
     this.clampPart = "double_tube";      // Doppelrohrverbinder oder Rohrklammer
     // Platten-Modus: erstes angeklicktes Tragrohr + Stelle entlang davon.
     this.panelRail = null;
+    // Verstaerken-Modus: erstes angeklicktes 35er-Rohr, das noch seinen Partner
+    // sucht (ein Profil deckt immer 80 cm).
+    this.reinforceRail = null;
     this.color = "blue";
     this.selectedNodeId = null;
     // Cursor-Modus: id -> kind ("tube"/"panel"/"node"/...). Die ids sind ueber
@@ -104,11 +107,12 @@ export class Builder {
    */
   clearMarks() {
     const had = this.selection.size > 0 || !!this.highlight || !!this.panelRail ||
-      (this.mode !== "select" && !!this.selectedNodeId);
+      !!this.reinforceRail || (this.mode !== "select" && !!this.selectedNodeId);
     if (!had) return false;
     this.selection.clear();
     this.highlight = null;
     this.panelRail = null;
+    this.reinforceRail = null;
     if (this.mode !== "select") this.selectedNodeId = null;
     this.refresh();
     return true;
@@ -161,6 +165,7 @@ export class Builder {
     if (this._paste && mode !== "select") this.cancelPaste();
     this.mode = mode;
     if (this.panelRail) { this.panelRail = null; this.highlight = null; }
+    if (this.reinforceRail) { this.reinforceRail = null; this.highlight = null; }
     // Im Cursor-Modus gibt es keine Bau-Kupplung: sonst blieben Ankerpunkte
     // stehen. Umgekehrt gilt die Cursor-Auswahl nur dort.
     if (mode === "select") this.selectedNodeId = null;
@@ -720,6 +725,7 @@ export class Builder {
     this.selectedNodeId = null;
     this.highlight = null;
     this.panelRail = null;
+    this.reinforceRail = null;
     this.onHistoryChange();
   }
 
@@ -1787,8 +1793,11 @@ export class Builder {
       const gesetzt = p && this.model.nodes.get(p.data.id)?.c45body;
       obj = handle() || (gesetzt ? p.object : null);
     } else if (this.mode === "reinforce") {
-      const p = build(["tube"]);
-      obj = p && this._realTube(p.data.id) ? p.object : null;
+      // Sucht das erste Rohr noch seinen Partner, zeigt die Hand nur auf den
+      // hervorgehobenen Gegenstuecken.
+      const p = (this.reinforceRail && this.highlight && this.scene.pickAmong(x, y, this.highlight))
+        || build(["tube"]);
+      obj = p && p.data.kind === "tube" && this._reinforceUsable(p.data.id) ? p.object : null;
     } else if (this.mode === "assembly") {
       // Nur ansehen -- aber die Hand zeigt, dass sich ein Teil nachschlagen laesst.
       obj = this.scene.pickForDelete(x, y)?.object || null;
@@ -1871,13 +1880,78 @@ export class Builder {
     this.refresh();
   }
 
-  // Klick auf ein Rohr schaltet die Alu-Verstaerkung an/aus.
+  /**
+   * Klick auf ein Rohr schiebt ein Holz-Profil ein oder zieht es heraus. Zu
+   * kaufen gibt es nur die 80-cm-Laenge: sie fuellt entweder ein 75er-Rohr oder
+   * zwei 35er in einer Linie. Beim 35er wartet der zweite Klick auf das
+   * Partnerrohr -- die moeglichen sind so lange hervorgehoben (wie bei der
+   * Platte).
+   */
   _clickReinforce(e) {
-    const pick = this.scene.pickBuild(e.clientX, e.clientY);
-    if (!pick || pick.data.kind !== "tube") return;
-    let on;
-    this.recordHistory(() => { on = this.model.toggleReinforced(pick.data.id); });
-    this.onNotice(t(on ? "notice_reinforce_added" : "notice_reinforce_removed"));
+    // Ist das erste Rohr gewaehlt, zaehlen zuerst die hervorgehobenen Partner --
+    // auch wenn ein anderes Teil davor liegt.
+    const pick = (this.reinforceRail && this.highlight
+      && this.scene.pickAmong(e.clientX, e.clientY, this.highlight))
+      || this.scene.pickBuild(e.clientX, e.clientY);
+    if (!pick || pick.data.kind !== "tube") { this._clearReinforceRail(); return; }
+    const tube = this.model.tubes.get(pick.data.id);
+    if (!tube) { this._clearReinforceRail(); return; }
+
+    // Zweiter Klick: passt das angeklickte Rohr als Partner?
+    if (this.reinforceRail) {
+      const erste = this.reinforceRail;
+      if (tube.id === erste) { this._clearReinforceRail(); return; }
+      const partner = this.model.reinforcePartners(erste).some((o) => o.id === tube.id);
+      if (!partner) { this.onNotice(t("notice_reinforce_no_fit"), "warn"); return; }
+      this.recordHistory(() => { this.model.addReinforcement([erste, tube.id]); });
+      this._clearReinforceRail();
+      this.onNotice(t("notice_reinforce_added"));
+      this.refresh();
+      return;
+    }
+
+    // Schon verstaerkt: Profil herausziehen (beim 35er mit seinem Partner).
+    if (tube.reinforced) {
+      this.recordHistory(() => { this.model.removeReinforcement(tube.id); });
+      this.onNotice(t("notice_reinforce_removed"));
+      this.refresh();
+      return;
+    }
+    // Ein 75er nimmt das Profil allein auf.
+    if (this.model.takesReinforcementAlone(tube)) {
+      this.recordHistory(() => { this.model.addReinforcement([tube.id]); });
+      this.onNotice(t("notice_reinforce_added"));
+      this.refresh();
+      return;
+    }
+    // Ein 35er braucht ein zweites in derselben Linie.
+    if (this.model.takesReinforcementPaired(tube)) {
+      const partner = this.model.reinforcePartners(tube.id);
+      if (!partner.length) { this.onNotice(t("notice_reinforce_no_partner"), "warn"); return; }
+      this.reinforceRail = tube.id;
+      this.highlight = new Set(partner.map((o) => o.id));
+      this.onNotice(t("notice_reinforce_pick_second", partner.length), "info");
+      this.refresh();
+      return;
+    }
+    this.onNotice(t("notice_reinforce_wrong_tube"), "warn");
+  }
+
+  /** Laesst sich an diesem Rohr gerade ein Profil setzen oder herausziehen? */
+  _reinforceUsable(id) {
+    const tube = this.model.tubes.get(id);
+    if (!tube || tube.arm || tube.link || tube.bow) return false;
+    if (this.reinforceRail) return this.highlight ? this.highlight.has(id) : false;
+    if (tube.reinforced) return true;
+    if (this.model.takesReinforcementAlone(tube)) return true;
+    return this.model.takesReinforcementPaired(tube)
+      && this.model.reinforcePartners(id).length > 0;
+  }
+
+  _clearReinforceRail() {
+    if (!this.reinforceRail && !this.highlight) return;
+    this.reinforceRail = null;
+    this.highlight = null;
     this.refresh();
   }
 
