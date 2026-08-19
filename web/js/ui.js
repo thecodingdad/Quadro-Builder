@@ -3585,7 +3585,9 @@ export function initUI({ scene, model, builder }) {
     b.toggle("compact-colors", collapseStage >= 1);
     b.toggle("compact-view", collapseStage >= 2);
     $("btn-color").hidden = collapseStage < 1;
-    $("btn-view").hidden = collapseStage < 2;
+    // Im Hochformat stehen Schnittebene und Perspektive oben in der Kopfzeile --
+    // dann gibt es hier nichts mehr aufzuklappen.
+    $("btn-view").hidden = collapseStage < 2 || mqPortrait.matches;
     // Was gerade offen ist, koennte umgehaengt worden sein -> zumachen.
     closePopup();
     paintColorButton();
@@ -3716,6 +3718,12 @@ export function initUI({ scene, model, builder }) {
     moveNode($("btn-slice"), hochformat ? $("view-mobile") : null);
     moveNode($("btn-projection"), hochformat ? $("view-mobile") : null);
     $("view-divider").hidden = !hochformat;
+    // Die Gruppe, aus der sie kommen, bleibt sonst als leerer Kasten stehen --
+    // sie enthaelt nur diese beiden Knoepfe (und die Heimat-Markierungen von
+    // moveNode, weshalb CSS-:empty nicht greift).
+    const ansichtGruppe = document.querySelector("#toolbar-ctx .view-row");
+    if (ansichtGruppe) ansichtGruppe.hidden = hochformat;
+    if (hochformat) $("btn-view").hidden = true;
     // Im Hochformat verschwindet der Datei-Knopf; seine Eintraege stehen dann
     // oben im Hauptmenue, das auch ein Tipp auf die Marke oeffnet.
     renderMenuFileRows(hochformat);
