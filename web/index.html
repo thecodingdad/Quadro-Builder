@@ -35,7 +35,9 @@
     <!-- Hauptzeile: Modi + Sonderfunktionen links (scrollt) · Aktionen rechts (fixiert) -->
     <div id="toolbar-main">
       <div id="toolbar-left">
-        <div class="brand"><img class="brand-icon" src="../icons/icon-192.png" alt="" width="24" height="24">QUADRO <span>3D</span></div>
+        <!-- Wird der Platz eng, geht zuerst "3D", dann "QUADRO" -- deshalb steht
+             jedes Wort in einem eigenen Feld. Das Zeichen bleibt immer. -->
+        <div class="brand"><img class="brand-icon" src="../icons/icon-192.png" alt="" width="24" height="24"><span class="brand-name">QUADRO</span><span class="brand-3d">3D</span></div>
         <span class="divider"></span>
         <!-- Datei-Gruppe: ein Knopf, die Einträge klappen wie bei den Bauteilen
              auf. Die vier Knöpfe dahinter bleiben (versteckt) stehen -- an

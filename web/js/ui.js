@@ -3634,8 +3634,11 @@ export function initUI({ scene, model, builder }) {
   let headCompact = false;
   // Stufen der Kopfzeile: 0 = alles ausgeschrieben, 1 = "Automatisch speichern"
   // nur noch als Kasten, 2 = alles ausser Datei/Zurueck/Wieder im Menue.
+  // Danach gibt die Marke Stueck fuer Stueck nach: 3 = ohne "3D", 4 = nur noch
+  // das Zeichen, 5 = das Zeichen kleiner. Erst schwindet also Text, dann Groesse.
   let headStage = 0;
-  const headTightAt = [0, 0, 0];
+  const HEAD_STAGE_MAX = 5;
+  const headTightAt = [0, 0, 0, 0, 0, 0];
 
   function applyHeadCollapse(compact) {
     if (compact === headCompact) return;
@@ -3652,6 +3655,9 @@ export function initUI({ scene, model, builder }) {
   function applyHeadStage() {
     document.body.classList.toggle("compact-autosave", headStage >= 1);
     applyHeadCollapse(headStage >= 2);
+    document.body.classList.toggle("head-hide-3d", headStage >= 3);
+    document.body.classList.toggle("head-hide-name", headStage >= 4);
+    document.body.classList.toggle("compact-brand", headStage >= 5);
   }
 
   function measureHead() {
@@ -3660,14 +3666,17 @@ export function initUI({ scene, model, builder }) {
     // haette ein breites Hochformat (Tablet, ~800 px) die Menue-Zeilen offen in
     // der Leiste stehen -- das Menue selbst wird ja erst mit compact-head zum
     // Ausklapp-Feld.
-    if (mqPortrait.matches) { headStage = 2; applyHeadStage(); return; }
+    // Im Hochformat ist Stufe 2 die unterste; die Marke gibt darueber hinaus
+    // aber genauso nach, wenn es eng wird.
+    const minStage = mqPortrait.matches ? 2 : 0;
+    if (headStage < minStage) { headStage = minStage; applyHeadStage(); }
     const left = $("toolbar-left");
     if (!left.clientWidth) return;
     const breite = window.innerWidth;
     // Die Knoepfe schrumpfen nicht mehr (flex-shrink: 0), die Zeile laeuft
     // stattdessen ueber -- daran erkennt man den Platzmangel.
     const eng = left.scrollWidth > left.clientWidth + 1;
-    if (eng && headStage < 2) {
+    if (eng && headStage < HEAD_STAGE_MAX) {
       const vorher = left.scrollWidth;
       headStage++;
       applyHeadStage();
@@ -3675,7 +3684,7 @@ export function initUI({ scene, model, builder }) {
       requestAnimationFrame(measureHead);
       return;
     }
-    if (!eng && headStage > 0 && breite > headTightAt[headStage] + HYSTERESIS) {
+    if (!eng && headStage > minStage && breite > headTightAt[headStage] + HYSTERESIS) {
       headStage--;
       applyHeadStage();
       requestAnimationFrame(measureHead);

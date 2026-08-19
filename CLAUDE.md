@@ -284,8 +284,10 @@ Koordinaten in **cm**, Three.js-Konvention **y = oben**, Boden bei y = 0.
   `window.innerWidth`, nicht gegen die Leiste selbst (der Kollaps ändert deren Breite – daran
   gemessen schaukelt es sich auf); und zurückgeschaltet wird erst, wenn das Fenster um so viel
   breiter ist, wie der Kollaps damals freigemacht hat (`tightAt`), sonst zuckt es bei jeder
-  Zwischenbreite einmal auf und zu. Die Kopfzeile hat dieselbe Mechanik in zwei Stufen
-  (`compact-autosave`, `compact-head`); im Hochformat gilt immer die kompakte.
+  Zwischenbreite einmal auf und zu. Die Kopfzeile hat dieselbe Mechanik in fünf Stufen
+  (`compact-autosave`, `compact-head`, `head-hide-3d`, `head-hide-name`, `compact-brand`):
+  wird es eng, verschwindet erst das „3D", dann „QUADRO", zuletzt schrumpft die Marke –
+  das Zeichen bleibt immer stehen. Im Hochformat ist Stufe 2 die unterste.
   Kollabiert wird durch **Umhängen des Original-Knotens** (`moveNode`), nicht durch eine zweite
   Garnitur Knöpfe; die Rückkehr-Stelle hält ein Kommentar-Knoten.
 - **Zeiger-Eingaben teilen sich `builder.js` und OrbitControls:** ein Finger/die linke Maustaste

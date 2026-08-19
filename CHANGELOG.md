@@ -10,6 +10,9 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Geändert · Changed
+- **Die Kopfzeile gibt der Reihe nach nach** – wird der Platz eng, verschwindet erst das „3D", dann „QUADRO"; das Zeichen bleibt stehen und erst danach schrumpft die Marke · **The header gives way in order: „3D" first, then „QUADRO", the icon stays**
+
 ### Behoben · Fixed
 - **Die Kupplung unter einer 45°-Winkelkupplung behält ihre eigene Form** – der Stutzen unter der Hülse wurde schief gezeichnet und die Kupplung dadurch als Raumkupplung statt als Flächenkupplung geführt; auch hieß sie selbst „Winkelkupplung (45 Grad)" · **A connector carrying a 45° angle connector keeps its own shape and name**
 - **Die belegte 45°-Winkelkupplung bietet keinen Anschlusspunkt mehr an** – steckt ihr Rohr schon, erschien beim Überfahren trotzdem noch der lila Punkt für ein zweites · **An angle connector that already holds a tube no longer offers a spot for another**
