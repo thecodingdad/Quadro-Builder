@@ -497,17 +497,29 @@ body.sidebar-hidden #sidebar, body.sidebar-hidden #sidebar-resizer { display: no
   position: absolute;
   top: 12px; left: 50%;
   transform: translateX(-50%);
-  display: flex; align-items: center; gap: 8px;
+  display: flex; align-items: center; gap: 8px; flex-wrap: nowrap;
   padding: 6px 10px;
   background: rgba(255, 255, 255, 0.95);
   border: 1px solid var(--line);
   border-radius: 10px;
   box-shadow: 0 6px 20px rgba(0, 0, 0, 0.14);
-  z-index: 6;
+  /* Über dem Szene-Knopf (10): der lag sonst auf den X/Y/Z-Knöpfen. */
+  z-index: 12;
 }
 #slice-bar .btn.small { padding: 4px 9px; font-size: 12px; }
 #slice-bar .seg .btn { min-width: 28px; }
-#slice-range { width: 220px; }
+/* Die Achsen bleiben immer in EINER Zeile; enger wird stattdessen der Regler. */
+#slice-axes { flex: 0 0 auto; }
+#slice-range { width: 220px; min-width: 60px; flex: 1 1 auto; }
+/* Schmale Schirme: die Leiste spannt sich zwischen Szene-Knopf und
+   Ansichtswürfel, statt beide zu überdecken. */
+@media (max-width: 760px) {
+  #slice-bar {
+    left: 68px; right: 78px; transform: none;
+    padding: 6px 8px; gap: 6px;
+  }
+  .slice-value { min-width: 46px; }
+}
 .slice-value {
   font-size: 12px; font-variant-numeric: tabular-nums;
   color: var(--muted); min-width: 56px; text-align: right;

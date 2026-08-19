@@ -11,6 +11,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ## [Unreleased]
 
 ### Behoben · Fixed
+- **Das Rohr am Doppelrohrverbinder rastet aufs 5-cm-Raster** – es saß mittig zur Klemme und lag damit oft zwischen den Rasterpunkten · **The tube at a double-tube connector snaps to the 5 cm grid**
+- **Die Schnittebenen-Leiste ist auf dem Handy wieder bedienbar** – der Szene-Knopf lag über den X/Y/Z-Knöpfen, und Z rutschte in eine zweite Zeile. Die Leiste liegt jetzt darüber, bleibt einzeilig und spannt sich zwischen Szene-Knopf und Ansichtswürfel · **The section-plane bar works on phones again** – the scene button covered its axis buttons
 - **„Oben" am Ansichtswürfel behält die Seite, von der man kommt** – die Draufsicht landete immer in derselben Lage, das Modell sprang dabei einmal um die Hochachse. Jetzt rastet sie auf der nächsten Vierteldrehung ein, also achsenparallel, aber auf der Seite, aus der man gerade schaut (dasselbe gilt für „Unten") · **Top on the view cube keeps the side you come from** – it snaps to the nearest quarter turn instead of always the same one
 - **In der orthografischen Ansicht ließ sich manches nicht anklicken** – Teile, die hinter der Kameraebene lagen, wurden zwar gezeichnet, der Auswahlstrahl begann aber genau dort und erreichte sie nie. Er setzt jetzt so weit hinten an wie die Kamera zeichnet · **Some parts could not be clicked in the orthographic view** – anything behind the camera plane was drawn but never hit by the pick ray
 - **Drehen läuft im Uhrzeigersinn**, wie der Pfeil auf dem Knopf – vorher drehte es andersherum (Strg + → und E ebenso) · **Rotating goes clockwise** as the arrow on the button says

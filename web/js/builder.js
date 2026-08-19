@@ -1414,7 +1414,13 @@ export class Builder {
     const u = [dir[0] / dl, dir[1] / dl, dir[2] / dl];
     const h = span / 2;
     const p1 = [center[0] - u[0] * h, center[1] - u[1] * h, center[2] - u[2] * h];
-    const p2 = [center[0] + u[0] * h, center[1] + u[1] * h, center[2] + u[2] * h];
+    // Mittig zur Klemme ist die grobe Lage -- entlang des Rohrs wird auf das
+    // Raster gerastet, damit das neue Rohr zu allem anderen passt. Quer dazu
+    // bleibt es, wo die Klemme es haelt.
+    const achse = [Math.abs(u[0]), Math.abs(u[1]), Math.abs(u[2])];
+    const gr = achse.indexOf(Math.max(...achse));
+    if (achse[gr] > 0.99) p1[gr] = Math.round(p1[gr] / MOVE_STEP) * MOVE_STEP;
+    const p2 = [p1[0] + u[0] * span, p1[1] + u[1] * span, p1[2] + u[2] * span];
     this.recordHistory(() => {
       const n1 = this.model.addNode(round2(p1[0]), round2(p1[1]), round2(p1[2]));
       const n2 = this.model.addNode(round2(p2[0]), round2(p2[1]), round2(p2[2]));
