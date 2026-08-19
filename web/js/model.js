@@ -2452,6 +2452,74 @@ export class BuildModel {
     return { node: to, tube, body };
   }
 
+  /**
+   * 45-Grad-Winkelkupplung setzen: ihre Huelse steckt auf einem freien Arm der
+   * Kupplung (`axis`), ihr Arm zeigt in die Schraege (`dir`). Ein Rohr kommt
+   * spaeter dazu -- die Kupplung ist ein eigenes Teil.
+   */
+  addC45Adapter(fromId, axis, dir, sleeveLen, armLen) {
+    const from = this.nodes.get(fromId);
+    if (!from) return null;
+    const bx = from.x + axis[0] * sleeveLen + dir[0] * armLen;
+    const by = from.y + axis[1] * sleeveLen + dir[1] * armLen;
+    const bz = from.z + axis[2] * sleeveLen + dir[2] * armLen;
+    if (this.isBelowGround(by)) return { ground: true };
+    const body = this.addNode(round(bx), round(by), round(bz));
+    body.c45 = true;
+    body.c45body = true;
+    body.c45axis = axis.slice();
+    this.addArm(from.id, body.id);
+    this._syncC45Flag(from.id);
+    return { body };
+  }
+
+  /**
+   * Winkelkupplung um 90 Grad um ihre Huelsenachse weiterdrehen -- mit allem,
+   * was an ihr haengt. Vier Stellungen, danach ist sie wieder am Anfang.
+   */
+  rotateC45(bodyId) {
+    const body = this.nodes.get(bodyId);
+    if (!body || !body.c45body || !body.c45axis) return false;
+    // Die Kupplung, auf der die Huelse steckt: ueber die Arm-Kante.
+    let baseId = null;
+    for (const t of this.tubes.values()) {
+      if (!t.arm) continue;
+      if (t.a === bodyId) baseId = t.b;
+      else if (t.b === bodyId) baseId = t.a;
+      if (baseId) break;
+    }
+    const base = baseId && this.nodes.get(baseId);
+    if (!base) return false;
+    const u = body.c45axis;
+    // Drehpunkt: die Kupplung selbst; gedreht wird um ihre Huelsenachse.
+    const dreh = (p) => {
+      const r = [p.x - base.x, p.y - base.y, p.z - base.z];
+      const c = cross3(u, r);
+      const d = dot3(u, r);
+      // 90 Grad: cos = 0, sin = 1 -> p' = (u x r) + u (u . r)
+      return { x: base.x + c[0] + u[0] * d, y: base.y + c[1] + u[1] * d, z: base.z + c[2] + u[2] * d };
+    };
+    // Alles, was an der Winkelkupplung haengt -- aber nicht ueber die Huelse
+    // zurueck in die tragende Kupplung.
+    const seen = new Set([bodyId, baseId]);
+    const stack = [bodyId];
+    while (stack.length) {
+      const id = stack.pop();
+      for (const t of this.tubes.values()) {
+        const other = t.a === id ? t.b : t.b === id ? t.a : null;
+        if (other && !seen.has(other)) { seen.add(other); stack.push(other); }
+      }
+    }
+    seen.delete(baseId);
+    const zweig = [...seen].map((id) => this.nodes.get(id)).filter(Boolean).map((n) => ({ n, p: dreh(n) }));
+    if (zweig.some((e) => this.isBelowGround(e.p.y))) return false;
+    for (const e of zweig) { e.n.x = round(e.p.x); e.n.y = round(e.p.y); e.n.z = round(e.p.z); }
+    const bewegt = new Set(zweig.map((e) => e.n.id));
+    this._moveTubeGeom(bewegt);
+    this._movePanelGeom(bewegt);
+    return true;
+  }
+
   // Aussenmasse des Modells in cm. Die Bounding-Box laeuft ueber alle Kupplungen
   // (Platten/Netze haengen an ihnen) plus die Eckpunkte der Rutschen, die ueber
   // das Rohrgeruest hinausragen. `pad` schlaegt an jeder Seite etwas drauf --

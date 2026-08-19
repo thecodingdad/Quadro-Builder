@@ -512,13 +512,7 @@ export function initUI({ scene, model, builder }) {
   });
   $("mode-reinforce").addEventListener("click", () => setMode(builder.mode === "reinforce" ? "select" : "reinforce"));
   $("mode-assembly").addEventListener("click", () => { toggleHamburger(false); setMode("assembly"); });
-  $("btn-diagonal").addEventListener("click", () => toggleDiagonal());
 
-  function toggleDiagonal() {
-    if (builder.mode !== "add" && builder.mode !== "panel") setMode("add");
-    builder.setDiagonal(!builder.diagonal);
-    syncPartHighlights();
-  }
 
   function syncPartHighlights() {
     renderCurrentPart();
@@ -537,7 +531,6 @@ export function initUI({ scene, model, builder }) {
       slideGroupBtn.title = `${t("grp_slides")}: ${slideKindName(builder.slideKind)}`;
     }
     renderFittingButton();
-    $("btn-diagonal").classList.toggle("active", inAdd && builder.diagonal);
     syncPartColors();
   }
 
@@ -558,7 +551,7 @@ export function initUI({ scene, model, builder }) {
   function setzeBauteileGesperrt(gesperrt) {
     // #btn-view bleibt frei: dahinter stecken die Ansichts-Schalter, die auch
     // im Aufbau-Modus nutzbar sein sollen (Schraeg darin sperrt ueber build-opt).
-    const bereiche = ["#grp-build", "#btn-diagonal", "#btn-color",
+    const bereiche = ["#grp-build", "#btn-color",
                       "#mode-delete", "#btn-undo", "#btn-redo"];
     for (const wahl of bereiche) {
       for (const el2 of document.querySelectorAll(`${wahl}, ${wahl} button, ${wahl} input`)) {
@@ -647,6 +640,7 @@ export function initUI({ scene, model, builder }) {
       panel: "status_panel",
       reinforce: "status_reinforce",
       clamp: "status_clamp",
+      c45: "status_c45",
       fitting: "status_fitting",
       assembly: "status_assembly",
     };
@@ -1067,11 +1061,14 @@ export function initUI({ scene, model, builder }) {
   // einen eigenen Modus -- in der Liste steht er trotzdem bei den Verbindungen.
   const CLAMP_ENTRY = "double_tube";
   const CLIP_ENTRY = "tube_clamp";
+  // Die 45-Grad-Winkelkupplung ist ein eigenes Teil: sie steckt auf einem Arm
+  // einer Kupplung, das Rohr kommt danach an sie. Eigene QDF-Art hat sie nicht.
+  const C45_ENTRY = "c45";
   const FITTING_GROUPS = [
     ["grp_wheels", ["multi-wheel2", "floating-wheel2", "casters2", "bearing2", "hub-cap2", "steering-lock2"],
       `<circle cx="8" cy="8" r="5.4" fill="none" stroke="currentColor" stroke-width="1.6"/>` +
       `<circle cx="8" cy="8" r="1.6" fill="currentColor"/>`],
-    ["grp_joints", ["bearing-clamp", CLAMP_ENTRY, CLIP_ENTRY, "open-connector2"],
+    ["grp_joints", [C45_ENTRY, "bearing-clamp", CLAMP_ENTRY, CLIP_ENTRY, "open-connector2"],
       `<line x1="2.5" y1="6" x2="13.5" y2="6" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/>` +
       `<line x1="2.5" y1="11" x2="13.5" y2="11" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/>` +
       `<rect x="6" y="3" width="4" height="11" rx="1.4" fill="none" stroke="currentColor" stroke-width="1.3"/>`],
@@ -1098,6 +1095,8 @@ export function initUI({ scene, model, builder }) {
     "steering-lock2": `<circle cx="8" cy="8" r="5.6" fill="none" stroke="currentColor" stroke-width="1.2"/>` +
       `<path d="M8 2.6 L8 8 L11.6 9.8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" fill="none"/>`,
     // Verbindungen
+    "c45": `<line x1="2.5" y1="13.5" x2="13.5" y2="2.5" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/>` +
+      `<rect x="1.5" y="10.5" width="4" height="4" rx="1" fill="currentColor"/>`,
     "bearing-clamp": `<line x1="1.5" y1="10.5" x2="14.5" y2="10.5" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/>` +
       `<rect x="5.4" y="7.4" width="5.2" height="6.2" rx="1.2" fill="none" stroke="currentColor" stroke-width="1.3"/>` +
       `<rect x="6.6" y="2.4" width="2.8" height="5.4" rx="1.2" fill="currentColor"/>`,
@@ -1211,7 +1210,9 @@ export function initUI({ scene, model, builder }) {
   for (const [key, kinds, path] of FITTING_GROUPS) {
     const items = kinds.map((k) => {
       const def = (k === CLAMP_ENTRY || k === CLIP_ENTRY)
-        ? allConnectors().find((c) => c.id === k) : partForFitting(k);
+        ? allConnectors().find((c) => c.id === k)
+        : k === C45_ENTRY ? allConnectors().find((c) => c.id === "diagonal")
+        : partForFitting(k);
       return def ? { ...def, id: k, qdf: k } : null;
     }).filter(Boolean);
     if (!items.length) continue;
@@ -1222,7 +1223,10 @@ export function initUI({ scene, model, builder }) {
     const btn = el("button", "btn part");
     btn.addEventListener("click", (e) => {
       e.stopPropagation();
-      showPartPopup(btn, items, builder.mode === "clamp" ? builder.clampPart : builder.fittingKind, icon, (p) => {
+      const gewaehlt = builder.mode === "clamp" ? builder.clampPart
+        : builder.mode === "c45" ? C45_ENTRY : builder.fittingKind;
+      showPartPopup(btn, items, gewaehlt, icon, (p) => {
+        if (p.qdf === C45_ENTRY) { setMode("c45"); return; }
         if (p.qdf === CLAMP_ENTRY || p.qdf === CLIP_ENTRY) {
           builder.setClampPart(p.qdf);
           setMode("clamp");
@@ -1241,7 +1245,8 @@ export function initUI({ scene, model, builder }) {
   renderFittingButton = () => {
     for (const g of fittingGroupBtns) {
       const aktiv = (builder.mode === "fitting" && g.kinds.includes(builder.fittingKind))
-        || (builder.mode === "clamp" && g.kinds.includes(builder.clampPart));
+        || (builder.mode === "clamp" && g.kinds.includes(builder.clampPart))
+        || (builder.mode === "c45" && g.kinds.includes(C45_ENTRY));
       g.btn.classList.toggle("active", aktiv);
       g.btn.lastChild.textContent = t(g.key);
     }
@@ -2468,7 +2473,6 @@ export function initUI({ scene, model, builder }) {
       // Drehen wie mit Strg+Pfeil -- Q gegen, E im Uhrzeigersinn.
       case "q": if (builder.rotateSelectionBy(-1)) flash(t("flash_rotated")); break;
       case "e": if (builder.rotateSelectionBy(1)) flash(t("flash_rotated")); break;
-      case "d": toggleDiagonal(); break;
       case "c": scene.resetCamera(model); break;
       // Die Liste der Tasten selbst: F1 wie ueberall, "?" fuer die Tastatur
       // ohne F-Reihe.
@@ -3159,7 +3163,6 @@ export function initUI({ scene, model, builder }) {
     applySlice();
     syncPartHighlights();
     if (v.camera) scene.restoreCameraState(v.camera); else scene.resetCamera(model);
-    $("btn-diagonal").classList.toggle("active", builder.mode === "add" && builder.diagonal);
     renderColorButtons();
     updateUndoButton();
   }

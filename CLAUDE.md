@@ -242,6 +242,12 @@ Koordinaten in **cm**, Three.js-Konvention **y = oben**, Boden bei y = 0.
 - **Rückfragen:** nie `alert`/`confirm`/`prompt`. In `ui.js` stehen `dialog()` und die
   Kurzformen `askConfirm()`, `askInput()`, `showMessage()`; sie füllen die Karte
   `#dlg-overlay` (Enter = erster Knopf, Escape/Klick daneben = Abbruch).
+- **45°-Winkelkupplung:** ein eigenes Teil in der Gruppe „Verbindungen" (`C45_ENTRY` in `ui.js`),
+  Modus `c45` im Builder. `_buildC45Handles()` bietet an jedem **freien Arm** einer Kupplung einen
+  Punkt an, `model.addC45Adapter()` setzt Hülse + Adapterkörper (ohne Rohr), ein weiterer Klick auf
+  die gesetzte Kupplung dreht sie über `model.rotateC45()` um 90° um ihre Hülsenachse (mit allem,
+  was daran hängt). Das Rohr kommt danach im Bau-Modus an den Adapterkörper – der bietet genau
+  seine eigene Schräge an (`_c45ArmDir`). Einen Schalter „Schräg" gibt es nicht mehr.
 - **Neue Bau-Richtung/Logik:** `config.js` + `builder.js` (+ ggf. `scene.js`).
 - **Tastatur:** zentral in `ui.js` (`keydown`). Pfeiltasten sind kamera-relativ über
   `scene.getHorizontalAxes()`. **Strg/Cmd+W ist nicht abfangbar** – Browser schließen damit ihren

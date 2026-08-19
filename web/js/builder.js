@@ -62,7 +62,6 @@ export class Builder {
     this.selection = new Map();
     this.highlight = null;   // reine Sicht-Hervorhebung (Bestandsliste)
 
-    this.diagonal = false;       // schraege (45-Grad) Streben statt Achsen
     this.buildPlan = { levels: [], steps: [] };
     this.assemblyStep = 0;
     this.assemblyOrder = "y+";   // Aufbaurichtung, siehe buildplan.BUILD_ORDERS
@@ -698,7 +697,7 @@ export class Builder {
     return {
       mode: this.mode, tubeId: this.tubeId, panelId: this.panelId,
       fittingKind: this.fittingKind, clampPart: this.clampPart, slideKind: this.slideKind,
-      color: this.color, diagonal: this.diagonal,
+      color: this.color,
       assemblyOrder: this.assemblyOrder, assemblyStep: this.assemblyStep,
       undo: this._undoStack.slice(), redo: this._redoStack.slice(),
     };
@@ -713,7 +712,6 @@ export class Builder {
     if (s.clampPart) this.clampPart = s.clampPart;
     if (s.slideKind) this.slideKind = s.slideKind;
     if (s.color) this.color = s.color;
-    this.diagonal = !!s.diagonal;
     if (s.assemblyOrder) this.assemblyOrder = s.assemblyOrder;
     this.assemblyStep = s.assemblyStep || 0;
     this._undoStack = Array.isArray(s.undo) ? s.undo.slice() : [];
@@ -755,7 +753,6 @@ export class Builder {
       if (!map || !map.has(id)) this.selection.delete(id);
     }
   }
-  setDiagonal(on) { this.diagonal = !!on; if (this.mode === "add") this.refresh(); }
 
 
   // Anzahl der Rohre, die sich mit einem anderen ueberlagern.
@@ -894,31 +891,6 @@ export class Builder {
     return false;
   }
 
-  // Schraege Strebe (45 Grad) vom ausgewaehlten Knoten in eine Diagonalrichtung.
-  // Projektvorgabe: alle Schraegen sind immer 45 Grad ueber eine C45-Winkel-
-  // kupplung (Adapter belegt Platz, eigene Kupplung). Die Rohrlaenge kommt aus
-  // der Toolbar-Auswahl.
-  buildDiagonal(dirVec) {
-    const node = this.selectedNodeId && this.model.nodes.get(this.selectedNodeId);
-    if (!node) return;
-    const dt = this._diagonalTube();
-    if (!dt) return;
-    const axis = this._diagSleeveAxis(node, dirVec);
-    if (!axis) { this.onNotice(t("notice_no_free_arm"), "warn"); return; }
-    let res;
-    this.recordHistory(() => {
-      res = this.model.extendC45Diagonal(
-        node.id, dirVec, axis, dt.id, this.colorFor("tube"),
-        dt.length_cm, spacingFor(dt.length_cm), C45_SLEEVE_LEN, C45_ARM_LEN
-      );
-    });
-    if (res && res.ground) this.onNotice(t("notice_ground"), "warn");
-    else if (res && res.collision) this.onNotice(t("notice_collision"), "warn");
-    else if (res && res.tube) this._notePlaced(res.tube.id, "tube");
-    else if (res && res.node) this.selectedNodeId = res.node.id;
-    this.refresh();
-  }
-
   /** Meldet unten links, was gerade gesetzt wurde. */
   _notePlaced(id, kind) {
     const name = this._partLabel(id, kind);
@@ -1029,6 +1001,7 @@ export class Builder {
     if (this.mode === "panel") return;
     if (this.mode === "slide") { this._buildSlideHandles(); return; }
     if (this.mode === "clamp") { this._buildClampHandles(); return; }
+    if (this.mode === "c45") { this._buildC45Handles(); return; }
     if (this.mode === "fitting") { this._buildFittingHandles(); return; }
     if (this.mode !== "add") return;
 
@@ -1060,44 +1033,69 @@ export class Builder {
     for (const node of nodes) this._addBuildHandles(node, gap);
   }
 
+  /**
+   * In welche Schraege zeigt eine 45-Grad-Winkelkupplung? Ihr Koerper sitzt um
+   * die Huelse (auf einem Arm der Kupplung) plus den 45-Grad-Arm versetzt --
+   * aus der Differenz zur tragenden Kupplung und der Huelsenachse ergibt sich
+   * die Richtung.
+   */
+  _c45ArmDir(body) {
+    if (!body.c45body || !body.c45axis) return null;
+    let base = null;
+    for (const t of this.model.tubes.values()) {
+      if (!t.arm) continue;
+      const id = t.a === body.id ? t.b : t.b === body.id ? t.a : null;
+      if (id) { base = this.model.nodes.get(id); break; }
+    }
+    if (!base) return null;
+    const u = body.c45axis;
+    const v = [body.x - base.x, body.y - base.y, body.z - base.z];
+    const laengs = v[0] * u[0] + v[1] * u[1] + v[2] * u[2];
+    const rest = [v[0] - u[0] * laengs, v[1] - u[1] * laengs, v[2] - u[2] * laengs];
+    const L = Math.hypot(rest[0], rest[1], rest[2]);
+    if (L < 1e-6) return null;
+    // Die Schraege liegt zwischen Huelsenachse und Rest -- beide zu gleichen
+    // Teilen, das sind die 45 Grad.
+    const d = [u[0] + rest[0] / L, u[1] + rest[1] / L, u[2] + rest[2] / L];
+    const dl = Math.hypot(d[0], d[1], d[2]) || 1;
+    return [d[0] / dl, d[1] / dl, d[2] / dl];
+  }
+
   /** Ankerpunkte einer einzelnen Kupplung (Bau-Modus). */
   _addBuildHandles(node, gap) {
-    // Die 45-Grad-Winkelkupplung gibt es nur einarmig: Huelse auf das Rohrende,
-    // ein Arm in die Schraege. Von ihr aus laesst sich nichts weiterbauen.
-    if (node.c45body) return;
-
     // Rotierte Kupplung (armDirs aus QDF-Import): eigene Arm-Richtungen verwenden,
-    // kein C45-Adapter noetig - die Kupplung ist bereits korrekt ausgerichtet.
+    // die Kupplung ist bereits korrekt ausgerichtet.
     const hasArmDirs = node.armDirs && node.armDirs.length > 0;
     // Schraeg-Konnektor: liegt auf einer Schraege (hat schon ein Diagonalrohr) =
     // ist bereits 45-Grad gedreht.
     const isSlope = !hasArmDirs && this._hasDiagonalTube(node);
     const occupied = this._occupiedDirs(node);
-    const useDiag = !hasArmDirs && (this.diagonal || isSlope);
-    const isC45 = useDiag && !isSlope; // C45-Adapter nur an einer NICHT-schraegen Kupplung
+    const useDiag = !hasArmDirs && isSlope;
+    // Die 45-Grad-Winkelkupplung ist einarmig: sie bietet genau ihre eigene
+    // Schraege an, dorthin gehoert das Rohr.
+    const c45Dir = node.c45body ? this._c45ArmDir(node) : null;
     // Lochzapfenkupplung: genau EIN offenes Ende, dorthin geht das Rohr. Die
     // Lagerkupplung traegt dagegen eine ganze Kupplung -- von der geht es in
     // jede freie Richtung weiter.
-    const dirs = (node.stub && node.part === "hole_1")
+    const dirs = c45Dir ? [{ name: "c45", vec: c45Dir }]
+      : (node.stub && node.part === "hole_1")
       ? [{ name: "stub", vec: node.stub }]   // auch nach 45-Grad-Drehungen gueltig
       : hasArmDirs ? node.armDirs
       : isSlope ? (this._slopeArmDirs(node) || DIAGONAL_DIRECTIONS)
-      : (this.diagonal ? DIAGONAL_DIRECTIONS : DIRECTIONS);
+      : DIRECTIONS;
     for (const d of dirs) {
       if (occupied.has(d.name)) continue;
       if (this._targetBelowGround(node, d.vec)) continue;
-      // C45-Schraege nur anbieten, wenn ein freier Arm fuer die Winkelkupplung da ist.
-      if (isC45 && !this._diagSleeveAxis(node, d.vec)) continue;
       const isCardDir = Math.max(Math.abs(d.vec[0]), Math.abs(d.vec[1]), Math.abs(d.vec[2])) > DIR_ALIGN_TOL;
-      const hg = (useDiag && !isCardDir) ? gap * 1.6 : gap;
+      const hg = ((useDiag || c45Dir) && !isCardDir) ? gap * 1.6 : gap;
       const pos = [
         node.x + d.vec[0] * hg,
         node.y + d.vec[1] * hg,
         node.z + d.vec[2] * hg,
       ];
       this.scene.addHandle(
-        pos, { nodeId: node.id, dir: d.vec, dirName: d.name, diagonal: isC45, slope: isSlope },
-        (useDiag && !isCardDir) ? "diag" : "dir"
+        pos, { nodeId: node.id, dir: d.vec, dirName: d.name, slope: isSlope || !!c45Dir },
+        ((useDiag || c45Dir) && !isCardDir) ? "diag" : "dir"
       );
     }
   }
@@ -1194,9 +1192,9 @@ export class Builder {
       }
       return occ;
     }
-    // C45-Eckkupplung im Diagonal-Modus: eine schon gebaute Diagonale (ueber den
-    // Adapter-Koerper) gilt als belegt.
-    if (this.diagonal) {
+    // Eine schon gebaute Schraege (ueber den Adapter-Koerper) belegt ihre
+    // Richtung -- sonst boete die Kupplung sie ein zweites Mal an.
+    {
       for (const arm of this.model.tubes.values()) {
         if (!arm.arm) continue;
         const bId = arm.a === node.id ? arm.b : arm.b === node.id ? arm.a : null;
@@ -1226,6 +1224,76 @@ export class Builder {
       for (const d of DIAGONAL_DIRECTIONS) if (ux * d.vec[0] + uy * d.vec[1] + uz * d.vec[2] > DIR_ALIGN_TOL) occ.add(d.name);
     }
     return occ;
+  }
+
+  /**
+   * Ankerpunkte fuer die 45-Grad-Winkelkupplung: an jedem FREIEN Arm einer
+   * Kupplung sitzt einer. Ein Klick setzt sie dort, jeder weitere Klick auf die
+   * gesetzte Kupplung dreht sie um 90 Grad weiter.
+   */
+  _buildC45Handles() {
+    const gap = geometry().connectorSize / 2 + 4;
+    for (const node of this.model.nodes.values()) {
+      if (node.unused || node.c45body || node.part) continue;
+      for (const d of DIRECTIONS) {
+        if (this._armOccupied(node, d.vec)) continue;
+        const dir = this._c45DirFor(node, d.vec);
+        if (!dir) continue;
+        if (this.model.isBelowGround(node.y + dir[1] * C45_ARM_LEN)) continue;
+        this.scene.addHandle(
+          [node.x + d.vec[0] * gap, node.y + d.vec[1] * gap, node.z + d.vec[2] * gap],
+          { c45mount: true, nodeId: node.id, axis: d.vec, dir }, "diag");
+      }
+    }
+  }
+
+  /** Haengt an dieser Kupplung eine Winkelkupplung? Dann deren Koerper. */
+  _c45BodyAt(nodeId) {
+    for (const t of this.model.tubes.values()) {
+      if (!t.arm) continue;
+      const id = t.a === nodeId ? t.b : t.b === nodeId ? t.a : null;
+      const n = id && this.model.nodes.get(id);
+      if (n && n.c45body) return n;
+    }
+    return null;
+  }
+
+  /** Erste Schraege, deren Huelse auf genau diesem Arm sitzt. */
+  _c45DirFor(node, axis) {
+    for (const dd of DIAGONAL_DIRECTIONS) {
+      const a = this._diagSleeveAxis(node, dd.vec);
+      if (a && a[0] === axis[0] && a[1] === axis[1] && a[2] === axis[2]) return dd.vec;
+    }
+    return null;
+  }
+
+  /** Winkelkupplung setzen (Ankerpunkt) bzw. weiterdrehen (Klick auf sie). */
+  _clickC45(e) {
+    const h = this.scene.pickHandle(e.clientX, e.clientY);
+    if (h && h.data && h.data.c45mount) {
+      let res;
+      this.recordHistory(() => {
+        res = this.model.addC45Adapter(h.data.nodeId, h.data.axis, h.data.dir,
+          C45_SLEEVE_LEN, C45_ARM_LEN);
+      });
+      if (res && res.ground) this.onNotice(t("notice_ground"), "warn");
+      else if (res && res.body) this.onNotice(t("notice_placed", partName(getConnector("diagonal"))));
+      this.refresh();
+      return;
+    }
+    const pick = this.scene.pickForDelete(e.clientX, e.clientY);
+    const node = pick && pick.data.kind === "node" && this.model.nodes.get(pick.data.id);
+    // Getroffen wird mal der Koerper der Winkelkupplung, mal die Kupplung, auf
+    // der sie steckt (Huelse und Arm gehoeren beiden) -- beides dreht sie.
+    const body = node && (node.c45body ? node : this._c45BodyAt(node.id));
+    if (body) {
+      let ok = false;
+      this.recordHistory(() => { ok = this.model.rotateC45(body.id); });
+      this.onNotice(ok ? t("notice_c45_turned") : t("notice_c45_no_turn"), ok ? "ok" : "warn");
+      this.refresh();
+      return;
+    }
+    this.onNotice(t("notice_c45_click_arm"), "info");
   }
 
   // --- Doppelrohrverbinder ------------------------------------------------
@@ -1684,6 +1752,11 @@ export class Builder {
       const p = build(["tube", "clamp"]);
       const echt = p && (p.data.kind === "clamp" || this._straightTube(p.data.id));
       obj = handle() || (echt ? p.object : null);
+    } else if (this.mode === "c45") {
+      // Zeigefinger auf den Ankerpunkten und auf schon gesetzten Winkelkupplungen.
+      const p = build(["node"]);
+      const gesetzt = p && this.model.nodes.get(p.data.id)?.c45body;
+      obj = handle() || (gesetzt ? p.object : null);
     } else if (this.mode === "reinforce") {
       const p = build(["tube"]);
       obj = p && this._realTube(p.data.id) ? p.object : null;
@@ -1747,6 +1820,7 @@ export class Builder {
     else if (this.mode === "slide") this._clickSlide(e);
     else if (this.mode === "fitting") this._clickFitting(e);
     else if (this.mode === "clamp") this._clickClamp(e);
+    else if (this.mode === "c45") this._clickC45(e);
     else if (this.mode === "reinforce") this._clickReinforce(e);
     else if (this.mode === "assembly") this._clickAssembly(e);
     finish();
@@ -2218,18 +2292,7 @@ export class Builder {
         return;
       }
       let res;
-      if (h.data.diagonal) {
-        const dt = this._diagonalTube();
-        const node = this.model.nodes.get(h.data.nodeId);
-        const axis = node && this._diagSleeveAxis(node, h.data.dir);
-        if (!axis) { this.onNotice(t("notice_no_free_arm"), "warn"); return; }
-        this.recordHistory(() => {
-          res = this.model.extendC45Diagonal(
-            h.data.nodeId, h.data.dir, axis, dt.id,
-            this.colorFor("tube"), dt.length_cm, spacingFor(dt.length_cm), C45_SLEEVE_LEN, C45_ARM_LEN
-          );
-        });
-      } else if (h.data.slope) {
+      if (h.data.slope) {
         // Schräg-Konnektor (schon 45-Grad gedreht): Diagonalrohr weiterbauen,
         // OHNE neuen C45-Adapter; snappt an vorhandene Schräg-Kupplungen.
         const dt = this._diagonalTube();
@@ -2265,20 +2328,14 @@ export class Builder {
     const pick = front;
     if (!pick) return;
     if (pick.data.kind === "node" && this._isBuildable(pick.data.id)) {
-      // Erneuter Klick auf die BEREITS gewaehlte Kupplung schaltet zwischen
-      // Achs- und Schraeg-Richtungen um: die Ankerpunkte liegen dicht
-      // beieinander, der Griff zur Toolbar unterbricht den Bau-Fluss.
-      if (this.selectedNodeId === pick.data.id) this.diagonal = !this.diagonal;
-      else this.selectedNodeId = pick.data.id;
+      this.selectedNodeId = pick.data.id;
       this.refresh();
     }
   }
 
-  // Laesst sich an dieser Kupplung ueberhaupt weiterbauen? Die 45-Grad-
-  // Winkelkupplung (c45body) nicht: sie ist einarmig und schon belegt.
+  // Laesst sich an dieser Kupplung ueberhaupt weiterbauen?
   _isBuildable(nodeId) {
-    const n = this.model.nodes.get(nodeId);
-    return !!n && !n.c45body;
+    return this.model.nodes.has(nodeId);
   }
 
   // Cursor-Modus: bereits platzierte Teile auswaehlen. Einfacher Klick waehlt

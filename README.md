@@ -44,7 +44,7 @@ dem eigenen Rechner.
 **Bauen**
 
 - **3D-Editor** – Kupplungen, Rohre, Bogenrohre und Platten frei im Raum setzen
-- **Schräge Streben** – 45°-Elemente für Rampen und Verstrebungen
+- **45°-Winkelkupplung** – als Teil auf einen freien Arm setzen, per Klick weiterdrehen, Rohr daran hängen
 - **Platten** – zwischen zwei parallelen Rohren, alle Katalogformate von 30×30 bis 80×80
 - **Rutschen und Anbauteile** – Rutschen einhängen, Räder, Rollen, Lager, Netze, Rundabdeckung,
   Dach, Spielsack und Bällebad setzen
@@ -164,7 +164,7 @@ your own machine.
 **Building**
 
 - **3D editor** – place connectors, tubes, arc tubes and panels freely in space
-- **Diagonal braces** – 45° elements for ramps and bracing
+- **45° angle connector** – place it on a free arm, click again to turn it, then attach a tube
 - **Panels** – between two parallel tubes, every catalogue size from 30×30 to 80×80
 - **Slides and fittings** – hook in slides, place wheels, casters, bearings, nets, round covers,
   roofs, the play bag and the ball pit
