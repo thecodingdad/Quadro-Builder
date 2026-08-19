@@ -1086,6 +1086,10 @@ export class Builder {
       : DIRECTIONS;
     for (const d of dirs) {
       if (occupied.has(d.name)) continue;
+      // Die Schraege der Winkelkupplung traegt keinen Namen aus DIRECTIONS, ihre
+      // Belegung muss ueber die Richtung geprueft werden -- sonst bietet sie den
+      // Punkt auch dann noch an, wenn das Rohr schon steckt.
+      if (c45Dir && this._armOccupied(node, d.vec)) continue;
       if (this._targetBelowGround(node, d.vec)) continue;
       const isCardDir = Math.max(Math.abs(d.vec[0]), Math.abs(d.vec[1]), Math.abs(d.vec[2])) > DIR_ALIGN_TOL;
       const hg = ((useDiag || c45Dir) && !isCardDir) ? gap * 1.6 : gap;

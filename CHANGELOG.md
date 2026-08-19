@@ -11,6 +11,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ## [Unreleased]
 
 ### Behoben · Fixed
+- **Die belegte 45°-Winkelkupplung bietet keinen Anschlusspunkt mehr an** – steckt ihr Rohr schon, erschien beim Überfahren trotzdem noch der lila Punkt für ein zweites · **An angle connector that already holds a tube no longer offers a spot for another**
 - **Die 45°-Winkelkupplung wird auch ohne Rohr richtig gezeichnet** – frisch gesetzt fehlte ihr das Rohr, aus dem die Darstellung ihre Lage ablas; zu sehen war nur ein schiefer Stutzen · **The 45° angle connector is drawn correctly before a tube is attached**
 - **Kupplungen ohne Anschluss verschwinden mit dem gelöschten Teil** – wer ein Rohr löschte, ließ die leeren Kupplungen an seinen Enden zurück. Kupplungen, die ein Anbauteil, eine Klemme oder eine Rutsche tragen, bleiben; eine frisch gesetzte, noch leere ebenfalls · **Connectors left without anything attached go with the deleted part**
 - **Das Rohr am Doppelrohrverbinder rastet aufs 5-cm-Raster** – es saß mittig zur Klemme und lag damit oft zwischen den Rasterpunkten · **The tube at a double-tube connector snaps to the 5 cm grid**
