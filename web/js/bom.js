@@ -14,6 +14,15 @@ import { POOL_KINDS } from "./model.js";
 // Laufrolle sitzt auf ihrem Adapter und zaehlt nicht doppelt.
 const ARM_FITTINGS = new Set(["bearing2", "adapter2", "steering-lock2"]);
 
+// Naechste Achsenrichtung zu einem Vektor.
+function cardinalOf(dx, dy, dz) {
+  const m = [Math.abs(dx), Math.abs(dy), Math.abs(dz)];
+  const ax = m.indexOf(Math.max(m[0], m[1], m[2]));
+  const d = [0, 0, 0];
+  d[ax] = Math.sign([dx, dy, dz][ax]) || 1;
+  return d;
+}
+
 function neighborDirs(model, node) {
   const dirs = [];
   for (const t of model.tubes.values()) {
@@ -24,7 +33,11 @@ function neighborDirs(model, node) {
     if (!nb) continue;
     const dx = nb.x - node.x, dy = nb.y - node.y, dz = nb.z - node.z;
     const len = Math.hypot(dx, dy, dz) || 1;
-    dirs.push([dx / len, dy / len, dz / len]);
+    // Die Huelse der Winkelkupplung steckt auf einem KARDINALEN Stutzen; ihr
+    // Koerper sitzt zusaetzlich um den 45-Grad-Arm versetzt, die Kante dorthin
+    // laeuft deshalb ~17 Grad schief. Ungerundet gaelte die Basiskupplung als
+    // Raumkupplung statt als flache -- also auf die Achse runden.
+    dirs.push(t.arm ? cardinalOf(dx, dy, dz) : [dx / len, dy / len, dz / len]);
   }
   for (const f of (model.fittings ? model.fittings.values() : [])) {
     if (!ARM_FITTINGS.has(f.kind) || !f.quat) continue;
@@ -180,7 +193,10 @@ export function inferConnectorType(model, node) {
   if (node.part) return node.part;
   const dirs = neighborDirs(model, node);
   if (dirs.length === 0) return null;
-  if (node.c45) return "diagonal";
+  // Die Winkelkupplung sitzt auf ihrem eigenen Knoten (dem Adapter-Koerper).
+  // Die Kupplung, die sie TRAEGT, heisst weiter nach ihren eigenen Armen -- der
+  // Stutzen unter der Huelse ist einer davon.
+  if (node.c45body) return "diagonal";
   return connectorTypeForDirs(dirs);
 }
 
@@ -231,11 +247,15 @@ export function connectorsForNode(model, node) {
   const out = [];
   const baseType = connectorTypeForDirs(axis);
   if (baseType && baseType !== "end") out.push(baseType);
-  // 45-Grad-Winkelkupplung sitzt auf einer Basiskupplung; fehlt eine
-  // achsenparallele Basis, traegt eine gerade Kupplung die Diagonale.
-  if (out.length === 0) out.push("straight");
-  const dcount = Math.max(diag.length, 1);
-  for (let i = 0; i < dcount; i++) out.push("diagonal");
+  // Ein 45-Grad-Rohr, das direkt an diesem Knoten haengt (ohne eigenen Adapter-
+  // Koerper), braucht hier eine Winkelkupplung. Haengt sie dagegen am Koerper,
+  // zaehlt sie dort -- sonst stuende sie zweimal in der Liste.
+  if (diag.length) {
+    // 45-Grad-Winkelkupplung sitzt auf einer Basiskupplung; fehlt eine
+    // achsenparallele Basis, traegt eine gerade Kupplung die Diagonale.
+    if (out.length === 0) out.push("straight");
+    for (let i = 0; i < diag.length; i++) out.push("diagonal");
+  }
   return out;
 }
 

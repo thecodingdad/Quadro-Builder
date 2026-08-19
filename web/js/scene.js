@@ -2226,6 +2226,17 @@ export class SceneManager {
         const [cx, cy, cz] = t.bowCenter;
         pushDir(t.a, nb.x - cx, nb.y - cy, nb.z - cz, true);
         pushDir(t.b, na.x - cx, na.y - cy, na.z - cz, true);
+      } else if (t.arm) {
+        // Kante zum Adapter-Koerper der Winkelkupplung: ihre Huelse steckt auf
+        // einem KARDINALEN Stutzen, der Koerper sitzt aber um den 45-Grad-Arm
+        // versetzt -- gemessen laeuft die Kante ~17 Grad schief. Der Stutzen der
+        // Basiskupplung gehoert trotzdem gerade auf die Achse.
+        const q = (d) => { const m = [Math.abs(d[0]), Math.abs(d[1]), Math.abs(d[2])];
+          const ax = m.indexOf(Math.max(m[0], m[1], m[2]));
+          const o = [0, 0, 0]; o[ax] = Math.sign(d[ax]) || 1; return o; };
+        const ab = q([nb.x - na.x, nb.y - na.y, nb.z - na.z]);
+        pushDir(t.a, ab[0], ab[1], ab[2], false);
+        pushDir(t.b, -ab[0], -ab[1], -ab[2], false);
       } else {
         pushDir(t.a, nb.x - na.x, nb.y - na.y, nb.z - na.z, false);
         pushDir(t.b, na.x - nb.x, na.y - nb.y, na.z - nb.z, false);
