@@ -1054,9 +1054,10 @@ export class Builder {
     const rest = [v[0] - u[0] * laengs, v[1] - u[1] * laengs, v[2] - u[2] * laengs];
     const L = Math.hypot(rest[0], rest[1], rest[2]);
     if (L < 1e-6) return null;
-    // Die Schraege liegt zwischen Huelsenachse und Rest -- beide zu gleichen
-    // Teilen, das sind die 45 Grad.
-    const d = [u[0] + rest[0] / L, u[1] + rest[1] / L, u[2] + rest[2] / L];
+    // Die Schraege knickt ZURUECK ueber die Kupplung: quer zur Huelse plus die
+    // GEGENrichtung der Huelsenachse -- beide zu gleichen Teilen, das sind die
+    // 45 Grad.
+    const d = [rest[0] / L - u[0], rest[1] / L - u[1], rest[2] / L - u[2]];
     const dl = Math.hypot(d[0], d[1], d[2]) || 1;
     return [d[0] / dl, d[1] / dl, d[2] / dl];
   }
@@ -1232,17 +1233,21 @@ export class Builder {
    * gesetzte Kupplung dreht sie um 90 Grad weiter.
    */
   _buildC45Handles() {
-    const gap = geometry().connectorSize / 2 + 4;
+    // Die Punkte liegen dort, WOHIN die Schraege zeigt -- genau wie frueher im
+    // Schraeg-Modus. Auf welchem Arm die Huelse dafuer sitzt, rechnet
+    // _diagSleeveAxis aus (Waagerechte bevorzugt, aber nur ein FREIER Arm).
+    const gap = (geometry().connectorSize / 2 + 4) * 1.6;
     for (const node of this.model.nodes.values()) {
       if (node.unused || node.c45body || node.part) continue;
-      for (const d of DIRECTIONS) {
-        if (this._armOccupied(node, d.vec)) continue;
-        const dir = this._c45DirFor(node, d.vec);
-        if (!dir) continue;
-        if (this.model.isBelowGround(node.y + dir[1] * C45_ARM_LEN)) continue;
+      const belegt = this._occupiedDirs(node);
+      for (const d of DIAGONAL_DIRECTIONS) {
+        if (belegt.has(d.name)) continue;
+        if (this._targetBelowGround(node, d.vec)) continue;
+        const axis = this._diagSleeveAxis(node, d.vec);
+        if (!axis) continue;
         this.scene.addHandle(
           [node.x + d.vec[0] * gap, node.y + d.vec[1] * gap, node.z + d.vec[2] * gap],
-          { c45mount: true, nodeId: node.id, axis: d.vec, dir }, "diag");
+          { c45mount: true, nodeId: node.id, axis, dir: d.vec }, "diag");
       }
     }
   }
@@ -1254,15 +1259,6 @@ export class Builder {
       const id = t.a === nodeId ? t.b : t.b === nodeId ? t.a : null;
       const n = id && this.model.nodes.get(id);
       if (n && n.c45body) return n;
-    }
-    return null;
-  }
-
-  /** Erste Schraege, deren Huelse auf genau diesem Arm sitzt. */
-  _c45DirFor(node, axis) {
-    for (const dd of DIAGONAL_DIRECTIONS) {
-      const a = this._diagSleeveAxis(node, dd.vec);
-      if (a && a[0] === axis[0] && a[1] === axis[1] && a[2] === axis[2]) return dd.vec;
     }
     return null;
   }

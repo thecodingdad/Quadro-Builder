@@ -1624,7 +1624,9 @@ export class SceneManager {
       const quer = v.clone().addScaledVector(u, -v.dot(u));
       const L = quer.length();
       if (L < 0.01) return null;
-      d = u.clone().add(quer.multiplyScalar(1 / L)).normalize();
+      // Der 45-Grad-Arm knickt ZURUECK ueber die Kupplung: seine Achskomponente
+      // zeigt der Huelse entgegen (Knierohr). Daher quer MINUS Huelsenachse.
+      d = quer.multiplyScalar(1 / L).sub(u).normalize();
       a = L * Math.SQRT2;
     }
     if (!(a > 0.01)) return null;
