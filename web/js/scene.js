@@ -589,7 +589,10 @@ export class SceneManager {
     this.renderer.shadowMap.autoUpdate = false;
     this.renderer.shadowMap.needsUpdate = true;
     this.renderer.shadowMap.enabled = QUALITY[this._quality].shadow > 0;
-    if (this._clipPlane) this.renderer.clippingPlanes = [this._clipPlane];
+    // Die Schnittebene haengt an den MATERIALIEN des Modells, nicht am Renderer
+    // -- Boden, Gras, Baeume und Himmel sollen ungeschnitten stehen bleiben.
+    this.renderer.localClippingEnabled = true;
+    if (this._clipPlane) this._applyClip();
     if (old) {
       old.dispose();
       old.domElement.remove();
@@ -2702,17 +2705,9 @@ export class SceneManager {
     // Gesammelte Kupplungen, Arm-Stutzen und Rohre als InstancedMesh anlegen.
     this._batchFlush();
 
-    // Schnittebene: Materialien muessen clipShadows tragen, sonst werfen
-    // weggeschnittene Teile weiterhin Schatten auf den Boden. Die Materialien
-    // entstehen erst bei ihrer ersten Verwendung, deshalb hier statt in setClip.
-    if (this._clipPlane) {
-      this.buildGroup.traverse((o) => {
-        if (o.isMesh && o.material && !o.material.clipShadows) {
-          o.material.clipShadows = true;
-          o.material.needsUpdate = true;
-        }
-      });
-    }
+    // Schnittebene: Materialien entstehen erst bei ihrer ersten Verwendung und
+    // muessen die Ebene nachtragen -- deshalb hier statt nur in setClip().
+    if (this._clipPlane) this._applyClip();
 
     // Gras unter bodennahen Bauteilen ausblenden (Footprint-Maske).
     this._updateGrassMask(model);
@@ -3341,23 +3336,63 @@ export class SceneManager {
 
   // --- Schnittebene --------------------------------------------------------
   // Blendet alles vor der Ebene aus (echtes Clipping, keine Objekt-Sichtbarkeit)
-  // -- ein Rohr, das die Ebene kreuzt, bleibt zur Haelfte stehen.
+  // -- ein Rohr, das die Ebene kreuzt, bleibt zur Haelfte stehen. Geschnitten
+  // wird NUR das Modell: die Ebene haengt an den Modell-Materialien
+  // (`localClippingEnabled`), nicht global am Renderer, sonst waeren Boden,
+  // Gras, Baeume und Himmel gleich mit halbiert.
   // axis: "x" | "y" | "z", value in cm, flip dreht die sichtbare Seite um.
   setClip(axis, value, flip) {
     const n = axis === "x" ? [1, 0, 0] : axis === "y" ? [0, 1, 0] : [0, 0, 1];
     const sign = flip ? 1 : -1;
     const normal = new THREE.Vector3(n[0] * sign, n[1] * sign, n[2] * sign);
     const constant = flip ? -value : value;
-    if (this._clipPlane) this._clipPlane.set(normal, constant);
-    else this._clipPlane = new THREE.Plane(normal, constant);
-    this.renderer.clippingPlanes = [this._clipPlane];
+    if (this._clipPlane) {
+      // Dieselbe Ebene weiterdrehen: die Materialien halten sie bereits, nur
+      // ihre Lage aendert sich -- kein neues Uebersetzen der Shader noetig.
+      this._clipPlane.set(normal, constant);
+    } else {
+      this._clipPlane = new THREE.Plane(normal, constant);
+      this._applyClip();
+    }
     this._shadowsDirty();
   }
 
   clearClip() {
+    if (!this._clipPlane) return;
     this._clipPlane = null;
-    this.renderer.clippingPlanes = [];
+    this._applyClip();
     this._shadowsDirty();
+  }
+
+  /**
+   * Schnittebene an alle Modell-Materialien haengen (bzw. wieder abnehmen).
+   * Die Liste ist bei jedem Wechsel eine NEUE Anordnung: three uebersetzt den
+   * Shader nur neu, wenn sich die Anzahl der Ebenen aendert, und daran haengt
+   * die Erkennung "schon gesetzt" (Vergleich der Anordnung selbst).
+   */
+  _applyClip() {
+    const want = this._clipPlane ? 1 : 0;
+    // Anordnung nur beim Wechsel neu bauen: sonst haetten nach jedem Zeichnen
+    // ALLE Materialien eine fremde Anordnung und wuerden neu uebersetzt.
+    if (!this._clipList || this._clipList.length !== want) {
+      this._clipList = this._clipPlane ? [this._clipPlane] : [];
+    }
+    for (const key of Object.keys(this._materials)) this._clipMaterial(this._materials[key]);
+    for (const group of [this.buildGroup, this.handleGroup, this.labelGroup]) {
+      group.traverse((o) => { if (o.material) this._clipMaterial(o.material); });
+    }
+  }
+
+  // Ein Material (oder eine Materialliste) auf den aktuellen Stand bringen.
+  // `clipShadows`, damit Weggeschnittenes auch keinen Schatten mehr wirft.
+  _clipMaterial(mat) {
+    const planes = this._clipList || [];
+    for (const m of Array.isArray(mat) ? mat : [mat]) {
+      if (!m || m.clippingPlanes === planes) continue;
+      m.clippingPlanes = planes;
+      m.clipShadows = true;
+      m.needsUpdate = true;
+    }
   }
 
   get clipping() { return !!this._clipPlane; }
@@ -4057,11 +4092,9 @@ export class SceneManager {
     gl.setViewport(r.x, yBottom, r.size, r.size);
     gl.setScissor(r.x, yBottom, r.size, r.size);
     gl.clearDepth();
-    // Clipping der Schnittebene gilt nur fuer das Modell.
-    const clip = gl.clippingPlanes;
-    gl.clippingPlanes = [];
+    // Die Schnittebene haengt an den Modell-Materialien -- der Wuerfel hat
+    // eigene und bleibt ohne Zutun ungeschnitten.
     gl.render(this._cubeScene, this._cubeCam);
-    gl.clippingPlanes = clip;
     gl.setScissorTest(false);
     gl.setViewport(0, 0, r.w, r.h);
     gl.autoClear = true;
