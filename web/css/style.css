@@ -437,6 +437,11 @@ body.sidebar-hidden #sidebar, body.sidebar-hidden #sidebar-resizer { display: no
   max-width: 70%;
   pointer-events: none;
 }
+/* Der Hinweis zum Werkzeug bleibt grau. Kurze Rückmeldungen sagen über die
+   Farbe, was passiert ist: grün = getan, orange = ging nicht, rot = Fehler. */
+.status.status-ok { background: rgba(18, 122, 66, 0.92); }
+.status.status-warn { background: rgba(176, 106, 10, 0.94); }
+.status.status-error { background: rgba(164, 43, 34, 0.94); }
 
 /* Sidebar */
 #sidebar {

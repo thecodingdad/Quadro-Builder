@@ -220,7 +220,7 @@ export function initUI({ scene, model, builder }) {
   applyViewCubeLabels();
 
   // --- Hinweise + Undo-Verfuegbarkeit ------------------------------------
-  builder.onNotice = (msg) => flash(msg);
+  builder.onNotice = (msg, art) => flash(msg, art);
   builder.onHistoryChange = () => updateUndoButton();
   function updateUndoButton() {
     $("btn-undo").disabled = !builder.canUndo();
@@ -403,7 +403,7 @@ export function initUI({ scene, model, builder }) {
       scene.setProjection(next);
       localStorage.setItem(PROJECTION_KEY, next);
       syncProjectionButton();
-      flash(t(next === "orthographic" ? "btn_projection_ortho" : "btn_projection_persp"));
+      flash(t(next === "orthographic" ? "btn_projection_ortho" : "btn_projection_persp"), "info");
     });
   }
 
@@ -512,18 +512,8 @@ export function initUI({ scene, model, builder }) {
   });
   $("mode-reinforce").addEventListener("click", () => setMode(builder.mode === "reinforce" ? "select" : "reinforce"));
   $("mode-assembly").addEventListener("click", () => { toggleHamburger(false); setMode("assembly"); });
-  $("btn-hints").addEventListener("click", () => toggleHints());
   $("btn-diagonal").addEventListener("click", () => toggleDiagonal());
 
-  function toggleHints() {
-    builder.setShowHints(!builder.showHints);
-    $("btn-hints").classList.toggle("active", builder.showHints);
-    const mh = $("mobile-btn-hints"); if (mh) mh.classList.toggle("active", builder.showHints);
-    if (builder.showHints) {
-      const n = builder.suggestionCount();
-      flash(n ? t("flash_hints_n", n) : t("flash_hints_0"));
-    }
-  }
   function toggleDiagonal() {
     if (builder.mode !== "add" && builder.mode !== "panel") setMode("add");
     builder.setDiagonal(!builder.diagonal);
@@ -593,19 +583,28 @@ export function initUI({ scene, model, builder }) {
   /** Dauerhafter Hinweis zum laufenden Werkzeug. */
   function setStatusHint(text) {
     statusHint = text;
+    $("status").className = "status";
     // Ein Werkzeugwechsel raeumt eine noch stehende Meldung ab -- sie gehoert
     // zum vorigen Werkzeug.
     if (flashTimer) { clearTimeout(flashTimer); flashTimer = null; }
     $("status").textContent = text;
   }
 
-  /** Kurze Rueckmeldung; danach kommt der Hinweis des Werkzeugs zurueck. */
-  function flash(msg) {
-    $("status").textContent = msg;
+  /**
+   * Kurze Rueckmeldung; danach kommt der Hinweis des Werkzeugs zurueck.
+   * `art` faerbt sie: "ok" gruen (etwas ist passiert), "warn" orange (ging
+   * nicht), "error" rot (etwas ist schiefgegangen), "info" bleibt grau wie die
+   * Hinweise.
+   */
+  function flash(msg, art = "ok") {
+    const box = $("status");
+    box.textContent = msg;
+    box.className = "status" + (art === "info" ? "" : " status-" + art);
     clearTimeout(flashTimer);
     flashTimer = setTimeout(() => {
       flashTimer = null;
-      $("status").textContent = statusHint;
+      box.textContent = statusHint;
+      box.className = "status";
     }, FLASH_MS);
   }
 
@@ -1291,7 +1290,7 @@ export function initUI({ scene, model, builder }) {
       const eintrag = { name: tab.name, data: tab.model };
       if (i >= 0) alle[i] = eintrag; else alle.push(eintrag);
     }
-    if (!alle.length) { flash(t("flash_export_all_empty")); return; }
+    if (!alle.length) { flash(t("flash_export_all_empty"), "warn"); return; }
     const texte = alle.map((d) => {
       const m2 = new (model.constructor)();
       m2.loadJSON(d.data);
@@ -1457,7 +1456,7 @@ export function initUI({ scene, model, builder }) {
       sync.nudge();
       return doc;
     } catch (e) {
-      flash(t("flash_save_failed", e.message));
+      flash(t("flash_save_failed", e.message), "error");
       return null;
     }
   }
@@ -1578,7 +1577,7 @@ export function initUI({ scene, model, builder }) {
     if (!tab) return;
     if (!tab.dirty) {
       applyRemoteToTab(tab, doc);
-      flash(t("sync_doc_updated", doc.name));
+      flash(t("sync_doc_updated", doc.name), "info");
       return;
     }
     const answer = await queueDialog(() => dialog({
@@ -1600,7 +1599,7 @@ export function initUI({ scene, model, builder }) {
       tab.docId = null;
       tab.dirty = true;
       tab.savedJson = null;
-      flash(t("sync_doc_removed", tab.name));
+      flash(t("sync_doc_removed", tab.name), "info");
     }
     renderTabs();
     if (currentPanel === "own") renderOwnModels();
@@ -1665,8 +1664,8 @@ export function initUI({ scene, model, builder }) {
     lastSyncInfo = { pending, lastSyncAt };
     renderSyncLine();
     if (previous && state !== previous && state !== "connecting") {
-      if (state === "offline") flash(t("sync_lost"));
-      else if (state === "online" && previous === "offline") flash(t("sync_back"));
+      if (state === "offline") flash(t("sync_lost"), "error");
+      else if (state === "online" && previous === "offline") flash(t("sync_back"), "info");
     }
   }
 
@@ -1681,7 +1680,7 @@ export function initUI({ scene, model, builder }) {
     });
     update();
     if (currentPanel === "library") renderLibrary();
-    flash(t("sync_inv_updated"));
+    flash(t("sync_inv_updated"), "info");
   }
 
   sync.configure({
@@ -1706,7 +1705,7 @@ export function initUI({ scene, model, builder }) {
       return offen;
     }
     const doc = await docs.getDoc(docId);
-    if (!doc) { flash(t("load_error_data")); return null; }
+    if (!doc) { flash(t("load_error_data"), "error"); return null; }
     const tab = openTab({ name: doc.name, data: doc.data, docId: doc.id, preview });
     flash(t("flash_loaded", doc.name));
     return tab;
@@ -1975,7 +1974,7 @@ export function initUI({ scene, model, builder }) {
       }
     }
     const data = parseDesign(qdf);
-    if (!data) { flash(t("lib_load_failed")); return; }
+    if (!data) { flash(t("lib_load_failed"), "error"); return; }
     // Die Sammlung bleibt, wie sie ist: geöffnet wird eine KOPIE in einem
     // eigenen Tab, die noch zu keiner Datei gehört.
     openTab({ name: entry.name, data, dirty: true, preview });
@@ -2007,7 +2006,7 @@ export function initUI({ scene, model, builder }) {
   $("lib-only-feasible").addEventListener("change", (e) => {
     if (e.target.checked && inventoryEmpty()) {
       e.target.checked = false;
-      flash(t("lib_no_inventory"));
+      flash(t("lib_no_inventory"), "warn");
     }
     renderLibrary();
   });
@@ -2343,7 +2342,7 @@ export function initUI({ scene, model, builder }) {
       if (builder.mode !== "select") return;
       e.preventDefault();
       const frag = builder.copySelection();
-      if (!frag) { flash(t("flash_copy_empty")); return; }
+      if (!frag) { flash(t("flash_copy_empty"), "warn"); return; }
       clipboard = frag;
       flash(t("flash_copied", frag.tubes.length + frag.panels.length
         + frag.textiles.length + frag.slides.length + frag.fittings.length + frag.clamps.length));
@@ -2351,9 +2350,9 @@ export function initUI({ scene, model, builder }) {
     }
     if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "v" && !e.shiftKey) {
       e.preventDefault();
-      if (!clipboard) { flash(t("flash_paste_empty")); return; }
+      if (!clipboard) { flash(t("flash_paste_empty"), "warn"); return; }
       builder.startPaste(clipboard);
-      flash(t("flash_paste_hint"));
+      flash(t("flash_paste_hint"), "info");
       return;
     }
     // Drehen: Strg/Cmd + Pfeil links/rechts dreht die Auswahl (oder die Kopie am
@@ -2470,7 +2469,6 @@ export function initUI({ scene, model, builder }) {
       case "q": if (builder.rotateSelectionBy(-1)) flash(t("flash_rotated")); break;
       case "e": if (builder.rotateSelectionBy(1)) flash(t("flash_rotated")); break;
       case "d": toggleDiagonal(); break;
-      case "h": toggleHints(); break;
       case "c": scene.resetCamera(model); break;
       // Die Liste der Tasten selbst: F1 wie ueberall, "?" fuer die Tastatur
       // ohne F-Reihe.
@@ -2486,7 +2484,7 @@ export function initUI({ scene, model, builder }) {
       case "escape":
         closePopup();
         // Haengt eine Kopie am Zeiger, nimmt Escape zuerst sie weg.
-        if (builder.cancelPaste()) { flash(t("flash_paste_cancelled")); update(); break; }
+        if (builder.cancelPaste()) { flash(t("flash_paste_cancelled"), "info"); update(); break; }
         // Offene Overlays zuerst: Escape schliesst sie, statt den Modus zu wechseln.
         if (!$("help-overlay").hidden) { $("help-overlay").hidden = true; break; }
         // Ueberlagernde Seitenleiste verhaelt sich wie ein Menue: Escape zu.
@@ -3161,7 +3159,6 @@ export function initUI({ scene, model, builder }) {
     applySlice();
     syncPartHighlights();
     if (v.camera) scene.restoreCameraState(v.camera); else scene.resetCamera(model);
-    $("btn-hints").classList.toggle("active", builder.showHints);
     $("btn-diagonal").classList.toggle("active", builder.mode === "add" && builder.diagonal);
     renderColorButtons();
     updateUndoButton();

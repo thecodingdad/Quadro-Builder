@@ -63,7 +63,6 @@ export class Builder {
     this.highlight = null;   // reine Sicht-Hervorhebung (Bestandsliste)
 
     this.diagonal = false;       // schraege (45-Grad) Streben statt Achsen
-    this.showHints = false;      // Verstaerkungs-Vorschlaege hervorheben
     this.buildPlan = { levels: [], steps: [] };
     this.assemblyStep = 0;
     this.assemblyOrder = "y+";   // Aufbaurichtung, siehe buildplan.BUILD_ORDERS
@@ -256,7 +255,7 @@ export class Builder {
     if (this.mode !== "select" || !this.selection.size) return false;
     const before = JSON.stringify(this.model.toJSON());
     const res = this._move(dir[0] * step, dir[1] * step, dir[2] * step);
-    if (!res.ok) { this.onNotice(t("notice_move_" + res.reason)); return false; }
+    if (!res.ok) { this.onNotice(t("notice_move_" + res.reason), "warn"); return false; }
     this._afterMove(before, res);
     return true;
   }
@@ -274,7 +273,7 @@ export class Builder {
     const before = JSON.stringify(this.model.toJSON());
     const res = this.model.rotateSelection(this.selection, steps,
       { merge: true, validate: infeasibleConnectors, grid: MOVE_STEP });
-    if (!res.ok) { this.onNotice(t("notice_rotate_" + res.reason)); return false; }
+    if (!res.ok) { this.onNotice(t("notice_rotate_" + res.reason), "warn"); return false; }
     this._afterMove(before, res);
     return true;
   }
@@ -431,7 +430,7 @@ export class Builder {
   commitPaste() {
     const d = this._paste;
     if (!d) return false;
-    if (!d.valid) { this.onNotice(t("notice_collision")); return false; }
+    if (!d.valid) { this.onNotice(t("notice_collision"), "warn"); return false; }
     this._paste = null;
     this.scene.setCursor("default");
     const merged = this.model._mergeMovedNodes(new Set(d.ids.nodes));
@@ -619,7 +618,7 @@ export class Builder {
     // Beim Loslassen zaehlt die letzte Lage, an der es passt: ueber einer
     // belegten Stelle rutscht die Auswahl dorthin zurueck.
     const ziel = d.invalid ? d.lastValid : d.applied;
-    if (d.invalid) this.onNotice(t("notice_move_collision"));
+    if (d.invalid) this.onNotice(t("notice_move_collision"), "warn");
     // Die Vorschau hat nur verschoben -- jetzt der echte Zug von der
     // Ausgangslage aus, mit Trennen, Zusammenlegen und Kupplungs-Pruefung.
     this.model.loadJSON(JSON.parse(d.before));
@@ -628,7 +627,7 @@ export class Builder {
     if (!res.ok) {
       // Das faellt nur auf, was die Vorschau nicht sehen kann (etwa eine
       // Kupplung, die es beim Zusammenlegen nicht gibt).
-      this.onNotice(t("notice_move_" + res.reason));
+      this.onNotice(t("notice_move_" + res.reason), "warn");
       this.refresh();
       return;
     }
@@ -655,6 +654,9 @@ export class Builder {
   deleteSelection() {
     if (!this.selection.size) return 0;
     const entries = [...this.selection];
+    // Kupplungen, an denen das Geloeschte haengt: sie koennten danach ohne
+    // jeden Anschluss dastehen und werden dann mit weggeraeumt.
+    const nachbarn = this.model.neighborNodeIds(entries.map(([id]) => id));
     this.recordHistory(() => {
       for (const [id, kind] of entries) {
         if (kind === "tube") this.model.removeTube(id);
@@ -665,7 +667,10 @@ export class Builder {
         else if (kind === "fitting") this._removeFittingWithRider(id);
       }
       for (const [id, kind] of entries) if (kind === "node") this.model.removeNode(id);
+      for (const [id] of entries) nachbarn.delete(id);
+      this.model.removeEmptyNodes(nachbarn);
     });
+    if (this.selectedNodeId && !this.model.nodes.has(this.selectedNodeId)) this.selectedNodeId = null;
     const n = entries.length;
     this.selection.clear();
     this.refresh();
@@ -694,7 +699,6 @@ export class Builder {
       mode: this.mode, tubeId: this.tubeId, panelId: this.panelId,
       fittingKind: this.fittingKind, clampPart: this.clampPart, slideKind: this.slideKind,
       color: this.color, diagonal: this.diagonal,
-      showHints: this.showHints,
       assemblyOrder: this.assemblyOrder, assemblyStep: this.assemblyStep,
       undo: this._undoStack.slice(), redo: this._redoStack.slice(),
     };
@@ -710,7 +714,6 @@ export class Builder {
     if (s.slideKind) this.slideKind = s.slideKind;
     if (s.color) this.color = s.color;
     this.diagonal = !!s.diagonal;
-    this.showHints = !!s.showHints;
     if (s.assemblyOrder) this.assemblyOrder = s.assemblyOrder;
     this.assemblyStep = s.assemblyStep || 0;
     this._undoStack = Array.isArray(s.undo) ? s.undo.slice() : [];
@@ -753,10 +756,7 @@ export class Builder {
     }
   }
   setDiagonal(on) { this.diagonal = !!on; if (this.mode === "add") this.refresh(); }
-  setShowHints(on) { this.showHints = !!on; this.refresh(); }
 
-  // Anzahl der Rohre, die ein Verstaerkungsprofil gebrauchen koennten.
-  suggestionCount() { return this.model.reinforcementSuggestions().size; }
 
   // Anzahl der Rohre, die sich mit einem anderen ueberlagern.
 
@@ -831,8 +831,8 @@ export class Builder {
             node.id, dirVec, this.tubeId, this.colorFor("tube"), tube.length_cm, spacingFor(tube.length_cm)
           );
     });
-    if (res && res.ground) this.onNotice(t("notice_ground"));
-    else if (res && res.collision) this.onNotice(t("notice_collision"));
+    if (res && res.ground) this.onNotice(t("notice_ground"), "warn");
+    else if (res && res.collision) this.onNotice(t("notice_collision"), "warn");
     else if (res && res.tube) this._notePlaced(res.tube.id, "tube");
     // Der Ankerpunkt wandert ans neue Rohrende -- sonst müsste man jede
     // Richtung zweimal drücken: einmal bauen, einmal hinlaufen.
@@ -904,7 +904,7 @@ export class Builder {
     const dt = this._diagonalTube();
     if (!dt) return;
     const axis = this._diagSleeveAxis(node, dirVec);
-    if (!axis) { this.onNotice(t("notice_no_free_arm")); return; }
+    if (!axis) { this.onNotice(t("notice_no_free_arm"), "warn"); return; }
     let res;
     this.recordHistory(() => {
       res = this.model.extendC45Diagonal(
@@ -912,8 +912,8 @@ export class Builder {
         dt.length_cm, spacingFor(dt.length_cm), C45_SLEEVE_LEN, C45_ARM_LEN
       );
     });
-    if (res && res.ground) this.onNotice(t("notice_ground"));
-    else if (res && res.collision) this.onNotice(t("notice_collision"));
+    if (res && res.ground) this.onNotice(t("notice_ground"), "warn");
+    else if (res && res.collision) this.onNotice(t("notice_collision"), "warn");
     else if (res && res.tube) this._notePlaced(res.tube.id, "tube");
     else if (res && res.node) this.selectedNodeId = res.node.id;
     this.refresh();
@@ -992,8 +992,9 @@ export class Builder {
     const labelIds = soloId != null ? new Set([soloId]) : null;
     const soloLabel = soloId != null
       ? { id: soloId, text: this._partLabel(soloId, this.selection.get(soloId)) } : null;
-    const suggest = (this.showHints || this.mode === "reinforce")
-      ? this.model.reinforcementSuggestions() : null;
+    // Vorschlaege, welche Rohre ein Verstaerkungsprofil gebrauchen koennten --
+    // sichtbar genau dann, wenn man verstaerkt.
+    const suggest = this.mode === "reinforce" ? this.model.reinforcementSuggestions() : null;
     const reinforce = this.mode === "reinforce";
     // Kollisions-Modus: immer ein Set (auch leeres), damit die Szene den Modus
     // erkennt und die uebrigen Rohre grau zeichnet.
@@ -1006,7 +1007,6 @@ export class Builder {
       : (this._drag && this._drag.invalid ? new Set(this.selection.keys()) : null);
     this.scene.renderModel(this.model, this.selectedNodeId,
       { labelFor, slideNameFor, labelIds, soloId, soloLabel, assembly, suggest, reinforce,
-        hintDim: this.showHints,
         selected, highlight: this.highlight, invalid });
     this._buildHandles();
     this.scene.requestRender();
@@ -1378,7 +1378,7 @@ export class Builder {
   _placeClampOnTube(tubeId, hit) {
     const tb = this.model.tubes.get(tubeId);
     // Auch sie greifen nur um ein gerades Rohr.
-    if (!tb || tb.bow || tb.arm || tb.link) { this.onNotice(t("notice_clamp_click_tube")); return; }
+    if (!tb || tb.bow || tb.arm || tb.link) { this.onNotice(t("notice_clamp_click_tube"), "info"); return; }
     const a = this.model.nodes.get(tb.a), b = this.model.nodes.get(tb.b);
     if (!a || !b) return;
     const cs = geometry().connectorSize;
@@ -1800,12 +1800,12 @@ export class Builder {
       // Auswahl-Modus, wie bei allen anderen Teilen auch.
       let turned = false;
       this.recordHistory(() => { turned = this.model.rotateClamp(pick.data.id); });
-      if (!turned) this.onNotice(t("notice_fitting_fixed"));
+      if (!turned) this.onNotice(t("notice_fitting_fixed"), "warn");
       this.refresh();
       return;
     }
     if (pick.data.kind !== "tube" || !pick.point) {
-      this.onNotice(t("notice_clamp_click_tube"));
+      this.onNotice(t("notice_clamp_click_tube"), "info");
       return;
     }
     this._placeClampOnTube(pick.data.id, pick.point);
@@ -1844,7 +1844,7 @@ export class Builder {
         added = this.model.addFittingAt(this.fittingKind, h.data.fittingMount, this.colorFor("fitting"));
       });
       if (added) this._notePlaced(added.id, "fitting");
-      else this.onNotice(t("notice_fitting_exists"));
+      else this.onNotice(t("notice_fitting_exists"), "warn");
       this.refresh();
       return;
     }
@@ -1858,7 +1858,7 @@ export class Builder {
           added = this.model.addFittingAt(this.fittingKind, nah, this.colorFor("fitting"));
         });
         if (added) this._notePlaced(added.id, "fitting");
-        else this.onNotice(t("notice_fitting_exists"));
+        else this.onNotice(t("notice_fitting_exists"), "warn");
         this.refresh();
         return;
       }
@@ -1868,7 +1868,7 @@ export class Builder {
       // geloescht wird im Auswahl-Modus. Teile ohne Wahlmoeglichkeit bleiben.
       let turned = false;
       this.recordHistory(() => { turned = this.model.rotateFitting(p.data.id); });
-      if (!turned) this.onNotice(t("notice_fitting_fixed"));
+      if (!turned) this.onNotice(t("notice_fitting_fixed"), "warn");
       this.refresh();
       return;
     }
@@ -1904,7 +1904,7 @@ export class Builder {
         added = this.model.addFittingAt(this.fittingKind, h.data.fittingMount, this.colorFor("fitting"));
       });
       if (added) this._notePlaced(added.id, "fitting");
-      else this.onNotice(t("notice_fitting_exists"));
+      else this.onNotice(t("notice_fitting_exists"), "warn");
       this.refresh();
       return;
     }
@@ -1915,7 +1915,7 @@ export class Builder {
         && this.model.fittings.get(pick.data.id)?.kind === this.fittingKind) {
       let turned = false;
       this.recordHistory(() => { turned = this.model.rotateFitting(pick.data.id); });
-      if (!turned) this.onNotice(t("notice_fitting_fixed"));
+      if (!turned) this.onNotice(t("notice_fitting_fixed"), "warn");
       this.refresh();
       return;
     }
@@ -1929,7 +1929,7 @@ export class Builder {
           added = this.model.addFittingAt(this.fittingKind, nah, this.colorFor("fitting"));
         });
         if (added) this._notePlaced(added.id, "fitting");
-        else this.onNotice(t("notice_fitting_exists"));
+        else this.onNotice(t("notice_fitting_exists"), "warn");
         this.refresh();
         return;
       }
@@ -1939,17 +1939,17 @@ export class Builder {
     if (!tubePick || !tubePick.point) { this._pickFittingNode(pick); return; }
     const pickData = tubePick.data;
     const tb = this.model.tubes.get(pickData.id);
-    if (!tb || tb.arm || tb.link || tb.bow) { this.onNotice(t("notice_clamp_click_tube")); return; }
+    if (!tb || tb.arm || tb.link || tb.bow) { this.onNotice(t("notice_clamp_click_tube"), "info"); return; }
     const hit = [tubePick.point.x, tubePick.point.y, tubePick.point.z];
     const mount = this.model.tubeFittingMount(pickData.id, hit, this.fittingKind,
       geometry().connectorSize);
-    if (!mount) { this.onNotice(t("notice_fitting_no_room")); return; }
+    if (!mount) { this.onNotice(t("notice_fitting_no_room"), "warn"); return; }
     let added = null;
     this.recordHistory(() => {
       added = this.model.addFittingAt(this.fittingKind, mount, this.colorFor("fitting"));
     });
     if (added) this._notePlaced(added.id, "fitting");
-    else this.onNotice(t("notice_fitting_no_room"));
+    else this.onNotice(t("notice_fitting_no_room"), "warn");
     this.refresh();
   }
 
@@ -2001,7 +2001,7 @@ export class Builder {
         added = this.model.addTubeClamp(m.tubeId, m.pos, part, geometry().connectorSize);
       });
       if (added) this._notePlaced(added.id, "node");
-      else this.onNotice(t("notice_fitting_exists"));
+      else this.onNotice(t("notice_fitting_exists"), "warn");
       this.refresh();
       return;
     }
@@ -2014,19 +2014,19 @@ export class Builder {
         // Rohr weiter, das Eingesteckte dreht mit.
         let turned = false;
         this.recordHistory(() => { turned = this.model.rotateTubeClamp(n.id, geometry().connectorSize); });
-        if (!turned) this.onNotice(t("notice_fitting_fixed"));
+        if (!turned) this.onNotice(t("notice_fitting_fixed"), "warn");
         this.refresh();
         return;
       }
     }
-    if (pick.data.kind !== "tube" || !pick.point) { this.onNotice(t("notice_clamp_click_tube")); return; }
+    if (pick.data.kind !== "tube" || !pick.point) { this.onNotice(t("notice_clamp_click_tube"), "info"); return; }
     const tb = this.model.tubes.get(pick.data.id);
-    if (!tb || tb.arm || tb.link || tb.bow) { this.onNotice(t("notice_clamp_click_tube")); return; }
+    if (!tb || tb.arm || tb.link || tb.bow) { this.onNotice(t("notice_clamp_click_tube"), "info"); return; }
     let added = null;
     const hit = [pick.point.x, pick.point.y, pick.point.z];
     this.recordHistory(() => { added = this.model.addTubeClamp(pick.data.id, hit, part, geometry().connectorSize); });
     if (added) this._notePlaced(added.id, "node");
-    else this.onNotice(t("notice_fitting_exists"));
+    else this.onNotice(t("notice_fitting_exists"), "warn");
     this.refresh();
   }
 
@@ -2043,7 +2043,7 @@ export class Builder {
     if (pick.data.kind === "fitting" && !this.panelRail) {
       const f = this.model.fittings.get(pick.data.id);
       // Netz und Sack lassen sich nicht drehen -- sie haengen an ihren Rohren.
-      if (f && RAIL_FITTINGS.has(f.kind)) { this.onNotice(t("notice_fitting_fixed")); return; }
+      if (f && RAIL_FITTINGS.has(f.kind)) { this.onNotice(t("notice_fitting_fixed"), "warn"); return; }
     }
     if (pick.data.kind !== "tube") { this._clearPanelRail(); return; }
     const tube = this.model.tubes.get(pick.data.id);
@@ -2052,7 +2052,7 @@ export class Builder {
     if (this.panelRail) {
       if (pick.data.id === this.panelRail.id) { this._clearPanelRail(); return; }
       const partner = this._railPartners(this.panelRail.id).find((c) => c.id === pick.data.id);
-      if (!partner) { this.onNotice(t("notice_panel_no_fit")); return; }
+      if (!partner) { this.onNotice(t("notice_panel_no_fit"), "warn"); return; }
       const sec = this.model.panelSection(partner, this.panelRail.at);
       let added = null;
       this.recordHistory(() => {
@@ -2061,15 +2061,15 @@ export class Builder {
         added = this.model[wohin](this.panelRail.id, partner.id, sec.t0, sec.len, this.colorFor("panel"));
       });
       if (added) this._notePlaced(added.id, this.fittingKind === "textil2" ? "textile" : "fitting");
-      else this.onNotice(t("notice_fitting_exists"));
+      else this.onNotice(t("notice_fitting_exists"), "warn");
       this._clearPanelRail();
       return;
     }
     const partners = this._railPartners(pick.data.id);
-    if (!partners.length) { this.onNotice(t("notice_panel_no_partner")); return; }
+    if (!partners.length) { this.onNotice(t("notice_panel_no_partner"), "warn"); return; }
     this.panelRail = { id: pick.data.id, at: this._alongTube(pick.data.id, pick.point) };
     this.highlight = new Set(partners.map((c) => c.id));
-    this.onNotice(t("notice_panel_pick_second", partners.length));
+    this.onNotice(t("notice_panel_pick_second", partners.length), "info");
     this.refresh();
   }
 
@@ -2083,7 +2083,7 @@ export class Builder {
         added = this.model.addSlideAt(this.slideKind, h.data.slideChain, this.colorFor("slide"));
       });
       if (added) this._notePlaced(added.id, "slide");
-      else this.onNotice(t("notice_slide_exists"));
+      else this.onNotice(t("notice_slide_exists"), "warn");
       this.refresh();
       return;
     }
@@ -2101,7 +2101,7 @@ export class Builder {
     let added = null;
     this.recordHistory(() => { added = this.model.addSlide(m.hook, n, this.slideKind, this.colorFor("slide")); });
     if (added) this._notePlaced(added.id, "slide");
-    else this.onNotice(t("notice_slide_exists"));
+    else this.onNotice(t("notice_slide_exists"), "warn");
     this.refresh();
   }
 
@@ -2126,7 +2126,7 @@ export class Builder {
     if (pick.data.kind === "panel" && !this.panelRail) {
       let side = null;
       this.recordHistory(() => { side = this.model.flipPanelSide(pick.data.id); });
-      if (side != null) this.onNotice(t(side < 0 ? "notice_panel_below" : "notice_panel_above"));
+      if (side != null) this.onNotice(t(side < 0 ? "notice_panel_below" : "notice_panel_above"), "info");
       this.refresh();
       return;
     }
@@ -2142,7 +2142,7 @@ export class Builder {
       if (pick.data.id === this.panelRail.id) { this._clearPanelRail(); return; }
       const partner = this.model.panelPartners(this.panelRail.id, dims)
         .find((c) => c.id === pick.data.id);
-      if (!partner) { this.onNotice(t("notice_panel_no_fit")); return; }
+      if (!partner) { this.onNotice(t("notice_panel_no_fit"), "warn"); return; }
       const sec = this.model.panelSection(partner, this.panelRail.at);
       let added = null;
       this.recordHistory(() => {
@@ -2157,10 +2157,10 @@ export class Builder {
 
     // Erster Klick: Rohr merken, Stelle entlang davon aus dem Trefferpunkt.
     const partners = this.model.panelPartners(pick.data.id, dims);
-    if (!partners.length) { this.onNotice(t("notice_panel_no_partner")); return; }
+    if (!partners.length) { this.onNotice(t("notice_panel_no_partner"), "warn"); return; }
     this.panelRail = { id: pick.data.id, at: this._alongTube(pick.data.id, pick.point) };
     this.highlight = new Set(partners.map((c) => c.id));
-    this.onNotice(t("notice_panel_pick_second", partners.length));
+    this.onNotice(t("notice_panel_pick_second", partners.length), "info");
     this.refresh();
   }
 
@@ -2198,7 +2198,7 @@ export class Builder {
     if (bow && bow.bow && (!h || front.distance < h.distance)) {
       let res;
       this.recordHistory(() => { res = this.model.rotateBow(bow.id); });
-      if (res && res.ground) this.onNotice(t("notice_ground"));
+      if (res && res.ground) this.onNotice(t("notice_ground"), "warn");
       else if (res && res.duplicate) this.onNotice(t("notice_bow_blocked"));
       else if (res && res.node) this.selectedNodeId = res.node.id;
       this.refresh();
@@ -2222,7 +2222,7 @@ export class Builder {
         const dt = this._diagonalTube();
         const node = this.model.nodes.get(h.data.nodeId);
         const axis = node && this._diagSleeveAxis(node, h.data.dir);
-        if (!axis) { this.onNotice(t("notice_no_free_arm")); return; }
+        if (!axis) { this.onNotice(t("notice_no_free_arm"), "warn"); return; }
         this.recordHistory(() => {
           res = this.model.extendC45Diagonal(
             h.data.nodeId, h.data.dir, axis, dt.id,
@@ -2251,8 +2251,8 @@ export class Builder {
               );
         });
       }
-      if (res && res.ground) this.onNotice(t("notice_ground"));
-      else if (res && res.collision) this.onNotice(t("notice_collision"));
+      if (res && res.ground) this.onNotice(t("notice_ground"), "warn");
+      else if (res && res.collision) this.onNotice(t("notice_collision"), "warn");
       else if (res && res.node) {
         this.selectedNodeId = res.node.id;
         if (res.tube) this._notePlaced(res.tube.id, "tube");

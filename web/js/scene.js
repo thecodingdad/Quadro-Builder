@@ -2092,7 +2092,8 @@ export class SceneManager {
     const dimOthers = !!highlight;
     // Im Vorschlags-Modus treten alle Teile zurueck, die keine Verstaerkung
     // brauchen -- sonst sucht man die orangen Rohre im Gewirr.
-    const hintDim = !!opts.hintDim && !!opts.suggest;
+    // Im Verstaerken-Modus treten Rohre zurueck, die kein Profil brauchen.
+    const hintDim = !!opts.suggest && !!opts.reinforce;
     // Eingefuegte Teile an einer belegten Stelle: Rot geht allem vor -- es sagt,
     // dass der Klick hier nichts absetzt.
     const invalid = opts.invalid && opts.invalid.size ? opts.invalid : null;

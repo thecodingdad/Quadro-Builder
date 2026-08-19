@@ -391,6 +391,59 @@ export class BuildModel {
     this._pruneOrphanedC45Bodies();
   }
 
+  /**
+   * Kupplungen, an denen nach dem Loeschen NICHTS mehr haengt, mit entfernen.
+   *
+   * Gemeint sind nur die Nachbarn des Geloeschten (`ids`) -- eine frisch
+   * gesetzte, noch leere Kupplung soll ja stehen bleiben. Behalten wird
+   * ausserdem, was ein Teil traegt: Klemm-Kupplungen, Kupplungen mit einem
+   * Anbauteil darauf und solche, die aus einer Datei stammen.
+   */
+  removeEmptyNodes(ids) {
+    let weg = 0;
+    for (const id of ids) {
+      const n = this.nodes.get(id);
+      if (!n || n.part) continue;
+      let belegt = false;
+      for (const t of this.tubes.values()) if (t.a === id || t.b === id) { belegt = true; break; }
+      if (belegt) continue;
+      for (const p of this.panels.values()) {
+        for (const tid of [p.a, p.b]) {
+          const t = this.tubes.get(tid);
+          if (t && (t.a === id || t.b === id)) { belegt = true; break; }
+        }
+        if (belegt) break;
+      }
+      if (belegt) continue;
+      // Sitzt ein Anbauteil, eine Rutsche oder eine Klemme daran, bleibt die
+      // Kupplung: sonst haengt das Teil in der Luft.
+      const nah = (o) => Math.hypot(o.x - n.x, o.y - n.y, o.z - n.z) < 3;
+      for (const f of this.fittings.values()) if (nah(f)) { belegt = true; break; }
+      if (!belegt) for (const c of this.clamps.values()) if (nah(c)) { belegt = true; break; }
+      if (!belegt) for (const sl of this.slides.values()) if (nah(sl)) { belegt = true; break; }
+      if (belegt) continue;
+      this.nodes.delete(id);
+      weg++;
+    }
+    return weg;
+  }
+
+  /** Kupplungen, die an diesen Teilen haengen -- Kandidaten fuers Aufraeumen. */
+  neighborNodeIds(ids) {
+    const out = new Set();
+    for (const id of ids) {
+      const t = this.tubes.get(id);
+      if (t) { out.add(t.a); out.add(t.b); continue; }
+      const n = this.nodes.get(id);
+      if (!n) continue;
+      for (const tb of this.tubes.values()) {
+        if (tb.a === id) out.add(tb.b);
+        else if (tb.b === id) out.add(tb.a);
+      }
+    }
+    return out;
+  }
+
   // Verwaiste c45body-Knoten entfernen: Adapter-Koerper ohne Diagonalrohr
   // (nur noch per Arm-Kante mit der Eck-Kupplung verbunden) werden geloescht.
   _pruneOrphanedC45Bodies() {

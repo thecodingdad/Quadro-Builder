@@ -18,8 +18,6 @@ const de = {
   btn_clamp_title: 'Doppelrohrverbinder setzen (K) – auf ein Rohr klicken',
   btn_reinforce: 'Verstärken',
   btn_reinforce_title: 'Rohr verstärken (V) – Alu-Profil einschieben',
-  btn_hints: 'Hinweise',
-  btn_hints_title: 'Verstärkungs-Vorschläge anzeigen (H)',
   label_part: 'Bauteil',
   label_tube: 'Rohr wählen',
   label_panel: 'Platte wählen',
@@ -339,8 +337,6 @@ const de = {
   notice_move_detached: (n) => `${n} Verbindung(en) getrennt.`,
 
   // Flash-Meldungen (Funktionen für Vorlagen)
-  flash_hints_n: (n) => `${n} Rohr(e) könnten ein Alu-Profil gebrauchen (orange).`,
-  flash_hints_0: 'Keine frei tragenden Ebenen gefunden.',
   flash_saved: (name) => `Gespeichert: ${name}`,
   flash_loaded: (name) => `Geladen: ${name}`,
   flash_imported_n: (n) => `${n} Modelle eingelesen.`,
@@ -443,8 +439,6 @@ const en = {
   btn_clamp_title: 'Place double-tube connector (K) – click a tube',
   btn_reinforce: 'Reinforce',
   btn_reinforce_title: 'Reinforce tube (V) – insert aluminium profile',
-  btn_hints: 'Hints',
-  btn_hints_title: 'Show reinforcement suggestions (H)',
   label_part: 'Part',
   label_tube: 'Select tube',
   label_panel: 'Select panel',
@@ -763,8 +757,6 @@ const en = {
   notice_move_detached: (n) => `${n} connection(s) separated.`,
 
   // Flash messages
-  flash_hints_n: (n) => `${n} tube(s) could use an aluminium profile (orange).`,
-  flash_hints_0: 'No free-spanning levels found.',
   flash_saved: (name) => `Saved: ${name}`,
   flash_loaded: (name) => `Loaded: ${name}`,
   flash_imported_n: (n) => `${n} models imported.`,

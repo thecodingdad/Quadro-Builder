@@ -11,6 +11,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ## [Unreleased]
 
 ### Behoben · Fixed
+- **Kupplungen ohne Anschluss verschwinden mit dem gelöschten Teil** – wer ein Rohr löschte, ließ die leeren Kupplungen an seinen Enden zurück. Kupplungen, die ein Anbauteil, eine Klemme oder eine Rutsche tragen, bleiben; eine frisch gesetzte, noch leere ebenfalls · **Connectors left without anything attached go with the deleted part**
 - **Das Rohr am Doppelrohrverbinder rastet aufs 5-cm-Raster** – es saß mittig zur Klemme und lag damit oft zwischen den Rasterpunkten · **The tube at a double-tube connector snaps to the 5 cm grid**
 - **Die Schnittebenen-Leiste ist auf dem Handy wieder bedienbar** – der Szene-Knopf lag über den X/Y/Z-Knöpfen, und Z rutschte in eine zweite Zeile. Die Leiste liegt jetzt darüber, bleibt einzeilig und spannt sich zwischen Szene-Knopf und Ansichtswürfel · **The section-plane bar works on phones again** – the scene button covered its axis buttons
 - **„Oben" am Ansichtswürfel behält die Seite, von der man kommt** – die Draufsicht landete immer in derselben Lage, das Modell sprang dabei einmal um die Hochachse. Jetzt rastet sie auf der nächsten Vierteldrehung ein, also achsenparallel, aber auf der Seite, aus der man gerade schaut (dasselbe gilt für „Unten") · **Top on the view cube keeps the side you come from** – it snaps to the nearest quarter turn instead of always the same one
@@ -32,6 +33,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - **Gedrehte Aufbauten bekommen die richtigen Kupplungen** – ob drei Arme in einer Ebene liegen, wird an der Ebene selbst gemessen und nicht mehr nur an den drei Achsenebenen. Im Ball Cage (45° gekippt) stand deshalb „Raumkupplung 3-armig", wo eine Flächenkupplung 3-armig sitzt · **Rotated builds get the right connectors** – coplanarity is measured on the actual plane instead of the three axis planes
 
 ### Geändert · Changed
+- **Statusmeldungen sind eingefärbt** – grün, wenn etwas getan wurde (gesetzt, gelöscht, gedreht), orange, wenn es nicht ging (Kollision, kein Platz), rot bei einem Fehler. Der dauerhafte Hinweis zum Werkzeug bleibt grau · **Status messages are colour-coded** – green for done, orange for refused, red for errors
+- **„Verstärkungs-Vorschläge anzeigen" ist weg** – der Verstärken-Modus zeigt sie ohnehin · **The reinforcement-hints switch is gone** – the reinforce mode shows them anyway
 - **Kein versehentliches Markieren von Text mehr** – beim Ziehen im Bild, beim Doppelklick auf einen Tab oder beim Wischen durch eine Liste blieb ständig etwas blau hinterlegt. In Eingabefeldern lässt sich weiterhin markieren · **No more accidental text selection** – except in input fields
 - **Die Tastenkürzel-Karte schließt über ein Kreuz oben rechts** statt über einen Knopf unter der Liste · **The shortcut card closes with an X in its corner**
 - **Die Tastenkürzel-Karte ist nach Themen sortiert** – Bauen, Auswahl, Ansicht & Aufbau, Entwürfe, Sonstiges. Ist genug Platz, stehen zwei Blöcke nebeneinander (also vier Spalten), sonst einer; wird es in der Höhe eng, scrollt die Liste statt aus dem Bild zu laufen · **The shortcut card is grouped by topic** – two blocks side by side when there is room, and the list scrolls when the window is short
