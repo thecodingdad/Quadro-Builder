@@ -285,11 +285,11 @@ Koordinaten in **cm**, Three.js-Konvention **y = oben**, Boden bei y = 0.
   vorn – `scene._setMouse()` zieht seinen Ursprung deshalb um `camera.near` zurück. Ohne das
   waren Teile sichtbar, aber nicht wählbar, und erst ein Wechsel der Projektion half.
 - **Licht in beiden Ansichten:** Das Richtungslicht brennt **immer** – es modelliert die Rohre,
-  ohne es steht alles flach in einer Farbe da. `setScene()` stellt nur Stärke und Farbe
-  (Szene: 1,9 warm + Hemisphäre 1,1; normal: 1,1 neutral + Hemisphäre 1,0). Dass im
-  Normal-Modus trotzdem **kein** Schatten auf dem Boden liegt, ist kein Sonderfall im Code:
-  Gras und Boden sind dort ausgeblendet, und das Raster ist ein Liniennetz, das keinen Schatten
-  empfängt. Wer dort einen Boden ergänzt, holt sich den Bodenschatten also mit zurück.
+  ohne es steht alles flach in einer Farbe da und gleichfarbige Teile verschwimmen ineinander.
+  `setScene()` stellt Stärke und Farbe (Szene: 1,9 warm + Hemisphäre 1,1; normal: 1,1 neutral +
+  Hemisphäre 1,0) – und `castShadow`: **geworfene** Schatten gibt es nur in der Szene. Im
+  Normal-Modus sind sie bewusst aus, denn sie legen sich über die Nachbarteile und machen genau
+  die Unterscheidung wieder kaputt, um die es dort geht.
 - **Schnittebene schneidet nur das Modell:** Die Ebene hängt an den **Materialien**
   (`renderer.localClippingEnabled = true`, `material.clippingPlanes`), nicht global am Renderer –
   sonst wären Boden, Gras, Bäume und Himmel gleich mit halbiert. `scene._applyClip()` hängt sie an

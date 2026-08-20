@@ -3939,12 +3939,12 @@ export class SceneManager {
     if (this._bushGroup) this._bushGroup.visible  = v; // Büsche: nur im Szene-Modus
     // Direktionales Licht: brennt AUCH im Normal-Modus, denn es modelliert die
     // Bauteile -- ohne es steht alles flach in einer Farbe da und Vorder- und
-    // Rueckseite sind nicht auseinanderzuhalten. Schatten fallen dabei nur auf
-    // die Bauteile selbst: Gras und Boden sind ausgeblendet, das Raster ist ein
-    // Liniennetz und faengt keinen Schatten.
+    // Rueckseite sind nicht auseinanderzuhalten. GEWORFENE Schatten gibt es
+    // dort aber nicht: sie legen sich ueber die Nachbarteile und machen genau
+    // die Unterscheidung wieder kaputt, um die es geht. Nur die Szene wirft.
     if (this._dirLight) {
       this._dirLight.visible    = true;
-      this._dirLight.castShadow = true;
+      this._dirLight.castShadow = v;
       this._dirLight.intensity  = v ? 1.9 : 1.1;   // Szene: helle Sonne, Normal: nur Modellierung
       this._dirLight.color.set(v ? 0xfff8e7 : 0xffffff);  // Normal neutral -> Teilefarben bleiben echt
     }
