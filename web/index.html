@@ -17,6 +17,18 @@
   <link rel="icon" href="../icons/icon-192.png" sizes="192x192" type="image/png" />
   <link rel="apple-touch-icon" href="../icons/icon-192.png" />
   <link rel="stylesheet" href="./css/style.css" />
+  <!-- Farbschema VOR dem ersten Bild setzen. Über die Module ginge das nicht:
+       main.js wartet erst auf den Katalog, bis dahin stünde die Seite hell da
+       und klappte dann sichtbar ins Dunkle um. Gepflegt wird der Wert in
+       ui.js (Einstellungen), hier wird er nur gelesen. -->
+  <script>
+    (() => {
+      const mode = localStorage.getItem("quadro.theme.v1") || "auto";
+      const dark = mode === "dark" || (mode !== "light"
+        && window.matchMedia("(prefers-color-scheme: dark)").matches);
+      document.documentElement.dataset.theme = dark ? "dark" : "light";
+    })();
+  </script>
   <!-- Der Teilekatalog wird für die Werkzeugleiste gebraucht. Ohne diesen
        Hinweis startet sein Abruf erst, wenn der ganze Modulbaum geladen ist --
        die Bauteil-Knöpfe erschienen dadurch sichtbar später. -->
@@ -132,6 +144,10 @@
                   <option value="de">&#x1F1E9;&#x1F1EA; DE</option>
                   <option value="en">&#x1F1EC;&#x1F1E7; EN</option>
                 </select>
+              </div>
+              <div class="menu-section">
+                <span class="menu-label" data-i18n="settings_theme">Erscheinungsbild</span>
+                <select id="theme-select" class="lang-select"></select>
               </div>
               <div class="menu-section">
                 <span class="menu-label" data-i18n="settings_quality">Render-Qualität</span>

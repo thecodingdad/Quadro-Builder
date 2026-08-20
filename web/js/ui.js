@@ -198,6 +198,7 @@ export function initUI({ scene, model, builder }) {
       applyViewCubeLabels();
       renderOrderOptions();
       renderPartButtons();
+      renderThemeOptions();
       renderQualityOptions();
       renderSyncLine();
       renderLibHint();
@@ -417,6 +418,46 @@ export function initUI({ scene, model, builder }) {
   }
 
   // --- Einstellungen -----------------------------------------------------
+  // Farbschema: "auto" folgt dem System, sonst gilt die Wahl. Gesetzt wird es
+  // als data-theme am <html> -- das CSS liest nur diese Marke, und das Skript
+  // im <head> setzt sie schon vor dem ersten Bild (siehe index.html).
+  const THEME_KEY = "quadro.theme.v1";
+  const THEME_MODES = ["auto", "light", "dark"];
+  const mqDark = window.matchMedia("(prefers-color-scheme: dark)");
+  const themeSelect = $("theme-select");
+  let themeMode = THEME_MODES.includes(localStorage.getItem(THEME_KEY))
+    ? localStorage.getItem(THEME_KEY) : "auto";
+
+  function applyTheme(mode, save = true) {
+    themeMode = THEME_MODES.includes(mode) ? mode : "auto";
+    const dark = themeMode === "dark" || (themeMode === "auto" && mqDark.matches);
+    document.documentElement.dataset.theme = dark ? "dark" : "light";
+    // Die Szene faerbt Hintergrund und Raster mit; ihre Materialien fuer den
+    // Aufbaumodus haengen ebenfalls am Schema -> einmal neu zeichnen.
+    if (scene.setTheme(dark)) builder.refresh();
+    if (themeSelect) themeSelect.value = themeMode;
+    if (save) localStorage.setItem(THEME_KEY, themeMode);
+  }
+
+  function renderThemeOptions() {
+    if (!themeSelect) return;
+    themeSelect.innerHTML = "";
+    for (const mode of THEME_MODES) {
+      const o = el("option", null, t("theme_" + mode));
+      o.value = mode;
+      themeSelect.appendChild(o);
+    }
+    themeSelect.value = themeMode;
+  }
+
+  if (themeSelect) {
+    renderThemeOptions();
+    themeSelect.addEventListener("change", () => applyTheme(themeSelect.value));
+  }
+  applyTheme(themeMode, false);
+  // Stellt das System um, zieht "Auto" mit -- eine feste Wahl nicht.
+  mqDark.addEventListener("change", () => { if (themeMode === "auto") applyTheme("auto", false); });
+
   // Render-Qualitaet: nur die Aufloesung der Geometrien, keine Masse. Wird in
   // localStorage gemerkt und beim Start angewendet.
   const QUALITY_KEY = "quadro.quality.v1";
@@ -729,7 +770,9 @@ export function initUI({ scene, model, builder }) {
     // also bleibt er neutral.
     const random = builder.color === RANDOM_COLOR;
     const hex = colorHexFor(builder.color);
-    const ink = needsDarkInk(hex) ? "var(--ink)" : "#fff";
+    // Helle Teilefarbe -> dunkle Schrift. NICHT var(--ink): das kippt im
+    // Dunkelmodus ins Helle und stuende dann hell auf gelbem Grund.
+    const ink = needsDarkInk(hex) ? "var(--ink-on-part)" : "#fff";
     document.querySelectorAll(".btn.part[data-tube], .btn.part[data-panel]").forEach((b) => {
       if (b.classList.contains("active") && !random) {
         b.style.setProperty("--part-bg", hex);

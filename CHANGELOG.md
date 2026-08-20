@@ -10,6 +10,9 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Neu · Added
+- **Dunkelmodus** – in den Einstellungen unter „Erscheinungsbild": *Auto (System)*, *Hell*, *Dunkel*. „Auto" folgt dem Betriebssystem und schaltet sofort mit. Dunkel werden die Oberfläche und die normale 3D-Ansicht (Hintergrund und Bodenraster); die Szene-Ansicht bleibt Tag, die Teilefarben bleiben Produktfarben · **Dark mode** – Auto (system), Light, Dark in the settings
+
 ### Geändert · Changed
 - **Auch die normale Ansicht modelliert die Bauteile mit Licht** – bisher stand dort alles flach in einer Farbe, gleichfarbige Teile waren kaum auseinanderzuhalten. Geworfene Schatten gibt es dort weiterhin nicht, weder auf andere Teile noch auf den Boden; die bleiben der Szene-Ansicht vorbehalten · **The plain view shades the parts so they read as 3D** – no cast shadows there, neither on other parts nor on the ground
 - **Verstärkt wird nur noch mit dem Holz-Profil 80 cm** – das ist das einzige Teil, das es zu kaufen gibt. Es passt in ein 75er-Rohr oder in zwei 35er in einer Linie; beim 35er zeigt der erste Klick die möglichen Partner an, wie beim Platzieren einer Platte. „Verstärken" ist dafür zu einem Menü geworden, und in der Stückliste stehen jetzt Profile statt Lauflängen · **Reinforcement is now the 80 cm wood profile only**

@@ -241,6 +241,11 @@ Koordinaten in **cm**, Three.js-Konvention **y = oben**, Boden bei y = 0.
   Gerade Rohre mit `buildable:true` + `length_cm` und Platten mit `buildable:true` + `w`/`h`
   erscheinen automatisch als Button – **keine Code-Änderung**. Geometrie unter `geometry`.
   Preisänderungen bitte mit Quelle im Commit (z. B. quadroshop.com, Stand).
+- **Farben:** ausschließlich als CSS-Variable im `:root`-Block von `style.css`, im Rest der Datei
+  nur `var(...)`. Ein fester Wert irgendwo unten bleibt im **Dunkelmodus** hell stehen. Ausgenommen
+  sind Farben ohne Bezug zum Schema: Produktfarben (Farbrad) und Kacheln, die immer dunkel sind
+  (Statuszeile, Beschriftungen über der Szene). Wer eine Rolle braucht, die es noch nicht gibt,
+  legt eine Variable an und trägt sie in **beiden** Blöcken ein.
 - **Neue UI-Texte:** immer in **beide** Dictionaries (`de` und `en`) in `i18n.js`, dann `t('key')`
   bzw. `data-i18n`/`data-i18n-title` im HTML. Nie Strings in `ui.js` hardcoden.
 - **Statuszeile (unten links):** `setStatusHint()` setzt den dauerhaften Hinweis zum laufenden
@@ -284,6 +289,15 @@ Koordinaten in **cm**, Three.js-Konvention **y = oben**, Boden bei y = 0.
   `Raycaster.setFromCamera` beginnt dort aber genau in der Kameraebene und trifft nur nach
   vorn – `scene._setMouse()` zieht seinen Ursprung deshalb um `camera.near` zurück. Ohne das
   waren Teile sichtbar, aber nicht wählbar, und erst ein Wechsel der Projektion half.
+- **Dunkelmodus:** Die Wahl (`auto`/`light`/`dark`) steht in `quadro.theme.v1`, gilt als
+  `data-theme` am `<html>` und wird vom **Skript im `<head>`** gesetzt – vor dem ersten Bild.
+  Über die Module ginge das nicht (`main.js` wartet auf den Katalog), die Seite blitzte hell auf.
+  `ui.js` pflegt den Wert nur noch und hängt bei `auto` an
+  `matchMedia("(prefers-color-scheme: dark)")`. **Drei Fallen:** Farben nur als Variable (siehe
+  Konventionen); `--ink-on-part` bleibt in beiden Schemata dunkel, weil es auf einem Knopf in
+  **Teilefarbe** steht (sonst helle Schrift auf Gelb); und `scene.setTheme()` färbt nur
+  Hintergrund, Raster und das Ausblassen im Aufbaumodus – die **Szene-Ansicht** bleibt Tag, ihre
+  Rasterlinien also hell.
 - **Licht in beiden Ansichten:** Das Richtungslicht brennt **immer** – es modelliert die Rohre,
   ohne es steht alles flach in einer Farbe da und gleichfarbige Teile verschwimmen ineinander.
   `setScene()` stellt Stärke und Farbe (Szene: 1,9 warm + Hemisphäre 1,1; normal: 1,1 neutral +

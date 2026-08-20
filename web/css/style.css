@@ -1,13 +1,78 @@
+/* Farben stehen AUSSCHLIESSLICH hier -- im Rest der Datei nur noch var(...).
+   Nur so lässt sich das Schema umschalten; ein fester Wert irgendwo unten
+   bleibt im Dunkelmodus weiß stehen. Ausgenommen sind Farben, die nichts mit
+   dem Schema zu tun haben: Produktfarben (Farbrad der Bauteile) und Kacheln,
+   die IMMER dunkel sind (Statuszeile, Beschriftungen über der Szene).
+   Welches Schema gilt, setzt das Skript im <head> als data-theme. */
 :root {
-  --bg: #f4f6f9;
-  --panel: #ffffff;
+  --bg: #f4f6f9;              /* Arbeitsfläche hinter allem */
+  --panel: #ffffff;           /* Leisten, Karten, Seitenleiste */
+  --surface: #ffffff;         /* Knöpfe, Eingaben, Popups */
+  --surface-2: #f7f9fc;       /* Bauteil-Zeile, Zebrastreifen in Listen */
+  --hover: #f1f4f8;           /* Überfahren (deckend) */
   --line: #e2e7ee;
+  --line-strong: #c4ccd6;     /* Rand beim Überfahren, Ziehgriff */
   --ink: #1f2630;
+  --ink-soft: #45505f;        /* Sinnbild-Knöpfe ohne Rahmen */
+  /* Schrift auf einem Knopf in Bauteil-FARBE. Die Teilefarben sind in beiden
+     Schemata dieselben, also bleibt auch diese Farbe dunkel. */
+  --ink-on-part: #1f2630;
   --muted: #7a8696;
   --accent: #1a8cff;
   --accent-ink: #ffffff;
+  --accent-wash: rgba(26, 140, 255, 0.14);
+  --accent-wash-soft: rgba(26, 140, 255, 0.08);
   --ok: #18a558;
+  --ok-ink: #157f45;          /* Schrift auf hellem Grund */
+  --ok-wash: #e6f7ee;
   --no: #d8443a;
+  --no-ink: #a4243b;          /* Schrift auf hellem Grund */
+  --danger-wash: #fdeceb;
+  --danger-wash-strong: rgba(164, 36, 59, 0.18);
+  --mark-wash: #fff3e3;       /* markierte Bestandszeile */
+  --mark-line: #ffb765;
+  --mark2-wash: #f3e8ff;      /* markierte Aufbau-Zeile */
+  --mark2-line: #c79bff;
+  --wash: rgba(0, 0, 0, 0.06);        /* Tab, Schließen-Kreuz */
+  --wash-strong: rgba(0, 0, 0, 0.1);
+  --chip: rgba(255, 255, 255, 0.94);  /* schwebende Knöpfe über der Szene */
+  --chip-line: rgba(0, 0, 0, 0.13);
+  --veil: rgba(246, 248, 250, 0.92);  /* Schleier über der leeren Szene */
+  color-scheme: light;
+}
+
+/* Dunkles Schema: gedämpftes Anthrazit, keine schwarzen Flächen. */
+:root[data-theme="dark"] {
+  --bg: #171b21;
+  --panel: #232a33;
+  --surface: #2a323d;
+  --surface-2: #1e242c;
+  --hover: #333c48;
+  /* Deutlich heller als die Flächen: auf dunklem Grund verschwindet ein Rand,
+     der nur wenige Stufen absteht -- die Knöpfe sahen randlos aus. */
+  --line: #454f60;
+  --line-strong: #6b7a8d;
+  --ink: #e6eaf0;
+  --ink-soft: #c8d1dc;
+  --muted: #9aa6b4;
+  --accent: #3d9bff;
+  --accent-wash: rgba(61, 155, 255, 0.20);
+  --accent-wash-soft: rgba(61, 155, 255, 0.12);
+  --ok-ink: #56d98b;
+  --ok-wash: rgba(24, 165, 88, 0.18);
+  --no-ink: #ff8b84;
+  --danger-wash: rgba(216, 68, 58, 0.20);
+  --danger-wash-strong: rgba(216, 68, 58, 0.30);
+  --mark-wash: rgba(224, 140, 26, 0.20);
+  --mark-line: #a86a1e;
+  --mark2-wash: rgba(155, 61, 245, 0.22);
+  --mark2-line: #7d4bbd;
+  --wash: rgba(255, 255, 255, 0.08);
+  --wash-strong: rgba(255, 255, 255, 0.13);
+  --chip: rgba(35, 42, 51, 0.94);
+  --chip-line: rgba(255, 255, 255, 0.14);
+  --veil: rgba(23, 27, 33, 0.92);
+  color-scheme: dark;
 }
 
 * { box-sizing: border-box; }
@@ -103,7 +168,7 @@ input, textarea, [contenteditable="true"] { -webkit-user-select: text; user-sele
   gap: 8px;
   padding: 5px 14px;
   border-top: 1px solid var(--line);
-  background: #f7f9fc;
+  background: var(--surface-2);
   /* Kein overflow hier — nur #grp-build scrollt intern */
 }
 /* Bauteil-Gruppe nimmt alle verfügbare Breite und scrollt intern. */
@@ -183,7 +248,7 @@ body.compact-brand .brand-icon { width: 20px; height: 20px; }
 
 /* Disabled-Zustand für Part-Buttons (z. B. Undo wenn leer) */
 .btn.part:disabled { opacity: 0.38; cursor: default; }
-.btn.part:disabled:hover { border-color: var(--line); background: #fff; }
+.btn.part:disabled:hover { border-color: var(--line); background: var(--surface); }
 
 /* Varianten-Popup unter den Bauteil-Buttons (Rohre / Platten) */
 .part-popup {
@@ -194,7 +259,7 @@ body.compact-brand .brand-icon { width: 20px; height: 20px; }
   min-width: 180px;
   max-height: min(60vh, 420px);
   overflow-y: auto;
-  background: #fff;
+  background: var(--surface);
   border: 1px solid var(--line);
   border-radius: 10px;
   box-shadow: 0 8px 28px rgba(0, 0, 0, 0.18);
@@ -208,7 +273,7 @@ body.compact-brand .brand-icon { width: 20px; height: 20px; }
   font-size: 13px; font-family: inherit; text-align: left;
   cursor: pointer;
 }
-.part-popup-row:hover { background: #f1f4f8; }
+.part-popup-row:hover { background: var(--hover); }
 .part-popup-row.active { background: var(--accent); color: var(--accent-ink); }
 .part-popup-row svg { flex: 0 0 auto; }
 .part-popup-row .pp-name { flex: 1; white-space: nowrap; }
@@ -225,7 +290,7 @@ body.compact-brand .brand-icon { width: 20px; height: 20px; }
 .menu { position: relative; }
 .menu-pop {
   position: absolute; right: 0; top: calc(100% + 6px);
-  background: #fff; border: 1px solid var(--line); border-radius: 10px;
+  background: var(--surface); border: 1px solid var(--line); border-radius: 10px;
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.16);
   padding: 10px; width: 260px;
   max-width: min(260px, calc(100vw - 28px));
@@ -246,8 +311,8 @@ body.compact-brand .brand-icon { width: 20px; height: 20px; }
 .btn.full { width: 100%; justify-content: center; }
 .menu-row .btn.full { flex: 1; }
 .menu-item { text-align: left; justify-content: flex-start; }
-.btn.danger { color: var(--no); }
-.btn.danger:hover { border-color: var(--no); background: #fdeceb; }
+.btn.danger { color: var(--no-ink); }
+.btn.danger:hover { border-color: var(--no); background: var(--danger-wash); }
 .menu-pop hr, .menu-section + .btn { margin-top: 2px; }
 /* Einstellungen: schmaler als das Entwürfe-Menü, Hinweis ohne Extra-Abstand */
 #settings-pop { width: min(240px, calc(100vw - 28px)); }
@@ -258,7 +323,7 @@ body.compact-brand .brand-icon { width: 20px; height: 20px; }
 
 .btn {
   border: 1px solid var(--line);
-  background: #fff;
+  background: var(--surface);
   color: var(--ink);
   padding: 7px 13px;
   border-radius: 8px;
@@ -266,17 +331,17 @@ body.compact-brand .brand-icon { width: 20px; height: 20px; }
   cursor: pointer;
   transition: all 0.12s ease;
 }
-.btn:hover { border-color: #c4ccd6; }
+.btn:hover { border-color: var(--line-strong); }
 /* Gesperrt heisst blass -- gilt für jeden Knopf, nicht nur die Bauteil-Zeile
    (Zurück/Wieder stehen jetzt oben in der Kopfzeile). */
 .btn:disabled { opacity: 0.38; cursor: default; }
-.btn:disabled:hover { border-color: var(--line); background: #fff; }
+.btn:disabled:hover { border-color: var(--line); background: var(--surface); }
 .btn.active { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
-.btn.ghost { padding: 7px 11px; color: #45505f; }
+.btn.ghost { padding: 7px 11px; color: var(--ink-soft); }
 .lang-btn { font-weight: 600; letter-spacing: 0.04em; min-width: 2.8em; }
 .lang-select {
   border: 1px solid var(--line);
-  background: #fff;
+  background: var(--surface);
   color: var(--ink);
   padding: 6px 8px;
   border-radius: 8px;
@@ -285,7 +350,7 @@ body.compact-brand .brand-icon { width: 20px; height: 20px; }
   transition: border-color 0.12s ease;
   font-family: inherit;
 }
-.lang-select:hover { border-color: #c4ccd6; }
+.lang-select:hover { border-color: var(--line-strong); }
 .lang-select:focus { outline: none; border-color: var(--accent); }
 
 select {
@@ -293,7 +358,7 @@ select {
   border-radius: 8px;
   padding: 7px 9px;
   font-size: 14px;
-  background: #fff;
+  background: var(--surface);
   color: var(--ink);
   max-width: 200px;
 }
@@ -303,7 +368,7 @@ select {
   background: var(--swatch);
   width: 26px; height: 26px;
   border-radius: 50%;
-  border: 2px solid #fff;
+  border: 2px solid var(--panel);
   outline: 1px solid var(--line);
   cursor: pointer;
   padding: 0;
@@ -349,7 +414,7 @@ body.compact-view .view-row { display: none; }
   color: var(--ink); font-family: inherit; min-height: 0;
 }
 .part-popup.view-popup .btn:hover,
-.part-popup.color-popup .swatch:hover { background: #f1f4f8; }
+.part-popup.color-popup .swatch:hover { background: var(--hover); }
 .part-popup.view-popup .btn.active,
 .part-popup.color-popup .swatch.active { background: var(--accent); color: var(--accent-ink); }
 /* Der Farbtupfer wandert in ein eigenes Kästchen vor dem Namen. */
@@ -382,8 +447,8 @@ main { flex: 1; display: flex; min-height: 0; }
 /* Floating Canvas-Buttons (Tastenkürzel, ggf. weitere) */
 .canvas-btn {
   position: absolute;
-  background: rgba(255, 255, 255, 0.92);
-  border: 1px solid rgba(0, 0, 0, 0.13);
+  background: var(--chip);
+  border: 1px solid var(--chip-line);
   border-radius: 8px;
   cursor: pointer;
   padding: 7px 10px;
@@ -393,7 +458,7 @@ main { flex: 1; display: flex; min-height: 0; }
   z-index: 10;
   transition: transform 0.1s ease, box-shadow 0.15s ease, background 0.12s ease;
 }
-.canvas-btn:hover { background: #fff; transform: scale(1.06); box-shadow: 0 4px 14px rgba(0,0,0,0.22); }
+.canvas-btn:hover { background: var(--surface); transform: scale(1.06); box-shadow: 0 4px 14px rgba(0,0,0,0.22); }
 .canvas-btn:active { transform: scale(0.94); }
 #btn-help { bottom: 12px; right: 12px; }
 
@@ -484,7 +549,7 @@ body.sidebar-hidden #sidebar, body.sidebar-hidden #sidebar-resizer { display: no
   border-radius: 6px;
   font-size: 13px;
 }
-.bom-row:nth-child(odd) { background: #f7f9fc; }
+.bom-row:nth-child(odd) { background: var(--surface-2); }
 .bom-row.muted { color: var(--muted); }
 .bom-name { display: flex; align-items: center; gap: 7px; }
 /* Sinnbild je Zeile: feste Spur, damit die Namen untereinander stehen -- auch
@@ -497,7 +562,7 @@ body.sidebar-hidden #sidebar, body.sidebar-hidden #sidebar-resizer { display: no
 .bom-icon svg { display: block; }
 .bom-count { font-variant-numeric: tabular-nums; color: var(--muted); }
 .bom-sub { font-variant-numeric: tabular-nums; min-width: 56px; text-align: right; }
-.dot { width: 11px; height: 11px; border-radius: 50%; outline: 1px solid rgba(0,0,0,0.12); flex-shrink: 0; }
+.dot { width: 11px; height: 11px; border-radius: 50%; outline: 1px solid var(--line); flex-shrink: 0; }
 .muted { color: var(--muted); font-size: 13px; padding: 4px 6px; }
 
 .totals {
@@ -517,7 +582,7 @@ body.sidebar-hidden #sidebar, body.sidebar-hidden #sidebar-resizer { display: no
   transform: translateX(-50%);
   display: flex; align-items: center; gap: 8px; flex-wrap: nowrap;
   padding: 6px 10px;
-  background: rgba(255, 255, 255, 0.95);
+  background: var(--chip);
   border: 1px solid var(--line);
   border-radius: 10px;
   box-shadow: 0 6px 20px rgba(0, 0, 0, 0.14);
@@ -554,7 +619,7 @@ body.sidebar-hidden #sidebar, body.sidebar-hidden #sidebar-resizer { display: no
 .select-box {
   position: absolute;
   border: 1px solid var(--accent);
-  background: rgba(26, 140, 255, 0.14);
+  background: var(--accent-wash);
   pointer-events: none;
   z-index: 5;
 }
@@ -568,7 +633,7 @@ body.sidebar-hidden #sidebar, body.sidebar-hidden #sidebar-resizer { display: no
   flex: 1;
   display: flex; flex-direction: column; gap: 1px;
   padding: 6px 8px;
-  background: #f4f6f9; border-radius: 8px;
+  background: var(--surface-2); border-radius: 8px;
 }
 .model-size .dim-label {
   font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--muted);
@@ -581,8 +646,8 @@ body.sidebar-hidden #sidebar, body.sidebar-hidden #sidebar-resizer { display: no
   min-height: 0;
 }
 .feasibility:empty { display: none; }
-.feasibility.ok { background: #e6f7ee; color: var(--ok); }
-.feasibility.no { background: #fdeceb; color: var(--no); }
+.feasibility.ok { background: var(--ok-wash); color: var(--ok-ink); }
+.feasibility.no { background: var(--danger-wash); color: var(--no-ink); }
 
 .inv-list { display: flex; flex-direction: column; gap: 4px; }
 .inv-row {
@@ -594,16 +659,19 @@ body.sidebar-hidden #sidebar, body.sidebar-hidden #sidebar-resizer { display: no
   padding: 4px 6px;
   border-radius: 6px;
 }
-.inv-row.bad { background: #fdeceb; }
+.inv-row.bad { background: var(--danger-wash); }
 /* Bestandszeile ist anklickbar; die markierte hebt ihre Teile im Modell hervor.
    Muss NACH .bad stehen, sonst gewinnt dort der rote Hintergrund. */
 .inv-row { cursor: pointer; }
-.inv-row.marked { background: #fff3e3; box-shadow: inset 0 0 0 1px #ffb765; }
+.inv-row.marked { background: var(--mark-wash); box-shadow: inset 0 0 0 1px var(--mark-line); }
 .inv-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .inv-need { color: var(--muted); font-size: 12px; }
-.inv-input { width: 56px; padding: 4px 6px; border: 1px solid var(--line); border-radius: 6px; font-size: 13px; }
+.inv-input {
+  width: 56px; padding: 4px 6px; border: 1px solid var(--line); border-radius: 6px;
+  font-size: 13px; background: var(--surface); color: var(--ink);
+}
 .inv-status { font-size: 12px; color: var(--muted); min-width: 54px; text-align: right; }
-.inv-row.bad .inv-status { color: var(--no); font-weight: 600; }
+.inv-row.bad .inv-status { color: var(--no-ink); font-weight: 600; }
 
 .hint { font-size: 12px; color: var(--muted); margin-top: 10px; line-height: 1.45; }
 
@@ -633,7 +701,7 @@ body.sidebar-hidden #sidebar, body.sidebar-hidden #sidebar-resizer { display: no
 
 /* Karten in den Overlays (Hilfe, Rückfragen) */
 .help-card {
-  background: #fff; border-radius: 12px; padding: 20px 22px;
+  background: var(--surface); border-radius: 12px; padding: 20px 22px;
   box-shadow: 0 12px 40px rgba(0, 0, 0, 0.25);
   /* So breit, dass zwei Blöcke nebeneinander passen (= vier Spalten:
      Kürzel, Erklärung, Kürzel, Erklärung), aber nie breiter als der Schirm. */
@@ -652,7 +720,7 @@ body.sidebar-hidden #sidebar, body.sidebar-hidden #sidebar-resizer { display: no
   border: none; border-radius: 8px; background: none;
   color: var(--muted); cursor: pointer;
 }
-.card-close:hover { background: rgba(0, 0, 0, 0.06); color: var(--ink); }
+.card-close:hover { background: var(--wash); color: var(--ink); }
 /* Die Liste ist der einzige Teil, der wächst -- und scrollt, wenn es in der
    Höhe eng wird. Die Blöcke füllen die Breite in Spalten von ~330 px: eine
    Spalte auf dem Handy, zwei am Schirm. */
@@ -691,7 +759,7 @@ body.sidebar-hidden #sidebar, body.sidebar-hidden #sidebar-resizer { display: no
 .lib-actions .btn.danger { flex: 0 0 auto; }
 .lib-search {
   width: 100%; padding: 6px 9px; font-size: 13px; font-family: inherit;
-  border: 1px solid var(--line); border-radius: 8px; background: #fff; color: var(--ink);
+  border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--ink);
 }
 .lib-search:focus { outline: none; border-color: var(--accent); }
 .lib-opt { display: flex; align-items: center; gap: 7px; font-size: 12px; margin: 8px 0 4px; cursor: pointer; }
@@ -701,7 +769,7 @@ body.sidebar-hidden #sidebar, body.sidebar-hidden #sidebar-resizer { display: no
   display: flex; flex-direction: column; gap: 2px;
   padding: 7px 9px; text-align: left; font-family: inherit;
   border: 1px solid var(--line); border-left: 3px solid var(--line);
-  border-radius: 8px; background: #fff; color: var(--ink); cursor: pointer;
+  border-radius: 8px; background: var(--surface); color: var(--ink); cursor: pointer;
 }
 .lib-row:hover { border-color: var(--accent); border-left-color: var(--accent); }
 .lib-row.ok { border-left-color: var(--ok); }
@@ -709,9 +777,9 @@ body.sidebar-hidden #sidebar, body.sidebar-hidden #sidebar-resizer { display: no
 .lib-name { flex: 1; font-size: 13px; font-weight: 600; }
 .lib-badge {
   font-size: 11px; font-variant-numeric: tabular-nums;
-  color: var(--no); flex: 0 0 auto;
+  color: var(--no-ink); flex: 0 0 auto;
 }
-.lib-row.ok .lib-badge { color: var(--ok); }
+.lib-row.ok .lib-badge { color: var(--ok-ink); }
 .lib-meta { font-size: 11px; color: var(--muted); }
 
 /* Aufbaumodus */
@@ -729,13 +797,13 @@ body.sidebar-hidden #sidebar, body.sidebar-hidden #sidebar-resizer { display: no
   display: grid; grid-template-columns: 1fr auto; gap: 8px; align-items: center;
   padding: 6px 6px; border-radius: 6px; font-size: 13px;
 }
-.asm-row:nth-child(even) { background: #f7f9fc; }
+.asm-row:nth-child(even) { background: var(--surface-2); }
 .asm-name { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; }
 .asm-count { font-variant-numeric: tabular-nums; font-weight: 600; color: var(--ink); }
 /* Zeilen sind anklickbar: hebt die Teile des Schritts im Modell hervor.
    Muss NACH .asm-row:nth-child(even) stehen, sonst gewinnt der Zebrastreifen. */
 .asm-row { cursor: pointer; }
-.asm-row.marked { background: #f3e8ff; box-shadow: inset 0 0 0 1px #c79bff; }
+.asm-row.marked { background: var(--mark2-wash); box-shadow: inset 0 0 0 1px var(--mark2-line); }
 .asm-opt {
   display: flex; align-items: center; gap: 7px;
   margin: 2px 0 8px; font-size: 12px; color: var(--muted); cursor: pointer;
@@ -773,7 +841,7 @@ body.compact-head #toolbar-right-inner {
   position: absolute;
   top: calc(100% + 4px);
   right: 0;
-  background: #fff;
+  background: var(--surface);
   border: 1px solid var(--line);
   border-radius: 12px;
   box-shadow: 0 6px 24px rgba(0, 0, 0, 0.13);
@@ -803,7 +871,7 @@ body.compact-head #toolbar-right-inner .toolbar-icon-row .btn {
   justify-content: flex-start; padding: 7px 8px;
   border: none; border-radius: 7px; background: none; min-width: 0;
 }
-body.compact-head #toolbar-right-inner .toolbar-icon-row .btn:hover { background: #f1f4f8; }
+body.compact-head #toolbar-right-inner .toolbar-icon-row .btn:hover { background: var(--hover); }
 body.compact-head #toolbar-right-inner .toolbar-icon-row .pp-name {
   display: block; font-size: 13px; text-align: left;
 }
@@ -848,7 +916,7 @@ body.sidebar-overlay .sidebar-close {
   border: none; border-radius: 8px; background: none;
   color: var(--muted); cursor: pointer;
 }
-body.sidebar-overlay .sidebar-close:hover { background: rgba(0, 0, 0, 0.06); color: var(--ink); }
+body.sidebar-overlay .sidebar-close:hover { background: var(--wash); color: var(--ink); }
 #sidebar-backdrop {
   position: fixed; inset: 0;
   background: rgba(20, 26, 34, 0.35);
@@ -917,7 +985,7 @@ body.mobile-portrait #tab-bar.single { display: none; }
   touch-action: none;
 }
 .asm-sheet-grip {
-  display: block; width: 42px; height: 4px; border-radius: 2px; background: #c4ccd6;
+  display: block; width: 42px; height: 4px; border-radius: 2px; background: var(--line-strong);
 }
 #asm-sheet-body {
   flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 0 14px 10px;
@@ -964,8 +1032,8 @@ body.mobile-portrait .status { bottom: 16px; max-width: calc(100% - 24px); }
   align-items: stretch;
   gap: 4px;
   padding: 0 8px;
-  background: var(--panel, #f4f6f8);
-  border-top: 1px solid rgba(0, 0, 0, 0.08);
+  background: var(--panel);
+  border-top: 1px solid var(--line);
   min-height: 34px;
 }
 .tab-list {
@@ -981,16 +1049,16 @@ body.mobile-portrait .status { bottom: 16px; max-width: calc(100% - 24px); }
   align-items: center;
   gap: 6px;
   padding: 4px 8px 4px 12px;
-  border: 1px solid rgba(0, 0, 0, 0.12);
+  border: 1px solid var(--line);
   border-bottom: none;
   border-radius: 8px 8px 0 0;
-  background: rgba(0, 0, 0, 0.04);
+  background: var(--wash);
   font-size: 13px;
   white-space: nowrap;
   cursor: pointer;
   max-width: 240px;
 }
-.tab:hover { background: rgba(0, 0, 0, 0.07); }
+.tab:hover { background: var(--wash-strong); }
 /* Aktiver Entwurf: blau wie ein aktiver Knopf -- so sieht man auf einen Blick,
    welches Modell gerade offen ist. */
 .tab.active {
@@ -1002,7 +1070,7 @@ body.mobile-portrait .status { bottom: 16px; max-width: calc(100% - 24px); }
 .tab.active:hover { background: var(--accent); }
 .tab.active .tab-close { opacity: 0.85; }
 .tab.active .tab-close:hover { background: rgba(255, 255, 255, 0.25); opacity: 1; }
-.tab.active .tab-dirty { background: #fff; }
+.tab.active .tab-dirty { background: var(--surface); }
 .tab-name { overflow: hidden; text-overflow: ellipsis; }
 /* Vorschau-Tab (ein Klick in der Liste): kursiv wie in VS Code -- er wird vom
    nächsten Vorschau-Klick ersetzt, solange niemand darin baut. */
@@ -1017,13 +1085,13 @@ body.mobile-portrait .status { bottom: 16px; max-width: calc(100% - 24px); }
   font-size: 15px; line-height: 1; padding: 2px 4px; border-radius: 4px;
   color: inherit; opacity: 0.55;
 }
-.tab-close:hover { opacity: 1; background: rgba(0, 0, 0, 0.1); }
+.tab-close:hover { opacity: 1; background: var(--wash-strong); }
 .tab-new {
   border: none; background: none; cursor: pointer;
   font-size: 18px; line-height: 1; padding: 0 10px; border-radius: 6px;
   color: inherit; opacity: 0.7;
 }
-.tab-new:hover { opacity: 1; background: rgba(0, 0, 0, 0.08); }
+.tab-new:hover { opacity: 1; background: var(--wash); }
 
 .ask-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 14px; }
 
@@ -1044,7 +1112,7 @@ body.mobile-portrait .status { bottom: 16px; max-width: calc(100% - 24px); }
 .dlg-text { margin: 0; font-size: 13px; line-height: 1.45; white-space: pre-wrap; }
 .dlg-input {
   width: 100%; margin-top: 12px; padding: 7px 10px; font-size: 13px; font-family: inherit;
-  border: 1px solid var(--line); border-radius: 8px; background: #fff; color: var(--ink);
+  border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--ink);
   box-sizing: border-box;
 }
 .dlg-input:focus { outline: none; border-color: var(--accent); }
@@ -1053,12 +1121,12 @@ body.mobile-portrait .status { bottom: 16px; max-width: calc(100% - 24px); }
 .empty-state {
   position: absolute; inset: 0;
   display: flex; align-items: center; justify-content: center;
-  background: rgba(246, 248, 250, 0.92);
+  background: var(--veil);
   z-index: 5;
 }
 .empty-card {
-  background: #fff;
-  border: 1px solid rgba(0, 0, 0, 0.1);
+  background: var(--surface);
+  border: 1px solid var(--line);
   border-radius: 12px;
   padding: 24px 28px;
   box-shadow: 0 6px 24px rgba(0, 0, 0, 0.08);
@@ -1066,7 +1134,7 @@ body.mobile-portrait .status { bottom: 16px; max-width: calc(100% - 24px); }
   text-align: center;
 }
 .empty-card h2 { margin: 0 0 6px; font-size: 17px; }
-.empty-card p { margin: 0 0 16px; color: #566; font-size: 13px; }
+.empty-card p { margin: 0 0 16px; color: var(--muted); font-size: 13px; }
 .empty-actions { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; }
 
 /* --- Seitenleiste: Tabs ------------------------------------------------ */
@@ -1074,7 +1142,7 @@ body.mobile-portrait .status { bottom: 16px; max-width: calc(100% - 24px); }
   display: flex;
   gap: 2px;
   padding: 6px 8px 0;
-  border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+  border-bottom: 1px solid var(--line);
   flex: 0 0 auto;
 }
 .side-tab {
@@ -1094,8 +1162,8 @@ body.mobile-portrait .status { bottom: 16px; max-width: calc(100% - 24px); }
 .side-tab:hover { opacity: 1; }
 .side-tab.active { opacity: 1; font-weight: 600; border-bottom-color: currentColor; }
 
-.bom-row.bad { color: #a4243b; }
-.bom-row.marked { background: rgba(26, 140, 255, 0.12); border-radius: 6px; }
+.bom-row.bad { color: var(--no-ink); }
+.bom-row.marked { background: var(--accent-wash); border-radius: 6px; }
 .bom-row .inv-status { min-width: 34px; text-align: right; font-size: 11.5px; opacity: 0.8; }
 
 /* Arbeitsbereich: Bauteil-Zeile, Datei-Tabs und Szene stehen links, die
@@ -1118,13 +1186,13 @@ body.mobile-portrait .status { bottom: 16px; max-width: calc(100% - 24px); }
   text-align: right;
 }
 /* Bestand reicht nicht: die ganze Zeile leicht rot hinterlegen. */
-.bom-row.bad, .bom-row.bad:nth-child(odd) { background: rgba(164, 36, 59, 0.12); }
-.bom-row.bad .bom-stock { color: #a4243b; font-weight: 600; }
+.bom-row.bad, .bom-row.bad:nth-child(odd) { background: var(--danger-wash); }
+.bom-row.bad .bom-stock { color: var(--no-ink); font-weight: 600; }
 
 /* Zeilen der Stückliste, die Teile im Modell hervorheben, sind anklickbar. */
 .bom-row.clickable { cursor: pointer; }
-.bom-row.clickable:hover { background: rgba(26, 140, 255, 0.08); }
-.bom-row.bad.clickable:hover { background: rgba(164, 36, 59, 0.18); }
+.bom-row.clickable:hover { background: var(--accent-wash-soft); }
+.bom-row.bad.clickable:hover { background: var(--danger-wash-strong); }
 
 /* Eintrag unter "Meine Modelle": links Name, Anzahl und Datum, rechts die
    Werkzeuge -- alles in einer Zeile. */

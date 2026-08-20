@@ -107,6 +107,20 @@ const POOL_INSET = 2.5;
 // dort denselben Stutzen wie fuer ein Rohr.
 const ARM_FITTINGS = new Set(["adapter2", "bearing2", "steering-lock2"]);
 
+// Farbschema der normalen Ansicht (die Szene bringt ihren eigenen Himmel mit).
+// Die Werte sind die Gegenstuecke zu --bg/--line in style.css.
+const BG_LIGHT = 0xeef1f5;
+const BG_DARK = 0x171b21;
+const GRID_LIGHT = [0xb8c0cc, 0xd6dce4];   // Hauptlinien, Nebenlinien
+const GRID_DARK = [0x3a4351, 0x2a313b];
+// Erledigte Teile im Aufbaumodus werden zum Untergrund hin ausgeblasst.
+const FADE_LIGHT = 0xffffff;
+const FADE_DARK = 0x2b323c;
+
+// Ansichtswuerfel: Kanten hell/dunkel (die Flaechen stecken in der Textur).
+const CUBE_EDGE_LIGHT = 0x8a94a3;
+const CUBE_EDGE_DARK = 0x5a6675;
+
 const HIGHLIGHT_COLOR = 0x9b30ff;
 const HIGHLIGHT_EMISSIVE = 0x3a0066;
 // Einfuegen an einer belegten Stelle: die Kopie wird rot gezeichnet.
@@ -158,7 +172,11 @@ export class SceneManager {
     this.onRendererReplaced = () => {};   // Builder haengt seine Listener neu ein
 
     this.scene = new THREE.Scene();
-    this.scene.background = new THREE.Color(0xeef1f5);
+    // Farbschema und Szene entscheiden gemeinsam ueber Hintergrund und Raster
+    // (siehe _applyBackground/_applyGrid). Beim Bau steht beides auf "aus".
+    this._dark = false;
+    this._sceneOn = false;
+    this.scene.background = new THREE.Color(BG_LIGHT);
 
     // Beide Kameras stehen bereit; umgeschaltet wird ueber setProjection().
     // Die orthografische zeigt keine Fluchtpunkte -- parallele Rohre bleiben
@@ -218,10 +236,7 @@ export class SceneManager {
     // Boden-Raster (20 cm Zellen). Er liegt eine halbe Kupplung TIEFER als die
     // Nullebene: Rohre auf y = 0 sind um ihre Achse zentriert, ihre untere
     // Haelfte laege sonst unter dem Boden und waere abgeschnitten.
-    const grid = new THREE.GridHelper(800, 40, 0xb8c0cc, 0xd6dce4);
-    grid.position.y = -GROUND_DROP;
-    this.scene.add(grid);
-    this._grid = grid;
+    this._applyGrid();
 
     // Prozedurales Gras + gruener Boden (umschaltbar via setScene()).
     this._buildGrass();
@@ -1798,10 +1813,14 @@ export class SceneManager {
   // Bereits gebaute Teile im Aufbaumodus: blass und leicht durchscheinend, damit
   // die Teile des AKTUELLEN Schritts klar hervortreten.
   _fadedMaterial(hex) {
-    const key = "faded_" + hex;
+    // Ausgeblasst wird zum UNTERGRUND hin: im Dunkelmodus gegen Weiss zu
+    // mischen hiesse, das Erledigte heller zu machen als den aktuellen Schritt.
+    // Das Schema steht deshalb im Schluessel -- sonst blieben beim Umschalten
+    // die alten Mischungen im Zwischenspeicher liegen.
+    const key = "faded_" + hex + (this._dark ? "_d" : "");
     if (!this._materials[key]) {
       const c = new THREE.Color(hex);
-      c.lerp(new THREE.Color(0xffffff), 0.55);
+      c.lerp(new THREE.Color(this._dark ? FADE_DARK : FADE_LIGHT), 0.55);
       this._materials[key] = new THREE.MeshStandardMaterial({
         color: c, roughness: 0.85, metalness: 0.02,
         transparent: true, opacity: 0.45, depthWrite: false,
@@ -3765,8 +3784,9 @@ export class SceneManager {
     this._skyMesh = new THREE.Mesh(new THREE.SphereGeometry(4800, 16, 10), mat);
     this._skyMesh.renderOrder = -1;
     this.scene.add(this._skyMesh);
-    // Hintergrundfarbe auf Horizont setzen (kein sichtbarer Naht bei Abweichung).
-    this.scene.background.set(0xc9dff2);
+    // Hintergrundfarbe passend zum Himmel (Szene) bzw. zum Farbschema setzen --
+    // sonst blitzt bis zum ersten setScene() die falsche Farbe auf.
+    this._applyBackground();
   }
 
   // Prozedurale Bäume am Rand der Grasfläche (Ring r 620–780 cm; die Fläche
@@ -3933,6 +3953,7 @@ export class SceneManager {
   setScene(on) {
     this._shadowsDirty();
     const v = !!on;
+    this._sceneOn = v;
     if (this._grassEnv)  this._grassEnv.visible  = v;
     if (this._skyMesh)   this._skyMesh.visible    = v;
     if (this._treeGroup) this._treeGroup.visible  = v;
@@ -3956,8 +3977,60 @@ export class SceneManager {
       this._hemiLight.color.set(v ? 0xcde7ff : 0xffffff);
       this._hemiLight.groundColor.set(v ? 0x7a9060 : 0x8090a0);
     }
-    // Hintergrundfarbe: Horizont-Blau wenn Szene an, neutrales Grau sonst.
-    if (this.scene.background) this.scene.background.set(v ? 0xc9dff2 : 0xeef1f5);
+    this._applyBackground();
+    this._applyGrid();
+  }
+
+  /**
+   * Farbschema der Oberflaeche uebernehmen (hell/dunkel). Betroffen sind nur
+   * Hintergrund, Bodenraster und das Ausblassen im Aufbaumodus -- die
+   * Teilefarben sind Produktfarben und bleiben in beiden Schemata gleich, und
+   * die Szene-Ansicht bringt ihren eigenen Himmel mit.
+   */
+  setTheme(dark) {
+    const v = !!dark;
+    if (v === this._dark) return false;
+    this._dark = v;
+    this._applyBackground();
+    this._applyGrid();
+    this._applyViewCubeTheme();
+    this._shadowsDirty();
+    return true;
+  }
+
+  /** Ansichtswuerfel mitfaerben: Kanten direkt, Flaechen ueber die Textur. */
+  _applyViewCubeTheme() {
+    if (!this._cubeEdgeMat) return;
+    this._cubeEdgeMat.color.set(this._dark ? CUBE_EDGE_DARK : CUBE_EDGE_LIGHT);
+    if (this._cubeLabels) this.setViewCubeLabels(this._cubeLabels);
+    this._needsRender = true;
+  }
+
+  /** Hintergrund: Szene an -> Horizont-Blau, sonst nach Farbschema. */
+  _applyBackground() {
+    if (!this.scene.background) return;
+    this.scene.background.set(
+      this._sceneOn ? 0xc9dff2 : (this._dark ? BG_DARK : BG_LIGHT));
+    this._needsRender = true;
+  }
+
+  /**
+   * Bodenraster (neu) aufbauen. Der GridHelper baeckt seine Farben in die
+   * Geometrie, also gibt es zum Umfaerben nur den Austausch. Ueber dem Gras
+   * bleiben die hellen Linien: die Szene ist immer Tag.
+   */
+  _applyGrid() {
+    const [major, minor] = (this._dark && !this._sceneOn) ? GRID_DARK : GRID_LIGHT;
+    if (this._grid) {
+      this.scene.remove(this._grid);
+      this._grid.geometry.dispose();
+      this._grid.material.dispose();
+    }
+    const grid = new THREE.GridHelper(800, 40, major, minor);
+    grid.position.y = -GROUND_DROP;
+    this.scene.add(grid);
+    this._grid = grid;
+    this._needsRender = true;
   }
 
   /**
@@ -3995,15 +4068,14 @@ export class SceneManager {
 
     // Wuerfelkoerper. Materialreihenfolge von BoxGeometry: +X, -X, +Y, -Y, +Z, -Z.
     this._cubeFaceOrder = ["right", "left", "top", "bottom", "front", "back"];
-    this._cubeFaceMats = this._cubeFaceOrder.map(() => new THREE.MeshLambertMaterial({ color: 0xf2f4f8 }));
+    this._cubeFaceMats = this._cubeFaceOrder.map(() => new THREE.MeshLambertMaterial({ color: 0xffffff }));
     this._cubeBody = new THREE.Mesh(new THREE.BoxGeometry(2, 2, 2), this._cubeFaceMats);
     this._cubeScene.add(this._cubeBody);
 
-    // Kanten nachziehen, sonst verschwimmt der Wuerfel vor hellem Hintergrund.
-    const edges = new THREE.LineSegments(
-      new THREE.EdgesGeometry(this._cubeBody.geometry),
-      new THREE.LineBasicMaterial({ color: 0x8a94a3 }));
-    this._cubeScene.add(edges);
+    // Kanten nachziehen, sonst verschwimmt der Wuerfel vor dem Hintergrund.
+    this._cubeEdgeMat = new THREE.LineBasicMaterial({ color: CUBE_EDGE_LIGHT });
+    this._cubeScene.add(new THREE.LineSegments(
+      new THREE.EdgesGeometry(this._cubeBody.geometry), this._cubeEdgeMat));
 
     // 26 Klickfelder: das 3x3x3-Raster ohne die Mitte. Ein Feld mit einer
     // Nicht-Null-Achse ist eine Flaeche, mit zweien eine Kante, mit dreien eine
@@ -4040,6 +4112,9 @@ export class SceneManager {
    */
   setViewCubeLabels(labels) {
     if (!this._cubeFaceMats) return;
+    // Gemerkt, weil der Wuerfel beim Wechsel des Farbschemas neu beschriftet
+    // wird -- Flaechenfarbe und Schrift stecken in derselben Textur.
+    this._cubeLabels = labels;
     this._cubeFaceOrder.forEach((key, i) => {
       const mat = this._cubeFaceMats[i];
       if (mat.map) mat.map.dispose();
@@ -4054,9 +4129,9 @@ export class SceneManager {
     const cv = document.createElement("canvas");
     cv.width = cv.height = S;
     const g = cv.getContext("2d");
-    g.fillStyle = "#f2f4f8";
+    g.fillStyle = this._dark ? "#2c3542" : "#f2f4f8";
     g.fillRect(0, 0, S, S);
-    g.fillStyle = "#1f2733";
+    g.fillStyle = this._dark ? "#e6eaf0" : "#1f2733";
     g.font = "700 23px system-ui, sans-serif";
     g.textAlign = "center";
     g.textBaseline = "middle";
