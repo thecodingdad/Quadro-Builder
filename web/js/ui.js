@@ -2664,7 +2664,13 @@ export function initUI({ scene, model, builder }) {
         link.target = "_blank";
         link.rel = "noopener noreferrer";
         link.title = t("inv_shop_link", partName(def));
-        link.textContent = "🛈";
+        // Gezeichnetes "i" im Kreis statt des Zeichens U+1F6C8: dafür fehlt
+        // vielen Systemschriften (vor allem auf Android) die Glyphe, und der
+        // Browser setzte irgendein Ersatzbild ein.
+        link.innerHTML = svg16(
+          '<circle cx="8" cy="8" r="6.5" fill="none" stroke="currentColor" stroke-width="1.4"/>'
+          + '<circle cx="8" cy="4.9" r="0.95" fill="currentColor"/>'
+          + '<path d="M8 7.3v4.4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>');
         link.addEventListener("click", (e) => e.stopPropagation());
         row.appendChild(link);
       }
