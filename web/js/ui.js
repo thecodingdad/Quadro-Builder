@@ -369,6 +369,13 @@ export function initUI({ scene, model, builder }) {
   // --- Kamera merken -----------------------------------------------------
   // Position, Blickziel und Zoom ueberleben einen Reload; sonst landet man
   // immer wieder in der Standardansicht.
+  //
+  // ZWEI Ablagen, und beide muessen mit: `quadro.camera.v1` haelt den zuletzt
+  // gesehenen Stand fuer den allerersten Tab, die Sitzung dagegen den Stand JE
+  // TAB (`tab.view.camera`). Beim Start gewinnt die Sitzung -- deshalb reicht
+  // es nicht, hier nur localStorage zu schreiben: wer nur die Ansicht drehte
+  // und neu lud, bekam den Stand aus der letzten Modellaenderung zurueck oder,
+  // wenn es keine gab, die Standardansicht.
   const CAMERA_KEY = "quadro.camera.v1";
   let camSaveTimer = null;
   scene.onCameraChange = () => {
@@ -376,6 +383,7 @@ export function initUI({ scene, model, builder }) {
     camSaveTimer = setTimeout(() => {
       const st = scene.cameraState();
       if (st) localStorage.setItem(CAMERA_KEY, JSON.stringify(st));
+      scheduleSessionSave();
     }, 400);
   };
 
@@ -3552,7 +3560,14 @@ export function initUI({ scene, model, builder }) {
       ladeVorgang = true;
       builder.modelReplaced();
       model.loadJSON(tab.model || { format: 1, nodes: [], tubes: [] });
-      applyViewState(tab.view || {});
+      // Sitzungen aus der Zeit vor dem Sichern der Kamera fuehren keinen Stand
+      // mit; dann gilt der zuletzt gesehene aus localStorage, statt gleich auf
+      // die Standardansicht zurueckzufallen.
+      const view = { ...(tab.view || {}) };
+      if (!view.camera) {
+        try { view.camera = JSON.parse(localStorage.getItem(CAMERA_KEY)) || null; } catch { /* egal */ }
+      }
+      applyViewState(view);
       builder.refresh();
       ladeVorgang = false;
     } else if (sitzung) {

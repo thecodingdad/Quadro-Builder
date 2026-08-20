@@ -18,6 +18,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - **Die Kopfzeile gibt der Reihe nach nach** – wird der Platz eng, verschwindet erst das „3D", dann „QUADRO"; das Zeichen bleibt stehen und erst danach schrumpft die Marke · **The header gives way in order: „3D" first, then „QUADRO", the icon stays**
 
 ### Behoben · Fixed
+- **Die Ansicht der offenen Tabs übersteht einen Reload zuverlässig** – gesichert wurde sie nur zusammen mit einer Modelländerung; wer nur drehte oder zoomte und neu lud, landete in der Standardansicht. Jetzt sichert jede Kamerabewegung die Sitzung, auch „Ansicht zurücksetzen" und der Wechsel der Projektion · **The camera of each open tab reliably survives a reload** – it was only stored alongside a model change
 - **Die Schnittebene schneidet nur noch das Modell** – Boden, Gras, Bäume und Himmel wurden bisher mit halbiert · **The section plane only cuts the model** – ground, grass, trees and sky stay whole
 - **Der Trenner rechts in der Kopfzeile sieht aus wie alle anderen** – er lief über die ganze Höhe der Leiste statt als kurzer Strich in der Mitte zu stehen · **The separator on the right of the header matches the other separators**
 - **Die Kupplung unter einer 45°-Winkelkupplung behält ihre eigene Form** – der Stutzen unter der Hülse wurde schief gezeichnet und die Kupplung dadurch als Raumkupplung statt als Flächenkupplung geführt; auch hieß sie selbst „Winkelkupplung (45 Grad)" · **A connector carrying a 45° angle connector keeps its own shape and name**

@@ -382,6 +382,14 @@ Koordinaten in **cm**, Three.js-Konvention **y = oben**, Boden bei y = 0.
   importiertes Modell hat `savedJson = null` und gilt bis zum ersten Speichern als geändert. In
   die Sitzung wandert `savedJson` **nicht** (sie wäre doppelt so groß), beim Start wird es aus
   `model`/`dirty` neu gebildet.
+- **Kamerastand liegt an zwei Stellen:** `quadro.camera.v1` (zuletzt gesehener Stand, Rückfall für
+  Sitzungen ohne Kamera) und – maßgeblich – `tab.view.camera` **je Tab** in der Sitzung. Beim Start
+  gewinnt die Sitzung, deshalb muss jede Kamerabewegung auch die **Sitzung** sichern:
+  `scene.onCameraChange` schreibt beides. Gemeldet wird aus `scene.js` an **allen** Stellen, die
+  die Kamera versetzen – Ende einer Bewegung von OrbitControls oder Builder (`endOrbit`), Ende
+  einer Kamerafahrt, `resetCamera()` und `setProjection()`; sonst kommt nach dem Reload der Stand
+  von davor zurück. `this.onCameraChange` wird deshalb **vor** dem ersten `resetCamera()` im
+  Konstruktor gesetzt.
 - **IndexedDB** `quadro.library.v1` (Version 2) hält drei Speicher: `designs` (eingelesene
   QDF-Sammlung, Originaltext + Kennzahlen), `docs` (eigene Modelle als virtuelle Dateien) und
   `session` (die offenen Tabs samt Arbeitsstand – damit übersteht auch Ungespeichertes einen

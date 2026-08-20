@@ -170,6 +170,8 @@ export class SceneManager {
     this.camera = this._perspCam;
     this._projection = "perspective";
     this._defaultCam = { pos: [140, 120, 180], target: [0, 30, 0] };
+    // Steht VOR dem ersten resetCamera(): der meldet den neuen Stand bereits.
+    this.onCameraChange = () => {};   // von der UI zum Sichern ueberschrieben
     this.resetCamera();
 
     this.controls = new OrbitControls(this.camera, this.renderer.domElement);
@@ -186,7 +188,6 @@ export class SceneManager {
     // schieben. `mouseButtons` gilt nur fuer die Maus; ohne diese Zeile wuerde
     // OrbitControls beim Wischen zusaetzlich drehen.
     this.controls.touches = { ONE: null, TWO: THREE.TOUCH.DOLLY_PAN };
-    this.onCameraChange = () => {};   // von der UI zum Sichern ueberschrieben
     this.controls.addEventListener("end", () => {
       // Nach Zoomen/Schieben den Bezugspunkt nachfuehren (siehe _reanchorTarget).
       if (!this.orbiting) this._reanchorTarget();
@@ -344,6 +345,8 @@ export class SceneManager {
     // Der orthografische Ausschnitt kommt aus Abstand und Oeffnungswinkel --
     // damit passt auch dort das ganze Modell ins Bild.
     this._updateOrthoFrustum();
+    // Auch das Einpassen ist ein Kamerastand, der einen Reload ueberleben soll.
+    this.onCameraChange();
   }
 
   /** Aktive Projektion: "perspective" | "orthographic". */
@@ -380,6 +383,9 @@ export class SceneManager {
       this.controls.object = to;
       this.controls.update();
     }
+    // Der Wechsel schiebt die Kamera (Zoom -> Abstand): auch das gehoert
+    // gesichert, sonst kommt nach dem Reload der Stand von davor zurueck.
+    this.onCameraChange();
     return true;
   }
 
