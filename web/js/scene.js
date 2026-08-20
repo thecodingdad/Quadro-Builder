@@ -195,9 +195,9 @@ export class SceneManager {
     this.controls.target.set(...this._defaultCam.target);
 
     // Licht: warmes Sonnenlicht + Himmelslicht + weiche Schatten
-    this._hemiLight = new THREE.HemisphereLight(0xffffff, 0x8090a0, 1.4); // Normal-Modus-Startwert
+    this._hemiLight = new THREE.HemisphereLight(0xffffff, 0x8090a0, 1.0); // Normal-Modus-Startwert
     this.scene.add(this._hemiLight);
-    this._dirLight = new THREE.DirectionalLight(0xfff8e7, 1.3);
+    this._dirLight = new THREE.DirectionalLight(0xffffff, 1.1);  // setScene() stellt Farbe/Staerke
     this._dirLight.position.set(200, 320, 150);
     this._dirLight.castShadow = true;
     this._dirLight.shadow.mapSize.width  = 2048;
@@ -3931,15 +3931,22 @@ export class SceneManager {
     if (this._skyMesh)   this._skyMesh.visible    = v;
     if (this._treeGroup) this._treeGroup.visible  = v;
     if (this._bushGroup) this._bushGroup.visible  = v; // Büsche: nur im Szene-Modus
-    // Direktionales Licht + Schatten ein-/ausschalten.
+    // Direktionales Licht: brennt AUCH im Normal-Modus, denn es modelliert die
+    // Bauteile -- ohne es steht alles flach in einer Farbe da und Vorder- und
+    // Rueckseite sind nicht auseinanderzuhalten. Schatten fallen dabei nur auf
+    // die Bauteile selbst: Gras und Boden sind ausgeblendet, das Raster ist ein
+    // Liniennetz und faengt keinen Schatten.
     if (this._dirLight) {
-      this._dirLight.visible    = v;
-      this._dirLight.castShadow = v;
-      this._dirLight.intensity  = 1.9; // Szene-Modus: helles Sonnenlicht
+      this._dirLight.visible    = true;
+      this._dirLight.castShadow = true;
+      this._dirLight.intensity  = v ? 1.9 : 1.1;   // Szene: helle Sonne, Normal: nur Modellierung
+      this._dirLight.color.set(v ? 0xfff8e7 : 0xffffff);  // Normal neutral -> Teilefarben bleiben echt
     }
     // Hemisphärenlicht: im Builder-Modus neutral weiß, im Szene-Modus warm.
+    // Normal ist es schwächer als früher (1,4) -- das Sonnenlicht bringt jetzt
+    // den fehlenden Teil der Helligkeit mit.
     if (this._hemiLight) {
-      this._hemiLight.intensity = v ? 1.1 : 1.4;   // Szene heller, Normal leicht aufgehellt
+      this._hemiLight.intensity = v ? 1.1 : 1.0;
       this._hemiLight.color.set(v ? 0xcde7ff : 0xffffff);
       this._hemiLight.groundColor.set(v ? 0x7a9060 : 0x8090a0);
     }
