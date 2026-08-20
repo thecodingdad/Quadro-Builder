@@ -17,6 +17,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - **Die Kopfzeile gibt der Reihe nach nach** – wird der Platz eng, verschwindet erst das „3D", dann „QUADRO"; das Zeichen bleibt stehen und erst danach schrumpft die Marke · **The header gives way in order: „3D" first, then „QUADRO", the icon stays**
 
 ### Behoben · Fixed
+- **Die Schnittebene schneidet nur noch das Modell** – Boden, Gras, Bäume und Himmel wurden bisher mit halbiert · **The section plane only cuts the model** – ground, grass, trees and sky stay whole
+- **Der Trenner rechts in der Kopfzeile sieht aus wie alle anderen** – er lief über die ganze Höhe der Leiste statt als kurzer Strich in der Mitte zu stehen · **The separator on the right of the header matches the other separators**
 - **Die Kupplung unter einer 45°-Winkelkupplung behält ihre eigene Form** – der Stutzen unter der Hülse wurde schief gezeichnet und die Kupplung dadurch als Raumkupplung statt als Flächenkupplung geführt; auch hieß sie selbst „Winkelkupplung (45 Grad)" · **A connector carrying a 45° angle connector keeps its own shape and name**
 - **Die belegte 45°-Winkelkupplung bietet keinen Anschlusspunkt mehr an** – steckt ihr Rohr schon, erschien beim Überfahren trotzdem noch der lila Punkt für ein zweites · **An angle connector that already holds a tube no longer offers a spot for another**
 - **Die 45°-Winkelkupplung wird auch ohne Rohr richtig gezeichnet** – frisch gesetzt fehlte ihr das Rohr, aus dem die Darstellung ihre Lage ablas; zu sehen war nur ein schiefer Stutzen · **The 45° angle connector is drawn correctly before a tube is attached**

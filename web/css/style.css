@@ -68,8 +68,15 @@ input, textarea, [contenteditable="true"] { -webkit-user-select: text; user-sele
   gap: 8px;
   padding: 6px 14px;
   flex-shrink: 0;
-  border-left: 1px solid var(--line);
   position: relative; /* Anker für Hamburger-Dropdown */
+}
+/* Der Trenner zum linken Teil sieht aus wie jeder andere: ein kurzer Strich
+   in der Mitte. Als Rahmen ginge er ueber die ganze Hoehe der Leiste und fiele
+   neben den .divider-Strichen auf. */
+#toolbar-right::before {
+  content: "";
+  width: 1px; height: 20px; align-self: center;
+  background: var(--line); margin: 0 5px; flex-shrink: 0;
 }
 
 /* Desktop: inner = normaler Inline-Flex-Container */
@@ -757,7 +764,8 @@ body.compact-autosave #toolbar-left .autosave-toggle { padding: 0 2px; }
    Name spart kaum Platz. Eng wird stattdessen die Schrift. */
 body.compact-head .hide-mobile { display: none !important; }
 body.compact-head #toolbar-left  { padding: 5px 10px; gap: 6px; }
-body.compact-head #toolbar-right { padding: 5px 8px; gap: 4px; border-left: none; }
+body.compact-head #toolbar-right { padding: 5px 8px; gap: 4px; }
+body.compact-head #toolbar-right::before { display: none; }
 body.compact-head #btn-hamburger { display: inline-flex !important; }
 
 body.compact-head #toolbar-right-inner {

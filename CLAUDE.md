@@ -284,6 +284,16 @@ Koordinaten in **cm**, Three.js-Konvention **y = oben**, Boden bei y = 0.
   `Raycaster.setFromCamera` beginnt dort aber genau in der Kameraebene und trifft nur nach
   vorn – `scene._setMouse()` zieht seinen Ursprung deshalb um `camera.near` zurück. Ohne das
   waren Teile sichtbar, aber nicht wählbar, und erst ein Wechsel der Projektion half.
+- **Schnittebene schneidet nur das Modell:** Die Ebene hängt an den **Materialien**
+  (`renderer.localClippingEnabled = true`, `material.clippingPlanes`), nicht global am Renderer –
+  sonst wären Boden, Gras, Bäume und Himmel gleich mit halbiert. `scene._applyClip()` hängt sie an
+  alle Materialien aus `_materials` sowie an `buildGroup`/`handleGroup`/`labelGroup` und läuft
+  auch am Ende von `renderModel()`, weil Materialien erst bei ihrer ersten Verwendung entstehen.
+  **Zwei Fallen:** die Liste der Ebenen darf nur beim **Wechsel** neu gebaut werden (three
+  übersetzt den Shader neu, sobald sich die Anzahl ändert – eine neue Anordnung je Bild hieße
+  Neuübersetzen je Bild; der Vergleich `m.clippingPlanes === liste` erkennt „schon gesetzt"), und
+  `clipShadows` muss mit, sonst werfen weggeschnittene Teile weiter Schatten. Umgekehrt braucht
+  der Ansichtswürfel nichts mehr abzuschalten: seine Materialien tragen die Ebene gar nicht.
 - **Layout ohne feste Breakpoints:** `ui.js` setzt Klassen auf `<body>`, das CSS liest nur diese –
   `compact-colors`/`compact-view` (Bauteil-Zeile eng), `compact-head` (Kopfzeile eng),
   `sidebar-overlay`, `mobile-portrait`, `asm-sheet-on`. Die beiden Kollaps-Stufen misst ein
