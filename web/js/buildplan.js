@@ -168,6 +168,52 @@ function countReinforcements(model, tubes) {
   return [{ id: part.id, name: partName(part), count, price: part.price || 0 }];
 }
 
+// So nah muss ein Rutschenteil am Ausgang des Teils darueber liegen, damit es
+// als dessen Fortsetzung gilt. Die Herstellerdateien treffen den Punkt genau;
+// die Toleranz faengt nur Rundungsreste ab.
+const SLIDE_CHAIN_TOL = 12;
+
+/**
+ * Rutschen zu Ketten buendeln. Eine Kette ist ein Einstieg samt allem, was
+ * darunter haengt (Koerper, Bogen, Auslauf) -- sie wird in EINEM Schritt
+ * eingebaut, naemlich dort, wo ihr oberes Ende Halt findet.
+ * Liefert [{ head, parts }] -- `head` ist das oberste Teil.
+ */
+function slideChainHeads(model) {
+  const slides = [...(model.slides ? model.slides.values() : [])];
+  if (!slides.length) return [];
+  // Wer haengt an wem? Der Ausgang eines Teils zeigt auf die Stelle, an der das
+  // naechste sitzt (model.slideExit kennt die Versaetze je Art).
+  const next = new Map();      // id -> Folgeteil
+  const hasParent = new Set(); // ids, die an einem anderen Teil haengen
+  for (const sl of slides) {
+    const exit = model.slideExit ? model.slideExit(sl) : null;
+    if (!exit) continue;
+    let best = null, bestD = Infinity;
+    for (const other of slides) {
+      if (other === sl) continue;
+      const d = Math.hypot(other.x - exit.pos[0], other.y - exit.pos[1], other.z - exit.pos[2]);
+      if (d < bestD) { bestD = d; best = other; }
+    }
+    if (best && bestD <= SLIDE_CHAIN_TOL && !hasParent.has(best.id)) {
+      next.set(sl.id, best);
+      hasParent.add(best.id);
+    }
+  }
+  const out = [];
+  for (const sl of slides) {
+    if (hasParent.has(sl.id)) continue;    // haengt an einem Teil weiter oben
+    const parts = [];
+    const seen = new Set();
+    for (let cur = sl; cur && !seen.has(cur.id); cur = next.get(cur.id)) {
+      seen.add(cur.id);
+      parts.push(cur);
+    }
+    out.push({ head: sl, parts });
+  }
+  return out;
+}
+
 // Erzeugt den Aufbauplan: ein Array von Schritten.
 // Jeder Schritt: { kind, title, level, y, connectors, openEnds, tubes, panels,
 //                  nodeIds, tubeIds, panelIds }
@@ -227,14 +273,18 @@ export function computeBuildPlan(model, order = "y+") {
   for (const f of (model.fittings ? model.fittings.values() : [])) {
     fittingsByLevel[levelIndex(levels, coord(f))].push(f);
   }
+  // Rutschen kommen dorthin, wo ihr EINSTIEG gebaut wird -- und eine Kette
+  // gehoert zusammen: Koerper und Auslauf werden in einem Zug eingehaengt, der
+  // Auslauf haengt ja am Teil ueber ihm. Frueher zaehlte jedes Teil fuer sich,
+  // der Auslauf landete dadurch zwei Ebenen frueher als sein Koerper.
   const slidesByLevel = levels.map(() => []);
-  for (const sl of (model.slides ? model.slides.values() : [])) {
-    // Eine Rutsche wird eingebaut, sobald ihr OBERER Anschluss steht -- nicht
-    // erst auf Hoehe ihres Auslaufs (sonst faellt sie ans Ende des Plans).
-    // hook ist der Einhaengepunkt am senkrechten Rohrpaar; importierte Rutschen
-    // ohne hook bleiben bei ihrer eigenen Position.
-    const anchor = sl.hook ? { x: sl.hook[0], y: sl.hook[1], z: sl.hook[2] } : sl;
-    slidesByLevel[levelIndex(levels, coord(anchor))].push(sl);
+  for (const sl of slideChainHeads(model)) {
+    // `hook` ist der Einhaengepunkt am senkrechten Rohrpaar (im Editor
+    // gesetzt); importierte Rutschen fuehren stattdessen ihren Bezugspunkt --
+    // und der liegt bei ihnen am oberen Ende.
+    const head = sl.head;
+    const anchor = head.hook ? { x: head.hook[0], y: head.hook[1], z: head.hook[2] } : head;
+    slidesByLevel[levelIndex(levels, coord(anchor))].push(...sl.parts);
   }
 
   // Fortschritt in Baurichtung: Abstand zur ersten Ebene. `levels` waechst

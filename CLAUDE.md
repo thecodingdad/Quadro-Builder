@@ -289,6 +289,13 @@ Koordinaten in **cm**, Three.js-Konvention **y = oben**, Boden bei y = 0.
   `Raycaster.setFromCamera` beginnt dort aber genau in der Kameraebene und trifft nur nach
   vorn – `scene._setMouse()` zieht seinen Ursprung deshalb um `camera.near` zurück. Ohne das
   waren Teile sichtbar, aber nicht wählbar, und erst ein Wechsel der Projektion half.
+- **Rutschen im Aufbauplan:** Ein Rutschenteil gehört nicht in die Ebene, auf der es *endet*,
+  sondern in den Schritt, der seinen **Einstieg** baut. `buildplan.slideChainHeads()` fasst dafür
+  jede Kette zusammen (Ausgang eines Teils über `model.slideExit()` → dort sitzt das nächste) und
+  ordnet alle Teile dem obersten zu; dessen Anker ist `hook` (im Editor gesetzt) bzw. bei
+  importierten Rutschen ihr Bezugspunkt, der am oberen Ende liegt. Ohne das landete der Auslauf
+  zwei Schritte vor dem Körper, an dem er hängt. Das **Dach** (`roof2`) hat keinen Ausgang und
+  bleibt auf seiner eigenen Höhe.
 - **Dunkelmodus:** Die Wahl (`auto`/`light`/`dark`) steht in `quadro.theme.v1`, gilt als
   `data-theme` am `<html>` und wird vom **Skript im `<head>`** gesetzt – vor dem ersten Bild.
   Über die Module ginge das nicht (`main.js` wartet auf den Katalog), die Seite blitzte hell auf.
