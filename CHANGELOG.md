@@ -22,7 +22,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Behoben · Fixed
 - **Auf dem Telefon steht die mobile Fassung sofort** – nach einem Neuladen blitzte kurz das Schreibtisch-Layout auf und klappte dann um · **The mobile layout is there from the first frame**
-- **Im Aufbau treten erledigte Teile grau zurück** – blass allein reichte nicht, ein blasses Gelb bleibt gelb. Die Rohre des aktuellen Schritts sind dafür kräftiger und lassen die Kupplungen dahinter gerade noch durchscheinen · **Finished parts go grey in assembly mode, the current step is the only colour**
+- **Im Aufbau treten erledigte Teile grau zurück** – deckend, nicht durchscheinend: durchscheinende Teile ließen sich nicht nach Tiefe sortieren, beim Drehen der Ansicht sprang dadurch die Darstellung (Stutzen der Kupplungen verschwanden und kamen wieder). Durchscheinend sind jetzt nur noch die Rohre des aktuellen Schritts, damit man die Kupplungen darin sieht · **Finished parts go opaque grey; only the current step stays see-through**
 - **Der Szene-Knopf rückt nur noch nach unten, wenn die Schnittebenen-Leiste über dem Bild liegt** – bisher ab 760 px Breite immer, auch ohne Leiste. Er folgt jetzt derselben Regel wie der Ansichtswürfel · **The scene button only moves down when the section bar is actually there**
 - **Die Statuszeile bleibt über der Aufbau-Karte** – auf dem Telefon lag sie darunter und war verdeckt · **The status line stays above the assembly sheet on phones**
 - **Das „null"-Rohr im Aufbauplan ist weg** – die Hülse einer 45°-Winkelkupplung wurde als Rohr gezählt und stand namenlos in der Teileliste des Schritts · **No more "null" tube in the assembly list**
