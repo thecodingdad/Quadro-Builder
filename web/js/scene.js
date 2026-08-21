@@ -113,9 +113,6 @@ const BG_LIGHT = 0xeef1f5;
 const BG_DARK = 0x171b21;
 const GRID_LIGHT = [0xb8c0cc, 0xd6dce4];   // Hauptlinien, Nebenlinien
 const GRID_DARK = [0x3a4351, 0x2a313b];
-// Erledigte Teile im Aufbaumodus werden zum Untergrund hin ausgeblasst.
-const FADE_LIGHT = 0xffffff;
-const FADE_DARK = 0x2b323c;
 
 // Ansichtswuerfel: Kanten hell/dunkel (die Flaechen stecken in der Textur).
 const CUBE_EDGE_LIGHT = 0x8a94a3;
@@ -1812,18 +1809,27 @@ export class SceneManager {
   // Halbtransparentes "Geist"-Material fuer noch nicht gebaute Teile (Aufbaumodus).
   // Bereits gebaute Teile im Aufbaumodus: blass und leicht durchscheinend, damit
   // die Teile des AKTUELLEN Schritts klar hervortreten.
-  _fadedMaterial(hex) {
-    // Ausgeblasst wird zum UNTERGRUND hin: im Dunkelmodus gegen Weiss zu
-    // mischen hiesse, das Erledigte heller zu machen als den aktuellen Schritt.
-    // Das Schema steht deshalb im Schluessel -- sonst blieben beim Umschalten
-    // die alten Mischungen im Zwischenspeicher liegen.
-    const key = "faded_" + hex + (this._dark ? "_d" : "");
+  /**
+   * EIN Grau fuer alles Erledigte -- die Bauteilfarbe (`hex`) spielt hier
+   * bewusst keine Rolle mehr.
+   *
+   * EIN Ton fuer alles Erledigte: so tritt es geschlossen zurueck, und der
+   * aktuelle Schritt ist das Einzige mit Farbe.
+   */
+  _fadedMaterial() {
+    const key = "faded" + (this._dark ? "_d" : "");
     if (!this._materials[key]) {
-      const c = new THREE.Color(hex);
-      c.lerp(new THREE.Color(this._dark ? FADE_DARK : FADE_LIGHT), 0.55);
       this._materials[key] = new THREE.MeshStandardMaterial({
-        color: c, roughness: 0.85, metalness: 0.02,
-        transparent: true, opacity: 0.45, depthWrite: false,
+        color: new THREE.Color(this._dark ? 0x8a94a2 : 0xb9c0ca),
+        roughness: 0.85, metalness: 0.02,
+        // DECKEND. Durchscheinend geht hier nicht sauber: die Teile haengen
+        // gebuendelt als InstancedMesh im Ursprung, three sortiert sie also
+        // weder untereinander noch instanzweise nach Tiefe. Ohne
+        // Tiefenschreiben blendet jede weitere Lage dahinter noch einmal auf
+        // (das Erledigte wurde mit jedem Schritt dichter), mit
+        // Tiefenschreiben streiten sich Stutzen und Rohr an ihrer Nahtstelle
+        // um Bildpunkte (Flimmern beim Drehen). Deckend laeuft alles ueber den
+        // Tiefenpuffer und steht in jedem Winkel und in jedem Schritt gleich.
       });
     }
     return this._materials[key];
@@ -2292,7 +2298,7 @@ export class SceneManager {
       // vom schon Gebauten heben sie sich bereits durch dessen blasses,
       // durchscheinendes Material ab.
       else if (st === "current") mat = this._connMaterial(false);
-      else if (asm && st === "done") mat = this._fadedMaterial(connectorColor().hex);
+      else if (asm && st === "done") mat = this._fadedMaterial();
       else mat = this._connMaterial(n.id === selectedNodeId);
       // Adapter-Koerper (importierte C45, n.c45body) sind keine eigenstaendige
       // Kupplung -> kein dunkler Wuerfel; sie werden unten in Adapter-Farbe
@@ -2347,7 +2353,7 @@ export class SceneManager {
         // aus -- sonst steht die 45-Grad-Kupplung als einziges Stueck kraeftig
         // schwarz im schon Gebauten.
         const c45base = (asm && st === "done")
-          ? this._fadedMaterial(connectorColor().hex) : this._c45Material();
+          ? this._fadedMaterial() : this._c45Material();
         const c45mat = matFor(n.id, c45base);
         if (n.c45body) {
           // Import: n ist der Adapter-Koerper am Diagonal-Fuss; die Basis sitzt
@@ -2474,7 +2480,7 @@ export class SceneManager {
           : st === "current" ? this._tubeHighlight(t.color)
           : (suggest && suggest.has(t.id)) ? this._tubeSuggest()
           : reinforce ? this._tubeGray()
-          : (asm && st === "done") ? this._fadedMaterial(colorHex(t.color))
+          : (asm && st === "done") ? this._fadedMaterial()
           : this._tubeMaterial(t.color);
         const bowFinalMat = matFor(t.id, bowMat);
         const bowMesh = new THREE.Mesh(
@@ -2521,7 +2527,7 @@ export class SceneManager {
         : isReinforceActive ? this._tubeReinforceActive()
         : (suggest && suggest.has(t.id)) ? this._tubeSuggest()
         : reinforce ? this._tubeGray()
-        : (asm && st === "done") ? this._fadedMaterial(colorHex(t.color))
+        : (asm && st === "done") ? this._fadedMaterial()
         : this._tubeMaterial(t.color);
       const dir = vb.clone().sub(va).normalize();
       const quat = new THREE.Quaternion().setFromUnitVectors(UP, dir);
@@ -2587,7 +2593,7 @@ export class SceneManager {
       center.add(new THREE.Vector3(nrm[0], nrm[1], nrm[2]).multiplyScalar(lift * sgn));
       const geo = this._panelGeometry(p.panelId, u.length(), w.length(), thickness);
       const mat = st === "future" ? this._ghostMaterial()
-        : (asm && st === "done") ? this._fadedMaterial(colorHex(p.color))
+        : (asm && st === "done") ? this._fadedMaterial()
         : this._panelMaterial(p.color, st === "current", false);
       // Gleiches Mass + gleiche Farbe teilen sich Geometrie und Material -> ein
       // Buendel. In grossen Modellen sind die Platten sonst der groesste
@@ -2672,7 +2678,7 @@ export class SceneManager {
         mesh.userData = { kind: "fitting", id: f.id };
         const base = mesh.material;
         mesh.material = matFor(f.id, (suggest && suggest.has(f.id)) ? this._suggestMaterial(base)
-          : (asm && st === "done") ? this._fadedMaterial(base.color.getHex()) : base);
+          : (asm && st === "done") ? this._fadedMaterial() : base);
         this.buildGroup.add(mesh);
         this.pickFittings.push(mesh);
       }
@@ -2689,7 +2695,7 @@ export class SceneManager {
       const st = stateOf(sl.id);
       if (st === "future") continue;
       const base = (asm && st === "done")
-        ? this._fadedMaterial(sl.color ? colorHex(sl.color) : 0xd23b3b)
+        ? this._fadedMaterial()
         : this._slideMatFor(sl.kind, st === "current", sl.color);
       const mat = matFor(sl.id, (suggest && suggest.has(sl.id)) ? this._suggestMaterial(base) : base);
 
