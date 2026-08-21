@@ -77,7 +77,7 @@ Three.js ausschließlich in `scene.js`, DOM ausschließlich in `ui.js`/`scene.js
 | `web/js/sync.js` | Abgleich mit dem optionalen Backend: Suche (`probe`), WebSocket-Ereignisse, `reconcile`, Konflikte |
 | `server.py` | Optionales Backend (aiohttp): statische App + `/api/` + Ereignis-Kanal, Ablage als Dateien |
 | `web/js/ui.js` | Toolbar, Datei-Tabs, Seitenleiste (Stückliste & Bestand / Modelle / Aufbau), Tastatur |
-| `web/js/qdfimport.js` | Parser für QDF-Dateien der Original-QUADRO-3D-Software |
+| `web/js/qdfimport.js` | Parser für QDF-Dateien der Original-QUADRO-3D-Software (Format: `QDF-FORMAT.md`) |
 | `web/js/qdfexport.js` | Schreibt ein Modell als QDF (Gegenstück zu `qdfimport.js`) |
 | `web/js/library.js` | Modell-Bibliothek: QDF-Sammlung einlesen, Kennzahlen, Bestandsabgleich |
 | `manifest.webmanifest` | PWA-Manifest (Wurzel, damit `scope` auch `data/` umfasst) |
@@ -246,6 +246,10 @@ Koordinaten in **cm**, Three.js-Konvention **y = oben**, Boden bei y = 0.
   sind Farben ohne Bezug zum Schema: Produktfarben (Farbrad) und Kacheln, die immer dunkel sind
   (Statuszeile, Beschriftungen über der Szene). Wer eine Rolle braucht, die es noch nicht gibt,
   legt eine Variable an und trägt sie in **beiden** Blöcken ein.
+- **Neues über das QDF-Format** gehört in `QDF-FORMAT.md` – dort steht jedes Element mit allen
+  Feldern und der Angabe, wie sicher wir uns sind (sicher / vermutet / unbekannt). Die
+  Fundstellen-Kommentare im Code bleiben, aber die Beschreibung des Formats hat genau einen Ort;
+  wer ein Feld entschlüsselt, trägt es dort ein und streicht es aus „Was wir nicht wissen".
 - **Neue UI-Texte:** immer in **beide** Dictionaries (`de` und `en`) in `i18n.js`, dann `t('key')`
   bzw. `data-i18n`/`data-i18n-title` im HTML. Nie Strings in `ui.js` hardcoden.
 - **Statuszeile (unten links):** `setStatusHint()` setzt den dauerhaften Hinweis zum laufenden

@@ -65,7 +65,9 @@ dem eigenen Rechner.
 **Dateien**
 
 - **QDF-Import und -Export** – Entwürfe mit der Original-QUADRO-Software austauschen;
-  Kupplungen, Anbauteile und Sonderteile gehen dabei unverändert wieder hinaus
+  Kupplungen, Anbauteile und Sonderteile gehen dabei unverändert wieder hinaus.
+  Das Format ist in [QDF-FORMAT.md](QDF-FORMAT.md) beschrieben – Element für Element,
+  mit Angabe, wie sicher wir uns bei jedem Feld sind
 - **Mehrere Entwürfe** – Tabs wie im Editor, mit Vorschau-Tabs wie in VS Code
 - **Automatisch speichern** – nichts geht verloren, auch nicht beim Neuladen
 
@@ -185,7 +187,8 @@ your own machine.
 **Files**
 
 - **QDF import and export** – exchange designs with the original QUADRO software; connectors,
-  fittings and special parts are written back unchanged
+  fittings and special parts are written back unchanged. The format is documented in
+  [QDF-FORMAT.md](QDF-FORMAT.md) – element by element, with a confidence level per field
 - **Several designs** – tabs like in an editor, including preview tabs as in VS Code
 - **Autosave** – nothing is lost, not even on a reload
 
