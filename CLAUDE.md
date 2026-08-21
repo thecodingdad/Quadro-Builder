@@ -296,14 +296,6 @@ Koordinaten in **cm**, Three.js-Konvention **y = oben**, Boden bei y = 0.
   importierten Rutschen ihr Bezugspunkt, der am oberen Ende liegt. Ohne das landete der Auslauf
   zwei Schritte vor dem Körper, an dem er hängt. Das **Dach** (`roof2`) hat keinen Ausgang und
   bleibt auf seiner eigenen Höhe.
-- **Durchsichtiges im Aufbaumodus:** Alle gebatchten Teile hängen als `InstancedMesh` mit
-  **Einheitsmatrix im Ursprung** (die Lage steckt in den Instanz-Matrizen). Three sortiert
-  durchscheinende Objekte aber nach der Weltposition des OBJEKTS – die ist für alle gleich, also
-  gibt es keine Tiefensortierung, und die Reihenfolge entscheidet die Erzeugungs-Nummer. Zwei
-  durchscheinende Sachen übereinander flackern deshalb beim Drehen. Regel: im Aufbaumodus ist nur
-  der **aktuelle Schritt** durchscheinend (damit man die Kupplungen im Rohr sieht), erledigte
-  Teile sind **deckend grau**; wo es doch zwei Schichten braucht, legt `material.userData.renderLayer`
-  die Reihenfolge fest (`_batchFlush` setzt daraus `renderOrder`).
 - **Was vor dem ersten Bild stehen muss, steht in `index.html`:** zwei kurze Skripte, weil
   `main.js` erst auf den Katalog wartet – das **Farbschema** im `<head>` (`data-theme` am `<html>`)
   und die **Geräteform** direkt nach `<body>` (`mobile-portrait`, `sidebar-overlay`, dieselben

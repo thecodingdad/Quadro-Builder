@@ -1820,21 +1820,10 @@ export class SceneManager {
     const key = "faded_" + hex + (this._dark ? "_d" : "");
     if (!this._materials[key]) {
       const c = new THREE.Color(hex);
-      // Erst die FARBE herausnehmen (Helligkeit bleibt), dann zum Untergrund
-      // hin aufhellen: Erledigtes steht damit grau da und der aktuelle Schritt
-      // ist der einzige farbige. Blass allein reichte nicht -- ein blasses Gelb
-      // ist immer noch gelb.
-      const grau = 0.299 * c.r + 0.587 * c.g + 0.114 * c.b;
-      c.setRGB(grau, grau, grau);
-      c.lerp(new THREE.Color(this._dark ? FADE_DARK : FADE_LIGHT), 0.4);
-      // DECKEND, nicht durchscheinend: die gebatchten Teile liegen alle mit
-      // Einheitsmatrix im Ursprung, three kann transparente Objekte also nicht
-      // nach Tiefe sortieren -- ein erledigtes Rohr VOR einem Rohr des
-      // aktuellen Schritts wurde mal davor, mal dahinter gezeichnet, und beim
-      // Drehen sprang die Darstellung. Deckend laeuft alles ueber den
-      // Tiefenpuffer und steht damit fest.
+      c.lerp(new THREE.Color(this._dark ? FADE_DARK : FADE_LIGHT), 0.55);
       this._materials[key] = new THREE.MeshStandardMaterial({
         color: c, roughness: 0.85, metalness: 0.02,
+        transparent: true, opacity: 0.45, depthWrite: false,
       });
     }
     return this._materials[key];
@@ -1846,7 +1835,6 @@ export class SceneManager {
         color: new THREE.Color(0x9aa6b4), roughness: 0.9, metalness: 0,
         transparent: true, opacity: 0.14, depthWrite: false,
       });
-      this._materials["ghost"].userData.renderLayer = 1;
     }
     return this._materials["ghost"];
   }
@@ -2025,13 +2013,8 @@ export class SceneManager {
       this._materials[key] = new THREE.MeshStandardMaterial({
         color: new THREE.Color(colorHex(colorId)), roughness: 0.4, metalness: 0.05,
         emissive: new THREE.Color(0x3a2400),
-        // Durchscheinend, damit die Kupplungen im Rohr zu erkennen sind. Dass
-        // das Rohr frueher glasig wirkte, lag nicht an diesem Wert, sondern an
-        // den erledigten Teilen: die waren ebenfalls durchscheinend und wurden
-        // mangels Tiefensortierung ueber das Rohr geblendet.
-        transparent: true, opacity: 0.72, depthWrite: false,
+        transparent: true, opacity: 0.75, depthWrite: false,
       });
-      this._materials[key].userData.renderLayer = 2;
     }
     return this._materials[key];
   }
@@ -2112,10 +2095,6 @@ export class SceneManager {
       for (let i = 0; i < b.mats.length; i++) im.setMatrixAt(i, b.mats[i]);
       im.instanceMatrix.needsUpdate = true;
       im.userData = { instances: b.items };
-      // Durchscheinende Stapel brauchen eine feste Reihenfolge (siehe oben:
-      // sortieren kann three sie nicht). Der aktuelle Schritt liegt ueber den
-      // Geist-Teilen des naechsten.
-      im.renderOrder = (b.mat.userData && b.mat.userData.renderLayer) || 0;
       im.castShadow = true;
       im.receiveShadow = true;
       this.buildGroup.add(im);
