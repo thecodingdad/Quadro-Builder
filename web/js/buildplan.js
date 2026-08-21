@@ -124,6 +124,11 @@ function countConnectors(model, nodes) {
 function countTubes(tubes) {
   const map = new Map(); // tubeId|color -> {tubeId,color,count}
   for (const t of tubes) {
+    // Die Huelse einer 45-Grad-Winkelkupplung (arm) und die Verbindung im
+    // Doppelrohrverbinder (link) sind KEINE Rohre -- sie tragen keine
+    // Rohrkennung und standen sonst als Zeile "null" in der Liste. Gezeichnet
+    // werden sie weiter mit ihrem Schritt (sie bleiben in `tubeIds`).
+    if (t.arm || t.link) continue;
     const key = t.tubeId + "|" + t.color;
     if (!map.has(key)) map.set(key, { tubeId: t.tubeId, color: t.color, count: 0 });
     map.get(key).count++;
@@ -235,11 +240,18 @@ export function computeBuildPlan(model, order = "y+") {
   // Rohre einordnen: waagerecht (gleiche Ebene) vs. Stuetze (Ebene -> hoeher)
   const horizByLevel = levels.map(() => []);
   const risersByLevel = levels.map(() => []); // von der UNTEREN Ebene aus
+  // Huelse der 45-Grad-Winkelkupplung (arm) und Verbindung im Doppelrohr-
+  // verbinder (link): KEINE Rohre, sondern Teil der Kupplung. Sie zaehlen in
+  // keiner Liste, sollen aber mit ihrem Schritt gezeichnet werden -- also
+  // gehoeren sie zu dem Schritt, in dem ihr oberer Knoten entsteht. Als
+  // "Stuetze" gefuehrt ergaeben sie einen Schritt ganz ohne Teile.
+  const armsByLevel = levels.map(() => []);
   for (const t of model.tubes.values()) {
     const a = model.nodes.get(t.a), b = model.nodes.get(t.b);
     if (!a || !b) continue;
     const la = nodeLevel.get(a.id), lb = nodeLevel.get(b.id);
-    if (la === lb) horizByLevel[la].push(t);
+    if (t.arm || t.link) armsByLevel[Math.max(la, lb)].push(t);
+    else if (la === lb) horizByLevel[la].push(t);
     else risersByLevel[Math.min(la, lb)].push(t);
   }
 
@@ -278,13 +290,13 @@ export function computeBuildPlan(model, order = "y+") {
   // Auslauf haengt ja am Teil ueber ihm. Frueher zaehlte jedes Teil fuer sich,
   // der Auslauf landete dadurch zwei Ebenen frueher als sein Koerper.
   const slidesByLevel = levels.map(() => []);
-  for (const sl of slideChainHeads(model)) {
-    // `hook` ist der Einhaengepunkt am senkrechten Rohrpaar (im Editor
-    // gesetzt); importierte Rutschen fuehren stattdessen ihren Bezugspunkt --
-    // und der liegt bei ihnen am oberen Ende.
-    const head = sl.head;
-    const anchor = head.hook ? { x: head.hook[0], y: head.hook[1], z: head.hook[2] } : head;
-    slidesByLevel[levelIndex(levels, coord(anchor))].push(...sl.parts);
+  for (const chain of slideChainHeads(model)) {
+    // Wo die Kette oben haengt, weiss das Modell (model.slideEntry): der
+    // Einhaengepunkt am Rohrpaar, der Bezugspunkt eines Kettenteils oder --
+    // bei der Integralrutsche aus einer Datei -- ihr zurueckgerechneter
+    // Einstieg; deren Punkt steht dort naemlich am Fuss.
+    const anchor = model.slideEntry ? model.slideEntry(chain.head) : chain.head;
+    slidesByLevel[levelIndex(levels, coord(anchor || chain.head))].push(...chain.parts);
   }
 
   // Fortschritt in Baurichtung: Abstand zur ersten Ebene. `levels` waechst
@@ -313,7 +325,9 @@ export function computeBuildPlan(model, order = "y+") {
         tubes: countTubes(horiz), panels: countPanels(pans),
         reinforcements: countReinforcements(model, horiz),
         nodeIds: nodes.map((n) => n.id),
-        tubeIds: horiz.map((t) => t.id),
+        // Die Huelsen kommen mit ihrer Kupplung ins Bild, tauchen aber in
+        // keiner Liste auf (siehe armsByLevel).
+        tubeIds: [...horiz, ...armsByLevel[i]].map((t) => t.id),
         panelIds: pans.map((p) => p.id),
         textileIds: txs.map((tx) => tx.id),
         slideIds: sls.map((sl) => sl.id),

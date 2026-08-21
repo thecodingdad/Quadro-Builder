@@ -1583,6 +1583,32 @@ export class BuildModel {
     return { pos, quat: turnAroundY(q, spec.exit.turn), afterId: slide.id };
   }
 
+  /**
+   * Einstieg eines Rutschenteils -- der Punkt, an dem es OBEN Halt findet.
+   * Die drei Faelle:
+   *  - im Editor gesetzt: `hook` ist genau dieser Punkt;
+   *  - Kettenteil (Modular-/Bogenrutsche, Auslauf): sein Bezugspunkt liegt
+   *    bereits am oberen Ende, so fuehren es auch die Herstellerdateien;
+   *  - Integralrutsche aus einer Datei: ihr Punkt liegt am FUSS (es gibt dort
+   *    keinen `hook`), also Fall und Auslauf zurueckrechnen. Die Laufrichtung
+   *    steckt in der Drehung -- das lokale +X steht 90 Grad quer dazu.
+   */
+  slideEntry(slide) {
+    if (!slide) return null;
+    if (slide.hook && slide.hook.length === 3) {
+      return { x: slide.hook[0], y: slide.hook[1], z: slide.hook[2] };
+    }
+    if (slide.kind !== "slide-new2") return { x: slide.x, y: slide.y, z: slide.z };
+    const q = slide.quat && slide.quat.length === 4 ? slide.quat : [0, 0, 0, 1];
+    const ax = rotateVecByQuat(q, [1, 0, 0]);
+    const dir = [-ax[2], 0, ax[0]];             // Laufrichtung des Auslaufs
+    return {
+      x: round(slide.x - dir[0] * SLIDE_RUN),
+      y: round(slide.y + SLIDE_DROP + SLIDE_HOOK_LIFT),
+      z: round(slide.z - dir[2] * SLIDE_RUN),
+    };
+  }
+
   /** Sitzt an dieser Stelle schon ein Rutschenteil? */
   _slideAt(pos, tol = 5) {
     for (const s of this.slides.values()) {
