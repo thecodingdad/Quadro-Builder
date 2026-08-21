@@ -1816,12 +1816,17 @@ export class SceneManager {
    * EIN Ton fuer alles Erledigte: so tritt es geschlossen zurueck, und der
    * aktuelle Schritt ist das Einzige mit Farbe.
    */
-  _fadedMaterial() {
-    const key = "faded" + (this._dark ? "_d" : "");
+  _fadedMaterial(twoSided = false) {
+    const key = "faded" + (twoSided ? "_2" : "") + (this._dark ? "_d" : "");
     if (!this._materials[key]) {
       this._materials[key] = new THREE.MeshStandardMaterial({
         color: new THREE.Color(this._dark ? 0x8a94a2 : 0xb9c0ca),
         roughness: 0.85, metalness: 0.02,
+        // Offene Flaechen (Rutschenrinne, Platte, Netz) brauchen BEIDE Seiten
+        // -- einseitig sieht man von aussen durch sie hindurch auf ihre
+        // Innenwand. Geschlossene Koerper (Rohr, Kupplung) bleiben einseitig,
+        // dort spart das Rueckseiten-Wegschneiden die halbe Fuellrate.
+        side: twoSided ? THREE.DoubleSide : THREE.FrontSide,
         // DECKEND. Durchscheinend geht hier nicht sauber: die Teile haengen
         // gebuendelt als InstancedMesh im Ursprung, three sortiert sie also
         // weder untereinander noch instanzweise nach Tiefe. Ohne
@@ -2593,7 +2598,7 @@ export class SceneManager {
       center.add(new THREE.Vector3(nrm[0], nrm[1], nrm[2]).multiplyScalar(lift * sgn));
       const geo = this._panelGeometry(p.panelId, u.length(), w.length(), thickness);
       const mat = st === "future" ? this._ghostMaterial()
-        : (asm && st === "done") ? this._fadedMaterial()
+        : (asm && st === "done") ? this._fadedMaterial(true)
         : this._panelMaterial(p.color, st === "current", false);
       // Gleiches Mass + gleiche Farbe teilen sich Geometrie und Material -> ein
       // Buendel. In grossen Modellen sind die Platten sonst der groesste
@@ -2678,7 +2683,7 @@ export class SceneManager {
         mesh.userData = { kind: "fitting", id: f.id };
         const base = mesh.material;
         mesh.material = matFor(f.id, (suggest && suggest.has(f.id)) ? this._suggestMaterial(base)
-          : (asm && st === "done") ? this._fadedMaterial() : base);
+          : (asm && st === "done") ? this._fadedMaterial(base.side === THREE.DoubleSide) : base);
         this.buildGroup.add(mesh);
         this.pickFittings.push(mesh);
       }
@@ -2695,7 +2700,7 @@ export class SceneManager {
       const st = stateOf(sl.id);
       if (st === "future") continue;
       const base = (asm && st === "done")
-        ? this._fadedMaterial()
+        ? this._fadedMaterial(true)
         : this._slideMatFor(sl.kind, st === "current", sl.color);
       const mat = matFor(sl.id, (suggest && suggest.has(sl.id)) ? this._suggestMaterial(base) : base);
 
