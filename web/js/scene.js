@@ -2019,7 +2019,9 @@ export class SceneManager {
       this._materials[key] = new THREE.MeshStandardMaterial({
         color: new THREE.Color(colorHex(colorId)), roughness: 0.4, metalness: 0.05,
         emissive: new THREE.Color(0x3a2400),
-        transparent: true, opacity: 0.75, depthWrite: false,
+        // Gerade so durchscheinend, dass die Kupplungen dahinter zu erkennen
+        // sind -- mehr nicht: bei 0,75 wirkte das Rohr selbst schon glasig.
+        transparent: true, opacity: 0.9, depthWrite: false,
       });
     }
     return this._materials[key];

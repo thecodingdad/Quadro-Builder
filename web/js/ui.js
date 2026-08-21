@@ -2110,7 +2110,10 @@ export function initUI({ scene, model, builder }) {
   function syncCubeInset() {
     const bar = $("slice-bar");
     const alsLeiste = !bar.hidden && window.matchMedia("(max-width: 760px)").matches;
-    scene.setViewCubeInset(alsLeiste ? bar.getBoundingClientRect().height + 8 : 0);
+    const inset = alsLeiste ? bar.getBoundingClientRect().height + 8 : 0;
+    scene.setViewCubeInset(inset);
+    // Derselbe Versatz gilt fuer den Szene-Knopf oben links (siehe .scene-icon).
+    root.style.setProperty("--slice-inset", inset + "px");
   }
 
   function applyPanelVisibility() {
@@ -3868,6 +3871,17 @@ export function initUI({ scene, model, builder }) {
     }
     requestAnimationFrame(() => scene.onResize());
   }
+
+  // Die Statuszeile steht ueber der Karte, nicht darunter -- dafuer braucht das
+  // CSS ihre Hoehe. Ein Beobachter meldet jeden Stand: auf, zu und jede
+  // Zwischenhoehe waehrend des Ziehens.
+  (function watchSheetHeight() {
+    const sheet = $("asm-sheet");
+    if (!sheet || typeof ResizeObserver === "undefined") return;
+    new ResizeObserver(() => {
+      root.style.setProperty("--asm-sheet-h", (sheet.hidden ? 0 : sheet.offsetHeight) + "px");
+    }).observe(sheet);
+  })();
 
   // Ruhehoehe der eingeklappten Karte (Griff, Schrittzeile, Fortschritt, Titel).
   // Sie haengt am Inhalt und wird deshalb nach jedem Neuaufbau gemessen.

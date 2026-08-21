@@ -42,6 +42,19 @@
   </script>
 </head>
 <body class="sidebar-hidden booting">
+  <!-- Geräteform sofort setzen, noch vor dem ersten Bild. An diesen zwei Klassen
+       hängt das ganze Layout; ui.js setzt sie erst, wenn der Katalog geladen ist
+       -- bis dahin stand auf dem Telefon sichtbar die Schreibtisch-Fassung und
+       klappte dann um. Die Abfragen sind dieselben wie dort (mqPortrait,
+       mqNarrow), ab dem Start führt applyLayout() sie weiter. -->
+  <script>
+    (() => {
+      const mq = (q) => window.matchMedia(q).matches;
+      const hochformat = mq("(max-width: 820px) and (orientation: portrait)");
+      document.body.classList.toggle("mobile-portrait", hochformat);
+      document.body.classList.toggle("sidebar-overlay", mq("(max-width: 1000px)") || hochformat);
+    })();
+  </script>
   <header id="toolbar">
 
     <!-- Hauptzeile: Modi + Sonderfunktionen links (scrollt) · Aktionen rechts (fixiert) -->

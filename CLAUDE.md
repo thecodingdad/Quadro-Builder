@@ -296,6 +296,17 @@ Koordinaten in **cm**, Three.js-Konvention **y = oben**, Boden bei y = 0.
   importierten Rutschen ihr Bezugspunkt, der am oberen Ende liegt. Ohne das landete der Auslauf
   zwei Schritte vor dem Körper, an dem er hängt. Das **Dach** (`roof2`) hat keinen Ausgang und
   bleibt auf seiner eigenen Höhe.
+- **Was vor dem ersten Bild stehen muss, steht in `index.html`:** zwei kurze Skripte, weil
+  `main.js` erst auf den Katalog wartet – das **Farbschema** im `<head>` (`data-theme` am `<html>`)
+  und die **Geräteform** direkt nach `<body>` (`mobile-portrait`, `sidebar-overlay`, dieselben
+  Medienabfragen wie `applyLayout()`). Ohne sie blitzte erst die helle, dann die
+  Schreibtisch-Fassung auf. Beide Werte pflegt danach `ui.js` weiter.
+- **Schwebendes über der Szene:** Szene-Knopf und Ansichtswürfel weichen der Schnittebenen-Leiste,
+  sobald sie auf schmalen Schirmen als Leiste über dem Bild liegt – **eine** Quelle dafür ist
+  `syncCubeInset()` in `ui.js` (`scene.setViewCubeInset()` + CSS-Variable `--slice-inset`). Eine
+  feste Medienabfrage im CSS wäre falsch: sie rückte den Knopf auch dann tiefer, wenn gar keine
+  Leiste steht. Die Statuszeile weicht der Aufbau-Karte über `--asm-sheet-h` (ResizeObserver auf
+  `#asm-sheet`, damit sie beim Ziehen mitwandert).
 - **Dunkelmodus:** Die Wahl (`auto`/`light`/`dark`) steht in `quadro.theme.v1`, gilt als
   `data-theme` am `<html>` und wird vom **Skript im `<head>`** gesetzt – vor dem ersten Bild.
   Über die Module ginge das nicht (`main.js` wartet auf den Katalog), die Seite blitzte hell auf.

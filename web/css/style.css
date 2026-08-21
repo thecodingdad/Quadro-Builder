@@ -463,8 +463,13 @@ main { flex: 1; display: flex; min-height: 0; }
 #btn-help { bottom: 12px; right: 12px; }
 
 /* Szene-Toggle-Icon: Kreis links oben im 3D-Viewport */
+/* Der Knopf sitzt oben links im Bild -- und rueckt so weit nach unten, wie die
+   Schnittebenen-Leiste dort Platz einnimmt (ui.js setzt --slice-inset, genau
+   der Wert, um den auch der Ansichtswuerfel rueckt). Fruehere Regel war eine
+   feste Medienabfrage: der Knopf rutschte ab 760 px auch dann tiefer, wenn gar
+   keine Leiste da war. */
 .scene-icon {
-  position: absolute; top: 12px; left: 12px; z-index: 10;
+  position: absolute; top: calc(12px + var(--slice-inset, 0px)); left: 12px; z-index: 10;
   width: 48px; height: 48px; padding: 0; border: none;
   border-radius: 50%; overflow: hidden; cursor: pointer;
   box-shadow: 0 2px 8px rgba(0,0,0,0.30);
@@ -608,7 +613,6 @@ body.sidebar-hidden #sidebar, body.sidebar-hidden #sidebar-resizer { display: no
   }
   #slice-range { width: auto; }
   .slice-value { min-width: 46px; }
-  .scene-icon { top: 56px; }
 }
 .slice-value {
   font-size: 12px; font-variant-numeric: tabular-nums;
@@ -1008,6 +1012,11 @@ body.mobile-portrait #tab-bar.single { display: none; }
 #asm-sheet .asm-nav .btn { flex: 1 1 0; min-height: 44px; font-size: 20px; }
 /* Statusmeldung nicht an den Rand der unteren Leiste kleben lassen. */
 body.mobile-portrait .status { bottom: 16px; max-width: calc(100% - 24px); }
+/* Steht die Aufbau-Karte unten im Bild, gehoert die Statuszeile UEBER sie --
+   sonst liegt der Hinweis zum laufenden Schritt darunter und ist weg. Die Hoehe
+   der Karte meldet ein ResizeObserver in ui.js als --asm-sheet-h; beim Ziehen
+   wandert die Zeile also mit. */
+body.asm-sheet-on .status { bottom: calc(var(--asm-sheet-h, 0px) + 12px); }
 
 /* --- Touch: größere Ziele ---------------------------------------------
    Mit dem Finger trifft man 26-px-Knöpfe schlecht; auf Zeigern ohne feine
