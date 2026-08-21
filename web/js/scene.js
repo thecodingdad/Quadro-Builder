@@ -1820,6 +1820,12 @@ export class SceneManager {
     const key = "faded_" + hex + (this._dark ? "_d" : "");
     if (!this._materials[key]) {
       const c = new THREE.Color(hex);
+      // Erst die FARBE herausnehmen (Helligkeit bleibt), dann zum Untergrund
+      // hin aufhellen: Erledigtes steht damit grau da und der aktuelle Schritt
+      // ist der einzige farbige. Blass allein reichte nicht -- ein blasses Gelb
+      // ist immer noch gelb.
+      const grau = 0.299 * c.r + 0.587 * c.g + 0.114 * c.b;
+      c.setRGB(grau, grau, grau);
       c.lerp(new THREE.Color(this._dark ? FADE_DARK : FADE_LIGHT), 0.55);
       this._materials[key] = new THREE.MeshStandardMaterial({
         color: c, roughness: 0.85, metalness: 0.02,
