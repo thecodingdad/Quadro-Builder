@@ -2429,11 +2429,17 @@ export class Builder {
     // 2. bestehende Kupplung als Anbaupunkt waehlen. Umfaerben gibt es hier
     // bewusst nicht mehr -- das passiert nur im Cursor-Modus.
     const pick = front;
-    if (!pick) return;
-    if (pick.data.kind === "node" && this._isBuildable(pick.data.id)) {
+    if (pick && pick.data.kind === "node" && this._isBuildable(pick.data.id)) {
       this.selectedNodeId = pick.data.id;
       this.refresh();
+      return;
     }
+    // Alles, was KEINE Kupplung ist -- der leere Raum genauso wie ein Rohr oder
+    // eine Platte --, hebt die Wahl wieder auf: danach bietet wieder jede
+    // Kupplung ihre Ankerpunkte an (wie beim Anbauen von Teilen, siehe
+    // _pickFittingNode). Ohne das kam man nur ueber eine zweite Kupplung
+    // wieder heraus.
+    if (this.selectedNodeId) { this.selectedNodeId = null; this.refresh(); }
   }
 
   // Laesst sich an dieser Kupplung ueberhaupt weiterbauen?
