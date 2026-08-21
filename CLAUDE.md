@@ -296,6 +296,17 @@ Koordinaten in **cm**, Three.js-Konvention **y = oben**, Boden bei y = 0.
   importierten Rutschen ihr Bezugspunkt, der am oberen Ende liegt. Ohne das landete der Auslauf
   zwei Schritte vor dem Körper, an dem er hängt. Das **Dach** (`roof2`) hat keinen Ausgang und
   bleibt auf seiner eigenen Höhe.
+- **Durchscheinendes im Aufbaumodus:** Alle Bauteile haengen gebuendelt als `InstancedMesh` mit
+  **Einheitsmatrix im Ursprung** (die Lage steckt in den Instanz-Matrizen). Three sortiert
+  durchscheinende Objekte nach der Weltposition des OBJEKTS – die ist hier fuer alle gleich, also
+  gibt es **keine** Tiefensortierung, weder zwischen den Stapeln noch innerhalb eines Stapels.
+  Folgen: beim Drehen kippt, was ueber was liegt; ohne `depthWrite` blendet jede Lage dahinter
+  noch einmal auf (das Erledigte wurde mit jedem Schritt dichter); mit `depthWrite` streiten
+  Stutzen und Rohr an ihrer Nahtstelle um Bildpunkte. Deshalb ist im Aufbaumodus alles Erledigte
+  **deckend** und in EINEM Grauton (`_fadedMaterial()` kennt keine Bauteilfarbe mehr);
+  durchscheinend bleibt nur der aktuelle Schritt, der sich mit sich selbst kaum ueberlappt. Wer
+  die Farben zurueckholen will, muss die durchscheinenden Teile einzeln zeichnen – gemessen:
+  33 statt ~1740 Draw-Calls bei einem Modell mit 975 Teilen.
 - **Was vor dem ersten Bild stehen muss, steht in `index.html`:** zwei kurze Skripte, weil
   `main.js` erst auf den Katalog wartet – das **Farbschema** im `<head>` (`data-theme` am `<html>`)
   und die **Geräteform** direkt nach `<body>` (`mobile-portrait`, `sidebar-overlay`, dieselben
